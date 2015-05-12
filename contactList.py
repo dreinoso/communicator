@@ -22,3 +22,7 @@ PASS_SERVER  = 'servidorcentral1234'
 allowedEmails = dict()
 allowedEmails = {'Cliente1': 'cliente1.datalogger@gmail.com',
 				'Cliente2': 'Cliente2.daalogger@gmail.com'}
+
+allowedIpAdress = dict()
+allowedIpAdress = {'Cliente1': '192.168.1.1',
+				'Cliente2': '127.0.0.1'}
