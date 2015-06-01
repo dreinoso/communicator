@@ -27,7 +27,6 @@ class Email(object):
 
 	smtpServer = smtplib.SMTP
 	imapServer = imaplib.IMAP4_SSL
-	isAvaible = False# Sobre si la conexión con email esta disponible
 	countRead = 0
 	reciving = False
 	receptionThread = ''
@@ -37,7 +36,9 @@ class Email(object):
 		""" Configura el protocolo SMTP y el protocolo IMAP. El primero se encargara
 		de enviar correos electronicos, mientras que el segungo a recibirlos.
 		mbos disponen de una misma cuenta asociada a GMAIL para tales fines (y
-		que esta dada en el archivo 'contactList.py'. """
+		que esta dada en el archivo 'contactList.py'. 
+		@param _receptionBuffer: Buffer para la recepción de datos
+		@type: list"""
 		#print 'Configurando el modulo EMAIL...'
 		self.smtpServer = smtplib.SMTP(contactList.SMTP_SERVER, contactList.SMTP_PORT)      # Establecemos servidor y puerto SMTP
 		self.smtpServer.starttls()
@@ -55,6 +56,8 @@ class Email(object):
 		print '[MODO EMAIL] Listo para usarse.'
 
 	def __del__(self):
+		"""Elminación de la instancia de esta clase, cerrando conexiones establecidas, para no dejar
+		conexiones ocupados en el Host"""
 		#self.receptionThread.stop()
 		self.closeEmail()
 		print '[MODO EMAIL] Se terminó la sesión.'
@@ -81,9 +84,9 @@ class Email(object):
 		""" Funcion que se encarga de consultar el correo electronico asociado al modulo
 		por algun EMAIL entrante. Envia al servidor IMAP una peticion de solicitud
 		de mensajes no leidos (que por ende seran los nuevos) y que en caso de obtenerlos,
-		los almacenrá en el buffer, si remitente del mensaje se encuentra registrado (en el 
-		archivo 'contactList.py') o en caso contrario, se enviara una
-		notificacion al usuario informandole que no es posible realizar la operacion solicitada."""
+		los almacenrá en el buffer, si el remitente del mensaje se encuentra registrado (en el 
+		archivo 'contactList.py') o en caso contrario, se enviara una notificacion al usuario 
+ 		informandole que no es posible realizar la operacion solicitada."""
 		while self.reciving:
 			emailAmount = 0
 			emailIds = ['']
@@ -99,7 +102,7 @@ class Email(object):
 			if(not self.reciving): break #Para no ejecutar instrucciones innecesarias si el modo email se detuvó.
 			emailIdsList = emailIds[0].split()
 			emailAmount = len(emailIdsList) # Cantidad de emails no leidos
-			print '[MODO EMAIL] Ha(n) llegado ' + str(emailAmount) + ' nuevo(s) mensaje(s) de correo electronico!'
+			print '[MODO EMAIL] Ha(n) llegado ' + str(emailAmount) + ' nuevo(s) mensaje(s) de correo electronico.'
 			for i in emailIdsList:	# Recorremos los emails recibidos...
 				result, emailData = self.imapServer.fetch(i, '(RFC822)')
 				rawEmail = emailData[0][1]

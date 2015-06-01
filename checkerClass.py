@@ -8,6 +8,8 @@
 	@date: Lunes 16 de Abril de 2015 """
 
 import socket
+import os
+import re
 
 class Checker(object):
 
@@ -29,6 +31,10 @@ class Checker(object):
 		return False
 
 	def verifyEmailConnection(self):
+		"""Se determina la disponibilidad de la comunicación por medio del objeto Email.
+		@return: Se determina si la comunicación por este medio se puede realizar.
+		@rtype: bool"""
+		return False
 		REMOTE_SERVER = "www.google.com"
 		try:
 			host = socket.gethostbyname(REMOTE_SERVER) # Obtiene el DNS
@@ -39,16 +45,23 @@ class Checker(object):
 		return False
 
 	def verifyEthernetConnection(self):
-		try: 
-			s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-			s.connect(("gmail.com",80))
-			ipList =  s.getsockname() 
-			if ipList[0] != None:
-				#print ipList[0] #Muestra la dirección IP del programa.
-				return True
-				
-		except Exception as e:
-			print '[MODO ETHERNET] No se pudo iniciar este modo, establezca conexión a una LAN para solucionarlo.'	
+		"""Se determina la disponibilidad de la comunicación por medio del objeto Ethernet.
+		@return: Se determina si la comunicación por este medio se puede realizar.
+		@rtype: bool"""
+		ethernetDevices = os.popen('ip link show').readlines()
+		wlanActiveInterfaces = 0
+		ethActiveInterfaces = 0
+		for interface in ethernetDevices:
+			wlanPatron = re.compile('wlan[0-100]+')
+			ethPatron = re.compile('eth[0-100]+')
+			statePatron = re.compile('state UP')
+			if wlanPatron.search(interface) != None and statePatron.search(interface) != None:
+				wlanActiveInterfaces = wlanActiveInterfaces + 1
+			if ethPatron.search(interface) != None and statePatron.search(interface) != None:
+				ethActiveInterfaces = ethActiveInterfaces + 1
+		print '[MODO ETHERNET] ' + str(ethActiveInterfaces) + ' interfaz/es Ethernet activa/s y ' + str(wlanActiveInterfaces) + ' interfaz/es WLan activa/s.'
+		if ethActiveInterfaces + wlanActiveInterfaces > 0:
+			return True
 		return False
 
 	def verifyBluetoothConnection(self):

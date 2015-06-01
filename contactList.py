@@ -23,6 +23,10 @@ allowedEmails = dict()
 allowedEmails = {'Cliente1': 'cliente1.datalogger@gmail.com',
 				'Cliente2': 'Cliente2.daalogger@gmail.com'}
 
-allowedIpAdress = dict()
-allowedIpAdress = {'Cliente1': '192.168.1.1',
+allowedIpAddress = dict()
+allowedIpAddress = {'Cliente1': '127.0.0.1',
 				'Cliente2': '127.0.0.1'}
+
+allowedPorts = dict()
+allowedPorts = {'Cliente1': 5005,
+				'Cliente2': 5006}

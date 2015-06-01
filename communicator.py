@@ -1,5 +1,5 @@
  # coding=utf-8
-import configReader
+import configReaderClass
 import checkerClass
 import emailClass
 import ethernetClass
@@ -17,7 +17,7 @@ def open():
 	if(checker.emailAvailability):
 		emailInstance = emailClass.Email(receptionBuffer)
 	if(checker.ethernetAvailability):
-		ethernetInstance = ethernetClass.Ethernet()
+		ethernetInstance = ethernetClass.Ethernet(receptionBuffer)
 
 def send(contact, message):
 	"""Se envia de modo "inteligente un paquete de datos a un contacto previamente registrado
@@ -32,20 +32,22 @@ def send(contact, message):
 			destination = contactList.allowedEmails[contact]
 			emailInstance.sendEmail(destination, contact + ' - Proyecto Datalogger', message)
 		else:
-			print 'El contacto a enviar mensaje no esta configurado.'
+			print '[COMUNICADOR] El contacto a enviar mensaje no esta configurado para Modo Email.'
 	elif checker.ethernetAvailability:
 		if contactList.allowedIpAddress.has_key(contact):
-			destination = contactList.allowedIp[contact]
-			ethernetInstance.sendPaquet(destination, message)
+			destinationIp = contactList.allowedIpAddress[contact]
+			destinationPort = contactList.allowedPorts[contact]
+			ethernetInstance.sendPacket(destinationIp, destinationPort, message)
 		else:
-			print 'El contacto a enviar mensaje no esta configurado.'
+			print '[COMUNICADOR] El contacto a enviar mensaje no esta configurado para Modo Ethernet.'
 	else:
-		print 'No hay modulos para el envio de mensajes'
+		print '[COMUNICADOR] No hay modulos para el envio de mensajes'
 	# TODO: decidir entre varias interfaces de comunicación
 
 def recieve():
 	"""Se obtiene de un buffer circular el mensaje recibido mas antiguo.
-	@return Mensaje recibido"""
+	@return: Mensaje recibido
+	@rtype: str"""
 	global emailInstance, ethernetInstance, receptionBuffer
 	if checker.emailAvailability or checker.ethernetAvailability:
 		if len(receptionBuffer) > 0:
@@ -53,14 +55,17 @@ def recieve():
 			#print 'Mensaje leido: ' + message
 			return message
 		else:
-		    print 'El buffer de mensajes esta vacio.'
+		    print '[COMUNICADOR] El buffer de mensajes esta vacio.'
 		    return None
 	else:
-		print 'No hay modulos para la recepción de mensajes'
+		print '[COMUNICADOR] No hay modulos para la recepción de mensajes'
 		return None
 	# determinar de quien es el mensaje que se quiere leer?
 
 def length():
+	"""Devuelve la cantidad de elementos en el Buffer de Recepción.
+	@return: Cantidad de elementos en Buffer de Recepción.
+	@rtype: Int"""
 	return len(receptionBuffer)
 
 def close():
@@ -72,5 +77,6 @@ def close():
 		del(emailInstance)
 		#emailInstance.closeEmail()
 	if checker.ethernetAvailability:
+		ethernetInstance.stopReception()
 		del(ethernetInstance)
 		#ethernetInstance.closeEthernet()

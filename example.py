@@ -18,7 +18,7 @@ def main():
 	while optionSelected != 3:
 		if optionSelected == 1:
 			messageSend = 'Este es el mensaje, lo envia el comunicador..'
-			communicator.send('Cliente1', messageSend)
+			communicator.send('Cliente2', messageSend)
 		elif optionSelected == 2:
 			messageRecived = communicator.recieve()
 			if messageRecived != None:
