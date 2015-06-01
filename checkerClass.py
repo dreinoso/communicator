@@ -7,6 +7,7 @@
 	@organization: UNC - FCEFYN
 	@date: Lunes 16 de Abril de 2015 """
 
+import os
 import socket
 
 class Checker(object):
@@ -29,6 +30,8 @@ class Checker(object):
 		return False
 
 	def verifyEmailConnection(self):
+		return False
+
 		REMOTE_SERVER = "www.google.com"
 		try:
 			host = socket.gethostbyname(REMOTE_SERVER) # Obtiene el DNS
@@ -39,7 +42,9 @@ class Checker(object):
 		return False
 
 	def verifyEthernetConnection(self):
-		try: 
+		return False
+
+		try:
 			s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 			s.connect(("gmail.com",80))
 			ipList =  s.getsockname() 
@@ -52,4 +57,8 @@ class Checker(object):
 		return False
 
 	def verifyBluetoothConnection(self):
-		return False
+		bluetoothDevices = os.popen('hcitool dev').readlines()
+		if len(bluetoothDevices) > 1:
+			return True
+		else:
+			return False

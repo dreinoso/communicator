@@ -18,11 +18,22 @@ IMAP_PORT = 993
 EMAIL_SERVER = 'servidorcentral.datalogger@gmail.com'
 PASS_SERVER  = 'servidorcentral1234'
 
+# Configuracion Bluetooth local
+BLUETOOTH_SERVICE_NAME = 'RFCOMM-Client01'
+BLUETOOTH_MAC		   = '00:24:7E:64:7B:4A'
+BLUETOOTH_UUID		   = '94f39d29-7d6d-437d-973b-fba39e49d4ee'
+
 #Cuentas de correo permitidas para la interacción.
 allowedEmails = dict()
 allowedEmails = {'Cliente1': 'cliente1.datalogger@gmail.com',
-				'Cliente2': 'Cliente2.daalogger@gmail.com'}
+				 'Cliente2': 'Cliente2.daalogger@gmail.com'}
 
 allowedIpAdress = dict()
 allowedIpAdress = {'Cliente1': '192.168.1.1',
-				'Cliente2': '127.0.0.1'}
+				   'Cliente2': '127.0.0.1'}
+
+destinationBluetooth = dict()
+destinationBluetooth = {'Client02' : ('RFCOMM-Client02', '11:11:11:11:11:11', '94f39d29-7d6d-437d-973b-fba39e49d4ef')}
+
+sourceBluetooth = dict()
+sourceBluetooth = {'11:11:11:11:11:11' : 'Client02'}
