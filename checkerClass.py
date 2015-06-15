@@ -34,7 +34,7 @@ class Checker(object):
 		"""Se determina la disponibilidad de la comunicación por medio del objeto Email.
 		@return: Se determina si la comunicación por este medio se puede realizar.
 		@rtype: bool"""
-		return False
+		#return False
 		REMOTE_SERVER = "www.google.com"
 		try:
 			host = socket.gethostbyname(REMOTE_SERVER) # Obtiene el DNS

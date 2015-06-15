@@ -14,10 +14,11 @@ bluetoothPriority = 4
 emailPriority =  2
 smsPriority = 0
 processNotifications = True
-warningNotifiactions = True
+warningNotifications = True
 errorNotifications = True
 
 def readConfigFile():
+	#global ethernetPriority, bluetoothPriority, emailPriority, smsPriority, processNotifications, warningNotifications, errorNotifications 
 	configurationFile =  open('properties.conf').readlines() # Apertura de Archivo
 	configurationFile = ''.join(configurationFile) # Conversión a String para ejecución
 	try:

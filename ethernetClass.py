@@ -17,19 +17,26 @@ class Ethernet(object):
 
 	sock = ''
 	UDP_IP = "127.0.0.1"
-	UDP_RECEPTION_PORT = 5009
+	UDP_RECEPTION_PORT = 5014
 	reciving = False
 	receptionThread = ''
 	receptionBuffer = list()
+	processNotifications = True
+	warningNotifications = True
+	errorNotifications = True
 	contRead = 0
 
-	def __init__(self, _receptionBuffer):
+	def __init__(self, _receptionBuffer, _processNotifications, _warningNotifications, _errorNotifications):
 		"""Se crean los sockets para envío y recepción. Se activa el hilo para la recepción 
 		y se asigna el buffer también para la recepción.
 		@param _receptionBuffer: Buffer para la recepción de datos
 		@type: list"""
 		#print 'Configurando el modulo ETHERNET...'
 		#socket.setdefaulttimeout(10)                                                   # Establecemos tiempo maximo antes de reintentar lectura
+		self.receptionBuffer = _receptionBuffer
+		self.processNotifications = _processNotifications
+		self.warningNotifications = _warningNotifications
+		self.errorNotifications = _errorNotifications
 		self.sock = socket.socket(socket.AF_INET, # Internet
 						socket.SOCK_DGRAM) # UDP
 		self.receptionSock = socket.socket(socket.AF_INET, # Internet
@@ -37,19 +44,27 @@ class Ethernet(object):
 		self.reciving = True
 		self.receptionThread = threading.Thread(target = self.recievePacket, name = 'packetReciever')
 		self.receptionThread.start()
-		self.receptionBuffer = _receptionBuffer
-		print '[MODO ETHERNET] Listo para usarse.'
+		if (self.warningNotifications): print '[MODO ETHERNET] Listo para usarse.'
 
 	def __del__(self):
 		"""Elminación de la instancia de esta clase, cerrando conexiones establecidas, para no dejar
 		puertos ocupados en el Host"""
 		self.closeEthernet()
-		print '[MODO ETHERNET] Se terminó la sesión.'
+		if (self.warningNotifications): print '[MODO ETHERNET] Se terminó la sesión.'
 
 	def closeEthernet(self):
 		""" Finaliza la sesion iniciada, es decir que cierra los sockets para ethernet"""
 		self.sock.close()
 		self.receptionSock.close()
+
+	def sendEthernetPacket(contact, message):
+		if contactList.allowedIpAddress.has_key(contact):
+			destinationIp = contactList.allowedIpAddress[contact]
+			destinationPort = contactList.allowedPorts[contact]
+			self.sock.sendto(message, (destinationIp, destinationPort))
+			if (self.processNotifications): print '[MODO ETHERNET] Se envio un mensaje.'
+	 	else:
+			if (self.warningNotifications): print '[MODO ETHERNET] El contacto a enviar mensaje no esta configurado+.'
 
 	def sendPacket(self, destinationIp, destinationPort, message):
 		""" Envia una cadena de texto.
@@ -61,13 +76,18 @@ class Ethernet(object):
 		@type message: str """
 		#print 'Parametros :' + message + destinationIp + str(destinationPort)
 		self.sock.sendto(message, (destinationIp, destinationPort))
-		print '[MODO ETHERNET] Se envio un mensaje.'
+		if (self.processNotifications): print '[MODO ETHERNET] Se envio un mensaje.'
 
 	def recievePacket(self):
 		""" Esta función es ejecutada en un hilo, se queda esperando los paquetes
 		que llegen al puerto establecido para guardarlos en el buffer."""
-		print '[MODO ETHERNET] Se estan recibiendo paquetes.'
-		self.receptionSock.bind((self.UDP_IP, self.UDP_RECEPTION_PORT))
+		if (self.processNotifications): print '[MODO ETHERNET] Se estan recibiendo paquetes.'
+		try:
+			self.receptionSock.bind((self.UDP_IP, self.UDP_RECEPTION_PORT))
+		except Exception, e: #Selecciona el siguiente puerto en caso de estar ocupado
+			newPort = self.UDP_RECEPTION_PORT + 1
+			if (self.warningNotifications): print '[MODO ETHERNET] Puerto UDP de recepción en uso se cambia al ' + str(newPort)
+			self.receptionSock.bind((self.UDP_IP, self.UDP_RECEPTION_PORT))
 		self.receptionSock.settimeout(2)
 		while self.reciving:
 			try:
@@ -77,7 +97,7 @@ class Ethernet(object):
 				pass
 			#if data!=None:
   			#print "received message:", data
-  		print '[MODO ETHERNET] Ya no se estan recibiendo paquetes.'
+		if (self.warningNotifications): print '[MODO ETHERNET] Ya no se estan recibiendo paquetes.'
 	
 	def stopReception(self):
 		"""Se termina la ejecución del hilo cambiando su condición de ejecución."""
