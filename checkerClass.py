@@ -8,23 +8,23 @@
 	@date: Lunes 16 de Abril de 2015 """
 
 import os
+import time
 import socket
+import threading
 
 class Checker(object):
 
-	smsAvailability = False			#Establece si el modo SMS esta disponible
-	emailAvailability = False		#Establece si el modo EMAIL esta disponible
-	ethernetAvailability = False    #Establece si el modo ETHERNET esta disponible
-	bluetoothAvaliability = False	#Establece si el modo BLUTOOTH esta disponible
+	killChecker = False
+	availableSms = False			#Establece si el modo SMS esta disponible
+	availableEmail = False		#Establece si el modo EMAIL esta disponible
+	availableEthernet = False    #Establece si el modo ETHERNET esta disponible
+	availableBluetooth = False	#Establece si el modo BLUTOOTH esta disponible
 
-	def __init__(self):
-		self.smsAvailability = self.verifySmsConnection()
-		self.emailAvailability = self.verifyEmailConnection()
-		self.ethernetAvailability = self.verifyEthernetConnection()
-		self.bluetoothAvaliability = self.verifyBluetoothConnection()
+	def __init__(self, bluetoothInstance):
+		self.bluetoothInstance = bluetoothInstance
 
 	def __del__(self):
-		pass
+		print 'Objeto ' + self.__class__.__name__ + ' destruido.'
 	
 	def verifySmsConnection(self):
 		return False
@@ -58,7 +58,22 @@ class Checker(object):
 
 	def verifyBluetoothConnection(self):
 		bluetoothDevices = os.popen('hcitool dev').readlines()
-		if len(bluetoothDevices) > 1:
-			return True
+		bluetoothDevices.pop(0)
+		if len(bluetoothDevices) > 0:
+			if not self.bluetoothInstance.isActive:
+				self.bluetoothInstance.isActive = True
+				self.availableBluetooth = True
+				bluetoothThread = threading.Thread(target = self.bluetoothInstance.receivePacket, name = 'bluetoothReceptor')
+				bluetoothThread.start()
+				print '[BLUETOOTH] Listo para usarse.'
 		else:
-			return False
+			if self.bluetoothInstance.isActive:
+				self.availableBluetooth = False
+				self.bluetoothInstance.isActive = False
+				self.bluetoothInstance.killBluetooth = True
+
+	def verifyConnections(self):
+		while not self.killChecker:
+			self.verifyBluetoothConnection()
+			time.sleep(3)
+		self.bluetoothInstance.killBluetooth = True

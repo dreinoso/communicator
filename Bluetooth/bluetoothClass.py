@@ -16,6 +16,7 @@ class Bluetooth(object):
 	localSocket = bluetooth.BluetoothSocket
 	remoteSocket = bluetooth.BluetoothSocket
 	killBluetooth = False
+	isActive = False
 
 	def __init__(self):
 		# Crea un nuevo socket Bluetooth que usa el protocolo de transporte especificado
@@ -31,8 +32,6 @@ class Bluetooth(object):
 									service_classes = [self.localUUID, bluetooth.SERIAL_PORT_CLASS],
 									profiles = [bluetooth.SERIAL_PORT_PROFILE])
 		self.localPort = self.localSocket.getsockname()[1]
-		print '[MODO BLUETOOTH] Listo para usarse.'
-		#print 'Esperando por conexiones sobre el canal %d de RFCOMM' % self.localPort
 
 	def __del__(self):
 		self.localSocket.close()
@@ -73,6 +72,7 @@ class Bluetooth(object):
 				queueThreads.put(readerThread)
 			except bluetooth.BluetoothError:
 				pass
+		self.killBluetooth = False
 		# Terminamos los hilos creados (por la opcion 'Salir' del menu principal)
 		while not queueThreads.empty():
 			readerThread = queueThreads.get()

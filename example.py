@@ -12,7 +12,7 @@ def main():
 	print '    2) Leer.'
 	print '    3) Salir.\n'
 
-	communicator.open()# Se abre el comunicador para detectar medios
+	#communicator.open()# Se abre el comunicador para detectar medios
 
 	optionSelected = int(raw_input('Seleccione una de las opciones: '))
 	while optionSelected != 3:
