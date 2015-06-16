@@ -12,6 +12,7 @@ import contactList
 import time
 import email
 import socket
+import inspect
 import smtplib
 import imaplib
 import threading
@@ -27,37 +28,44 @@ class Email(object):
 
 	smtpServer = smtplib.SMTP
 	imapServer = imaplib.IMAP4_SSL
-	isAvaible = False# Sobre si la conexión con email esta disponible
 	countRead = 0
-	reciving = False
-	receptionThread = ''
+	isActive = False
 	receptionBuffer = list()
+	processNotifications = True
+	warningNotifications = True
+	errorNotifications = True
 
-	def __init__(self, _receptionBuffer):
+	def __init__(self, _receptionBuffer, _processNotifications, _warningNotifications, _errorNotifications):
 		""" Configura el protocolo SMTP y el protocolo IMAP. El primero se encargara
 		de enviar correos electronicos, mientras que el segungo a recibirlos.
 		mbos disponen de una misma cuenta asociada a GMAIL para tales fines (y
-		que esta dada en el archivo 'contactList.py'. """
+		que esta dada en el archivo 'contactList.py'. 
+		@param _receptionBuffer: Buffer para la recepción de datos
+		@type: list"""
 		#print 'Configurando el modulo EMAIL...'
 		self.smtpServer = smtplib.SMTP(contactList.SMTP_SERVER, contactList.SMTP_PORT)      # Establecemos servidor y puerto SMTP
+		self.imapServer = imaplib.IMAP4_SSL(contactList.IMAP_SERVER, contactList.IMAP_PORT) # Establecemos servidor y puerto IMAP
+		socket.setdefaulttimeout(10)                                                   # Establecemos tiempo maximo antes de reintentar lectura
+		self.receptionBuffer = _receptionBuffer
+		self.processNotifications = _processNotifications
+		self.warningNotifications = _warningNotifications
+		self.errorNotifications = _errorNotifications
+
+	def __del__(self):
+		"""Elminación de la instancia de esta clase, cerrando conexiones establecidas, para no dejar
+		conexiones ocupados en el Host"""
+		#self.receptionThread.stop()
+		self.smtpServer.close()  # Cerramos la sesion con el servidor SMTP
+		self.imapServer.logout() # Cerramos la sesion con el servidor IMAP
+		print 'Objeto ' + self.__class__.__name__ + ' destruido.'
+		#if (self.warningNotifications): print '[MODO EMAIL] Se terminó la sesión.'
+
+	def connect(self):
 		self.smtpServer.starttls()
 		self.smtpServer.ehlo()
 		self.smtpServer.login(contactList.EMAIL_SERVER, contactList.PASS_SERVER)            # Nos logueamos en el servidor SMTP
-		self.imapServer = imaplib.IMAP4_SSL(contactList.IMAP_SERVER, contactList.IMAP_PORT) # Establecemos servidor y puerto IMAP
 		self.imapServer.login(contactList.EMAIL_SERVER, contactList.PASS_SERVER)            # Nos logueamos en el servidor IMAP
 		self.imapServer.select('INBOX')                                                     # Seleccionamos la Bandeja de Entrada
-		socket.setdefaulttimeout(10)                                                   # Establecemos tiempo maximo antes de reintentar lectura
-		self.reciving = True
-		self.receptionThread = threading.Thread(target = self.recieve, name = 'emailReciever')
-		self.receptionThread.start()
-		#self.receptionThread.join()
-		self.receptionBuffer = _receptionBuffer
-		print '[MODO EMAIL] Listo para usarse.'
-
-	def __del__(self):
-		#self.receptionThread.stop()
-		self.closeEmail()
-		print '[MODO EMAIL] Se terminó la sesión.'
 		
 	def cleanMailBox(self):
 		"""Se limpia el buzón de la cuenta de correo porque los correos anteriores no son importantes
@@ -67,7 +75,7 @@ class Email(object):
 			result, emailIds = self.imapServer.search(None, '(UNSEEN)') # Buscamos emails sin leer (nuevos)
 				# Ejemplo de emailIds: ['35 36 37']
 		except Exception as e:					       # Timeout or something else
-			print '[MODO EMAIL] Error: en "recieve()" No hay conexion a Internet.'
+			if (self.errorNotifications): print '[MODO EMAIL] Error: en "recieve()" No hay conexion a Internet.'
 			time.sleep(5)           # ... sigo esperando por alguno de los anteriores.
 		emailIdsList = emailIds[0].split()
 		emailAmount = len(emailIdsList) # Cantidad de emails no leidos
@@ -77,18 +85,18 @@ class Email(object):
 			if emailAmount == 0:
 				break
 
-	def recieve(self):
+	def receivePacket(self):
 		""" Funcion que se encarga de consultar el correo electronico asociado al modulo
 		por algun EMAIL entrante. Envia al servidor IMAP una peticion de solicitud
 		de mensajes no leidos (que por ende seran los nuevos) y que en caso de obtenerlos,
-		los almacenrá en el buffer, si remitente del mensaje se encuentra registrado (en el 
-		archivo 'contactList.py') o en caso contrario, se enviara una
-		notificacion al usuario informandole que no es posible realizar la operacion solicitada."""
-		while self.reciving:
+		los almacenrá en el buffer, si el remitente del mensaje se encuentra registrado (en el 
+		archivo 'contactList.py') o en caso contrario, se enviara una notificacion al usuario 
+ 		informandole que no es posible realizar la operacion solicitada."""
+		while self.isActive:
 			emailAmount = 0
 			emailIds = ['']
 			# Mientras no se haya recibido ningun correo electronico, el temporizador no haya expirado y no se haya detectado movimiento...
-			while emailIds[0] == '' and self.reciving:
+			while emailIds[0] == '' and self.isActive:
 				try:
 					self.imapServer.recent()				       # Actualizamos la Bandeja de Entrada
 					result, emailIds = self.imapServer.search(None, '(UNSEEN)') # Buscamos emails sin leer (nuevos)
@@ -96,10 +104,10 @@ class Email(object):
 				except Exception as e:					       # Timeout or something else
 					print '[MODO EMAIL] Error: en "recieve()" No hay conexion a Internet.'
 				time.sleep(5)           # ... sigo esperando por alguno de los anteriores.
-			if(not self.reciving): break #Para no ejecutar instrucciones innecesarias si el modo email se detuvó.
+			if(not self.isActive): break #Para no ejecutar instrucciones innecesarias si el modo email se detuvó.
 			emailIdsList = emailIds[0].split()
 			emailAmount = len(emailIdsList) # Cantidad de emails no leidos
-			print '[MODO EMAIL] Ha(n) llegado ' + str(emailAmount) + ' nuevo(s) mensaje(s) de correo electronico!'
+			if (self.processNotifications): print '[MODO EMAIL] Ha(n) llegado ' + str(emailAmount) + ' nuevo(s) mensaje(s) de correo electronico.'
 			for i in emailIdsList:	# Recorremos los emails recibidos...
 				result, emailData = self.imapServer.fetch(i, '(RFC822)')
 				rawEmail = emailData[0][1]
@@ -113,7 +121,7 @@ class Email(object):
 				sourceName = headerList[0]                          # Almacenamos el nombre del remitente
 				sourceEmail = headerList[1]                         # Almacenamos el correo del remitente
 				emailSubject = headerList[2]                        # Almacenamos el asunto correspondiente
-				print '[MODO EMAIL] Procesando correo electronico de ' + sourceName + ' - ' + sourceEmail
+				if (self.processNotifications): print '[MODO EMAIL] Procesando correo electronico de ' + sourceName + ' - ' + sourceEmail
 				# Comprobamos si el remitente del mensaje (un correo) esta registrado y tiene permiso de ejecucion...
 				for key in contactList.allowedEmails:
 					if(contactList.allowedEmails[key] == sourceEmail):
@@ -121,13 +129,22 @@ class Email(object):
 						self.receptionBuffer.append(emailBody)
 				allowedEmailsValues = contactList.allowedEmails.values()
 				if(not(sourceEmail in allowedEmailsValues)):
-					print '[MODO EMAIL] Se recibió un email de una cuenta de correo no registrada... Se descarta el mensaje.'
+					if (self.warningNotifications): print '[MODO EMAIL] Se recibió un email de una cuenta de correo no registrada... Se descarta el mensaje.'
 					emailMessage = 'Imposible procesar la solicitud. Usted no se encuentra registrado.'
 					self.sendEmail(sourceEmail, emailSubject, emailMessage)
 				emailAmount -= 1 # Decrementamos la cantidad de emails no leidos
 				if emailAmount == 0:
 					break
-		print '[MODO EMAIL] Este modo ha dejado de esperar mensajes.'
+		print '[EMAIL] Funcion \'%s\' terminada.' % inspect.stack()[0][3]
+		#if (self.warningNotifications): print '[MODO EMAIL] Este modo ha dejado de esperar mensajes.'
+
+	def sendEmailPacket(self, contact, message):
+		if contactList.allowedEmails.has_key(contact):
+			destination = contactList.allowedEmails[contact]
+			emailInstance.sendEmail(destination, contact + ' - Proyecto Datalogger', message)
+			#TODO que el asunto se configure en el archivo properties.conf
+		else:
+			if (self.warningNotifications): print '[MODO EMAIL] El contacto a enviar mensaje no esta configurado para Modo Email.'
 
 	def sendEmail(self, emailDestination, emailSubject, emailMessage):
 		""" Envia un mensaje de correo electronico.
@@ -213,16 +230,3 @@ class Email(object):
 		else:
 			text = unicode(emailReceived.get_payload(decode=True), emailReceived.get_content_charset(), 'ignore').encode('utf8', 'replace')
 			return text.strip()
-
-	def stopReception(self):
-		"""Se termina la ejecución del hilo cambiando su condición de ejecución
-		"""
-		self.reciving = False
-		time.sleep(6) #Mayor que el perdiodo de revisión del hilo, de modo que le de tiempo a detenerse => poder usar del
-
-	def closeEmail(self):
-		""" Finaliza la sesion iniciada con ambos servidores, es decir, SMTP e IMAP
-		respectivamente. """
-		self.smtpServer.close()  # Cerramos la sesion con el servidor SMTP
-		self.imapServer.logout() # Cerramos la sesion con el servidor IMAP
-		#print '[MODO EMAIL] Se terminó la sesión.'
