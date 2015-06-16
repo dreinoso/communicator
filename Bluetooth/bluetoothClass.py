@@ -15,10 +15,18 @@ class Bluetooth(object):
 	localUUID = contactList.BLUETOOTH_UUID
 	localSocket = bluetooth.BluetoothSocket
 	remoteSocket = bluetooth.BluetoothSocket
-	killBluetooth = False
 	isActive = False
 
-	def __init__(self):
+	receptionBuffer = list()
+	processNotifications = True
+	warningNotifications = True
+	errorNotifications = True
+
+	def __init__(self, _receptionBuffer, _processNotifications, _warningNotifications, _errorNotifications):
+		self.receptionBuffer = _receptionBuffer
+		self.processNotifications = _processNotifications
+		self.warningNotifications = _warningNotifications
+		self.errorNotifications = _errorNotifications
 		# Crea un nuevo socket Bluetooth que usa el protocolo de transporte especificado
 		self.localSocket = bluetooth.BluetoothSocket(bluetooth.RFCOMM)
 		# Enlaza algun puerto disponible usando SDP (Service Discovery Protocol) al adaptador local
@@ -60,19 +68,18 @@ class Bluetooth(object):
 
 	def receivePacket(self):
 		queueThreads = Queue.Queue() # BORRAR: el cliente seria el que termina el thread creado. por lo que no haria falta
-		while not self.killBluetooth:
+		while self.isActive:
 			try:
 				# Espera por una conexion entrante y devuelve un nuevo socket que representa la conexion, como asi tambien la direccion del cliente
 				remoteSocket, remoteAddress = self.localSocket.accept()
 				remoteSocket.settimeout(TIMEOUT)
 				print 'Conexion desde ' + remoteAddress[0] + ' aceptada.'
 				threadName = 'Thread%s' % contactList.sourceBluetooth[remoteAddress[0]]
-				readerThread = bluetoothReader.BluetoothReader(threadName, remoteSocket)
+				readerThread = bluetoothReader.BluetoothReader(threadName, remoteSocket, self.receptionBuffer)
 				readerThread.start()
 				queueThreads.put(readerThread)
 			except bluetooth.BluetoothError:
 				pass
-		self.killBluetooth = False
 		# Terminamos los hilos creados (por la opcion 'Salir' del menu principal)
 		while not queueThreads.empty():
 			readerThread = queueThreads.get()

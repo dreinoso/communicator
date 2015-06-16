@@ -7,10 +7,12 @@ BUFFER_SIZE = 1024
 class BluetoothReader(threading.Thread):
 
 	killReaderThread = False
+	receptionBuffer = list()
 
-	def __init__(self, threadName, remoteSocket):
+	def __init__(self, threadName, remoteSocket, receptionBuffer):
 		threading.Thread.__init__(self, name = threadName)
 		self.remoteSocket = remoteSocket
+		self.receptionBuffer = _receptionBuffer
 
 	def run(self):
 		while not self.killReaderThread:
@@ -22,6 +24,7 @@ class BluetoothReader(threading.Thread):
 				if dataReceived == 'FIN':
 					self.killReaderThread = True
 				else:
+					self.receptionBuffer.append(dataReceived)
 					print self.getName() + ': %s' % dataReceived
 			except bluetooth.BluetoothError:
 				pass
