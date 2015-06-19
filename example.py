@@ -13,7 +13,7 @@ def main():
 	print '    3) Salir.\n'
 
 	communicator.open()# Se abre el comunicador para detectar medios
-
+	time.sleep(4) #Da tiempo a que se inicien los modulos del comunicador
 	optionSelected = int(raw_input('Seleccione una de las opciones: '))
 	while optionSelected != 3:
 		if optionSelected == 1:

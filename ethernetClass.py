@@ -18,7 +18,7 @@ class Ethernet(object):
 
 	sock = ''
 	UDP_IP = "127.0.0.1"
-	UDP_RECEPTION_PORT = 5015
+	UDP_RECEPTION_PORT = 5016
 	isActive = False
 	receptionBuffer = list()
 	processNotifications = True
@@ -70,6 +70,23 @@ class Ethernet(object):
 		#print 'Parametros :' + message + destinationIp + str(destinationPort)
 		self.sock.sendto(message, (destinationIp, destinationPort))
 		if (self.processNotifications): print '[MODO ETHERNET] Se envio un mensaje.'
+
+	def send(self, destinationIp, destinationPort, message):
+		""" Envia una cadena de texto.
+		@param detinationIP: dirección IP del destinatario
+		@type emailDestination: str
+		@param destinationPort: N° de puerto del destinatario
+		@type destinationPort: int
+		@param message: cadena de texto a enviar
+		@type message: str """
+		#print 'Parametros :' + message + destinationIp + str(destinationPort)
+		try:
+			self.sock.sendto(message, (destinationIp, destinationPort))
+			return True
+		except Exception, e:
+			return False
+			#if (self.processNotifications): print '[MODO ETHERNET] Se envio un mensaje.'
+
 
 	def receivePacket(self):
 		""" Esta función es ejecutada en un hilo, se queda esperando los paquetes

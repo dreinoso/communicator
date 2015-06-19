@@ -9,6 +9,12 @@
 
 import os
 
+priorityLevels = dict()
+priorityLevels = {'ethernet': 4,
+				'bluetooth': 4,
+				'email': 2,
+				'sms': 0}
+
 ethernetPriority = 4
 bluetoothPriority = 4
 emailPriority =  2
