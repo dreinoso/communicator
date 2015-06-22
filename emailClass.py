@@ -161,6 +161,27 @@ class Email(object):
 		# Se envia el mensaje, al correo destino correspondiente
 		self.smtpServer.sendmail(simpleMessage['From'], simpleMessage['To'], simpleMessage.as_string())
 
+	def send(self, emailDestination, emailSubject, emailMessage):
+		""" Envia un mensaje de correo electronico.
+		@param emailDestination: correo electronico del destinatario
+		@type emailDestination: str
+		@param emailSubject: asunto del mensaje
+		@type emailSubject: str
+		@param emailMessage: correo electronico a enviar
+		@type emailMessage: str """
+		#return False 
+		# Se construye un mensaje simple
+		simpleMessage = MIMEText(emailMessage)
+		simpleMessage['From'] = contactList.EMAIL_SERVER
+		simpleMessage['To'] = emailDestination
+		simpleMessage['Subject'] = emailSubject
+		# Se envia el mensaje, al correo destino correspondiente
+		try:
+			self.smtpServer.sendmail(simpleMessage['From'], simpleMessage['To'], simpleMessage.as_string())
+			return True
+		except Exception, e:
+			return False
+
 	def processEmailHeader(self, emailReceived):
 		""" Procesa la cabecera del EMAIL.
 		@param emailReceived: correo electronico entrante

@@ -49,3 +49,6 @@ allowedNumbers = {3512560536 : 'Client02'}
 allowedEmails = dict()
 allowedEmails = {'Client01': 'cliente1.datalogger@gmail.com',
 				 'Client02': 'Cliente2.daalogger@gmail.com'}
+
+allowedNumbers = dict()
+allowedNumbers = {'Cliente01': '3512650513'}

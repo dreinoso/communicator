@@ -66,6 +66,29 @@ class Bluetooth(object):
 			self.remoteSocket.send('FIN')
 			self.remoteSocket.close()
 
+	def send(self, destinationServiceName, destinationMAC, destinationUUID, messageToSend):
+		print 'Buscando el servicio \'%s\' sobre la direccion %s' % (destinationServiceName, destinationMAC)
+		serviceMatches = bluetooth.find_service(uuid = destinationUUID, address = destinationMAC)
+		if len(serviceMatches) == 0:
+			#print 'No se pudo encontrar el servicio \'%s\'' % destinationServiceName
+			return False
+		else:
+			firstMatch = serviceMatches[0]
+			name = firstMatch['name']
+			host = firstMatch['host']
+			port = firstMatch['port']
+			print 'Conectando al servicio \'%s\' sobre la direccion %s...' % (name, host)
+			# Crea un nuevo socket Bluetooth que usa el protocolo de transporte especificado
+			self.remoteSocket = bluetooth.BluetoothSocket(bluetooth.RFCOMM)
+			# Conecta el socket con el dispositivo remoto (host) sobre el puerto (channel) especificado
+			self.remoteSocket.connect((host, port))
+			print('Conectado con el dispositivo Bluetooth.')
+			self.remoteSocket.send(messageToSend)
+			# Cierra la conexion del socket cliente
+			self.remoteSocket.send('FIN')
+			self.remoteSocket.close()
+			return True
+
 	def receivePacket(self):
 		queueThreads = Queue.Queue() # BORRAR: el cliente seria el que termina el thread creado. por lo que no haria falta
 		while self.isActive:
