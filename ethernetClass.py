@@ -18,7 +18,7 @@ class Ethernet(object):
 
 	sock = ''
 	UDP_IP = "127.0.0.1"
-	UDP_RECEPTION_PORT = 5015
+	UDP_RECEPTION_PORT = 5020
 	isActive = False
 	receptionBuffer = list()
 	processNotifications = True

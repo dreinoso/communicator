@@ -13,6 +13,7 @@ import time
 import socket
 import inspect
 import threading
+import subprocess
 
 class Checker(object):
 
@@ -22,7 +23,8 @@ class Checker(object):
 	availableEthernet = False    #Establece si el modo ETHERNET esta disponible
 	availableBluetooth = False	#Establece si el modo BLUTOOTH esta disponible
 
-	def __init__(self, _ethernetInstance, _bluetoothInstance, _emailInstance):
+	def __init__(self, _smsInstance, _ethernetInstance, _bluetoothInstance, _emailInstance):
+		self.smsInstance = _smsInstance
 		self.ethernetInstance = _ethernetInstance
 		self.bluetoothInstance = _bluetoothInstance
 		self.emailInstance = _emailInstance
@@ -89,20 +91,36 @@ class Checker(object):
 				print '[EMAIL] Listo para usarse.'
 			return True
 		except:
-			#print '[MODO EMAIL] No se pudo iniciar el sistema, establezca una conexión a internet para solucionarlo.'
 			if self.emailInstance.isActive:
 				self.emailInstance.isActive = False
 			return False
 
 	def verifySmsConnection(self):
-		return False
+		ttyUSBPattern = re.compile('ttyUSB[0-9]+')
+		wvdialProcess = subprocess.Popen('wvdialconf', stdout = subprocess.PIPE, stderr = subprocess.PIPE)
+		wvdialOutput, wvdialError = wvdialProcess.communicate()
+		modemsList = ttyUSBPattern.findall(wvdialOutput)
+		if len(modemsList) > 0:
+			if not self.smsInstance.isActive:
+				self.smsInstance.connect('/dev/' + modemsList[0])
+				self.smsInstance.isActive = True
+				self.smsThread = threading.Thread(target = self.smsInstance.waitSms, name = 'smsReceptor')
+				self.smsThread.start()
+				print '[SMS] Listo para usarse.'
+			return True
+		else:
+			if self.smsInstance.isActive:
+				self.smsInstance.isActive = False
+			return False
 
 	def verifyConnections(self):
 		while not self.killChecker:
+			self.availableSms = self.verifySmsConnection()
 			self.availableEthernet = self.verifyEthernetConnection()
 			self.availableBluetooth = self.verifyBluetoothConnection()
 			self.availableEmail = self.verifyEmailConnection()
 			time.sleep(3)
+		self.smsInstance.isActive = False
 		self.bluetoothInstance.isActive = False
 		self.emailInstance.isActive = False
 		self.ethernetInstance.isActive = False

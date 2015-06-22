@@ -43,9 +43,7 @@ class Email(object):
 		@param _receptionBuffer: Buffer para la recepción de datos
 		@type: list"""
 		#print 'Configurando el modulo EMAIL...'
-		self.smtpServer = smtplib.SMTP(contactList.SMTP_SERVER, contactList.SMTP_PORT)      # Establecemos servidor y puerto SMTP
-		self.imapServer = imaplib.IMAP4_SSL(contactList.IMAP_SERVER, contactList.IMAP_PORT) # Establecemos servidor y puerto IMAP
-		socket.setdefaulttimeout(10)                                                   # Establecemos tiempo maximo antes de reintentar lectura
+		socket.setdefaulttimeout(5)                                                   # Establecemos tiempo maximo antes de reintentar lectura
 		self.receptionBuffer = _receptionBuffer
 		self.processNotifications = _processNotifications
 		self.warningNotifications = _warningNotifications
@@ -54,13 +52,14 @@ class Email(object):
 	def __del__(self):
 		"""Elminación de la instancia de esta clase, cerrando conexiones establecidas, para no dejar
 		conexiones ocupados en el Host"""
-		#self.receptionThread.stop()
 		self.smtpServer.close()  # Cerramos la sesion con el servidor SMTP
 		self.imapServer.logout() # Cerramos la sesion con el servidor IMAP
 		print 'Objeto ' + self.__class__.__name__ + ' destruido.'
 		#if (self.warningNotifications): print '[MODO EMAIL] Se terminó la sesión.'
 
 	def connect(self):
+		self.smtpServer = smtplib.SMTP(contactList.SMTP_SERVER, contactList.SMTP_PORT)      # Establecemos servidor y puerto SMTP
+		self.imapServer = imaplib.IMAP4_SSL(contactList.IMAP_SERVER, contactList.IMAP_PORT) # Establecemos servidor y puerto IMAP
 		self.smtpServer.starttls()
 		self.smtpServer.ehlo()
 		self.smtpServer.login(contactList.EMAIL_SERVER, contactList.PASS_SERVER)            # Nos logueamos en el servidor SMTP
@@ -102,39 +101,39 @@ class Email(object):
 					result, emailIds = self.imapServer.search(None, '(UNSEEN)') # Buscamos emails sin leer (nuevos)
 					# Ejemplo de emailIds: ['35 36 37']
 				except Exception as e:					       # Timeout or something else
-					print '[MODO EMAIL] Error: en "recieve()" No hay conexion a Internet.'
-				time.sleep(5)           # ... sigo esperando por alguno de los anteriores.
-			if(not self.isActive): break #Para no ejecutar instrucciones innecesarias si el modo email se detuvó.
-			emailIdsList = emailIds[0].split()
-			emailAmount = len(emailIdsList) # Cantidad de emails no leidos
-			if (self.processNotifications): print '[MODO EMAIL] Ha(n) llegado ' + str(emailAmount) + ' nuevo(s) mensaje(s) de correo electronico.'
-			for i in emailIdsList:	# Recorremos los emails recibidos...
-				result, emailData = self.imapServer.fetch(i, '(RFC822)')
-				rawEmail = emailData[0][1]
-				if self.countRead == 0: 	   #Cambia el orden de la "matriz" para el segundo mensaje leido, despues de otra 
-					rawEmail = emailData[0][1] #llamada a recent() para evitar desbordamiento de buffer
-				else:
-					rawEmail = emailData[1][1] 
-				self.countRead = self.countRead + 1
-				emailReceived = email.message_from_string(rawEmail) # Retorna un objeto 'message', y podemos acceder a los items de su cabecera como un diccionario.
-				headerList = self.processEmailHeader(emailReceived) # Almacenamos una lista con los elementos del email recibido
-				sourceName = headerList[0]                          # Almacenamos el nombre del remitente
-				sourceEmail = headerList[1]                         # Almacenamos el correo del remitente
-				emailSubject = headerList[2]                        # Almacenamos el asunto correspondiente
-				if (self.processNotifications): print '[MODO EMAIL] Procesando correo electronico de ' + sourceName + ' - ' + sourceEmail
-				# Comprobamos si el remitente del mensaje (un correo) esta registrado y tiene permiso de ejecucion...
-				for key in contactList.allowedEmails:
-					if(contactList.allowedEmails[key] == sourceEmail):
-						emailBody = self.getDecodedEmailBody(emailReceived) # Obtenemos el cuerpo del email
-						self.receptionBuffer.append(emailBody)
-				allowedEmailsValues = contactList.allowedEmails.values()
-				if(not(sourceEmail in allowedEmailsValues)):
-					if (self.warningNotifications): print '[MODO EMAIL] Se recibió un email de una cuenta de correo no registrada... Se descarta el mensaje.'
-					emailMessage = 'Imposible procesar la solicitud. Usted no se encuentra registrado.'
-					self.sendEmail(sourceEmail, emailSubject, emailMessage)
-				emailAmount -= 1 # Decrementamos la cantidad de emails no leidos
-				if emailAmount == 0:
-					break
+					#print '[MODO EMAIL] Error: en "recieve()" No hay conexion a Internet.'
+					pass
+			# Comprobamos si se termino la funcion (el modo EMAIL dejo de funcionar)...
+			if not self.isActive:
+				break
+			# ... sino, leemos los mensajes recibidos
+			else:
+				emailIdsList = emailIds[0].split()
+				emailAmount = len(emailIdsList) # Cantidad de emails no leidos
+				print '[EMAIL] Ha(n) llegado ' + str(emailAmount) + ' nuevo(s) mensaje(s) de correo electronico.'
+				for i in emailIdsList:	# Recorremos los emails recibidos...
+					result, emailData = self.imapServer.fetch(i, '(RFC822)')
+					rawEmail = emailData[0][1]
+					emailReceived = email.message_from_string(rawEmail) # Retorna un objeto 'message', y podemos acceder a los items de su cabecera como un diccionario.
+					headerList = self.processEmailHeader(emailReceived) # Almacenamos una lista con los elementos del email recibido
+					sourceName = headerList[0]                          # Almacenamos el nombre del remitente
+					sourceEmail = headerList[1]                         # Almacenamos el correo del remitente
+					emailSubject = headerList[2]                        # Almacenamos el asunto correspondiente
+					print '[EMAIL] Procesando correo electronico de ' + sourceName + ' - ' + sourceEmail
+					# Comprobamos si el remitente del mensaje (un correo) esta registrado y tiene permiso de ejecucion...
+					for key in contactList.allowedEmails:
+						if contactList.allowedEmails[key] == sourceEmail:
+							emailBody = self.getDecodedEmailBody(emailReceived) # Obtenemos el cuerpo del email
+							self.receptionBuffer.append(emailBody)
+							break
+					allowedEmailsValues = contactList.allowedEmails.values()
+					if(not(sourceEmail in allowedEmailsValues)):
+						if (self.warningNotifications): print '[EMAIL] Se recibió un email de una cuenta de correo no registrada... Se descarta el mensaje.'
+						emailMessage = 'Imposible procesar la solicitud. Usted no se encuentra registrado.'
+						self.sendEmail(sourceEmail, emailSubject, emailMessage)
+					emailAmount -= 1 # Decrementamos la cantidad de emails no leidos
+					if emailAmount == 0:
+						break
 		print '[EMAIL] Funcion \'%s\' terminada.' % inspect.stack()[0][3]
 		#if (self.warningNotifications): print '[MODO EMAIL] Este modo ha dejado de esperar mensajes.'
 

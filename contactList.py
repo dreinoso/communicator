@@ -9,6 +9,7 @@
 	@organization: UNC - Fcefyn
 	@date: Lunes 16 de Abril de 2015 """
 
+# Configuracion Email
 SMTP_SERVER = 'smtp.gmail.com'
 IMAP_SERVER = 'imap.gmail.com'
 SMTP_PORT = 587
@@ -18,11 +19,14 @@ IMAP_PORT = 993
 EMAIL_SERVER = 'servidorcentral.datalogger@gmail.com'
 PASS_SERVER  = 'servidorcentral1234'
 
+# Configuracion Sms
+CLARO_MESSAGES_CENTER = 543200000001
+CLARO_WEB_PAGE = 876966
+
 # Configuracion Bluetooth local
 BLUETOOTH_SERVICE_NAME = 'RFCOMM-Client01'
 BLUETOOTH_MAC		   = '00:24:7E:64:7B:4A'
 BLUETOOTH_UUID		   = '94f39d29-7d6d-437d-973b-fba39e49d4ee'
-
 
 allowedIpAddress = dict()
 allowedIpAddress = {'Client01': '192.168.1.1',
@@ -37,6 +41,9 @@ destinationBluetooth = {'Client02' : ('RFCOMM-Client02', '11:11:11:11:11:11', '9
 
 sourceBluetooth = dict()
 sourceBluetooth = {'11:11:11:11:11:11' : 'Client02'}
+
+allowedNumbers = dict()
+allowedNumbers = {3512560536 : 'Client02'}
 
 #Cuentas de correo permitidas para la interacción.
 allowedEmails = dict()

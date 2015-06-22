@@ -5,8 +5,8 @@ import threading
 import configReader
 import checkerClass
 import emailClass
+import modemClass
 import ethernetClass
-import prioritySelector
 import contactList
 
 sys.path.append('/home/mauri/Communicator/Bluetooth')
@@ -17,16 +17,18 @@ receptionBuffer = list()
 checkerInstance = checkerClass.Checker
 ethernetInstance = ethernetClass.Ethernet
 bluetoothInstance = bluetoothClass.Bluetooth
+smsInstance = modemClass.Sms
 emailInstance = emailClass.Email
 
 def open():
 	"""Se realiza la apertura, inicialización de los componentes que se tengan disponibles
 	"""
-	global checkerInstance, ethernetInstance, bluetoothInstance, emailInstance
+	global checkerInstance, ethernetInstance, bluetoothInstance, smsInstance, emailInstance
 	ethernetInstance = ethernetClass.Ethernet(receptionBuffer, configReader.processNotifications, configReader.warningNotifications, configReader.errorNotifications)
 	bluetoothInstance = bluetoothClass.Bluetooth(receptionBuffer, configReader.processNotifications, configReader.warningNotifications, configReader.errorNotifications)
+	smsInstance = modemClass.Sms()
 	emailInstance = emailClass.Email(receptionBuffer, configReader.processNotifications, configReader.warningNotifications, configReader.errorNotifications)
-	checkerInstance = checkerClass.Checker(ethernetInstance, bluetoothInstance, emailInstance) # Al iniciar determina el estado de las conexiones
+	checkerInstance = checkerClass.Checker(smsInstance, ethernetInstance, bluetoothInstance, emailInstance) # Al iniciar determina el estado de las conexiones
 	checkerThread = threading.Thread(target = checkerInstance.verifyConnections, name = 'checkerThread')
 	checkerThread.start()
 
@@ -89,10 +91,11 @@ def recieve():
 
 def close():
 	"""Se cierran los componentes del sistema, unicamente los abiertos previamente"""
-	global receptionBuffer, checkerInstance, ethernetInstance, bluetoothInstance, emailInstance
+	global receptionBuffer, checkerInstance, smsInstance, ethernetInstance, bluetoothInstance, emailInstance
 	receptionBuffer = list() #Se limpia el buffer de recepción
 	checkerInstance.killChecker = True
 	del(checkerInstance)
+	del smsInstance
 	del(ethernetInstance)
 	del(emailInstance)
 	del(bluetoothInstance)
