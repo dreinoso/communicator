@@ -37,21 +37,23 @@ class Checker(object):
 		@return: Se determina si la comunicación por este medio se puede realizar.
 		@rtype: bool"""
 		ethernetDevices = os.popen('ip link show').readlines()
-		wlanActiveInterfaces = 0
-		ethActiveInterfaces = 0
+		wlanActiveInterfaces = False
+		ethActiveInterfaces = False
 		wlanPattern = re.compile('wlan[0-9]+') #Se buscan interfaces de 0 a 100
 		ethPattern = re.compile('eth[0-9]+')
 		statePattern = re.compile('state UP')
 		for interface in ethernetDevices:
-			if wlanPattern.search(interface) != None and statePattern.search(interface) != None:
-				wlanActiveInterfaces = wlanActiveInterfaces + 1
-			if ethPattern.search(interface) != None and statePattern.search(interface) != None:
-				ethActiveInterfaces = ethActiveInterfaces + 1
-		#print '[MODO ETHERNET] ' + str(ethActiveInterfaces) + ' interfaz/es Ethernet activa/s y ' + str(wlanActiveInterfaces) + ' interfaz/es WLan activa/s.'
-		if ethActiveInterfaces + wlanActiveInterfaces > 0:
+			if wlanPattern.search(interface) and statePattern.search(interface):
+				wlanActiveInterfaces = True
+				break
+			elif ethPattern.search(interface) and statePattern.search(interface):
+				ethActiveInterfaces = True
+				break
+		if ethActiveInterfaces or wlanActiveInterfaces:
 			if not self.ethernetInstance.isActive:
+				self.ethernetInstance.connect()
 				self.ethernetInstance.isActive = True
-				ethernetThread = threading.Thread(target = self.ethernetInstance.receivePacket, name = 'ethernetReceptor')
+				ethernetThread = threading.Thread(target = self.ethernetInstance.receive, name = 'ethernetReceptor')
 				ethernetThread.start()
 				print '[ETHERNET] Listo para usarse.'
 			return True
@@ -66,7 +68,7 @@ class Checker(object):
 		if len(bluetoothDevices) > 0:
 			if not self.bluetoothInstance.isActive:
 				self.bluetoothInstance.isActive = True
-				bluetoothThread = threading.Thread(target = self.bluetoothInstance.receivePacket, name = 'bluetoothReceptor')
+				bluetoothThread = threading.Thread(target = self.bluetoothInstance.receive, name = 'bluetoothReceptor')
 				bluetoothThread.start()
 				print '[BLUETOOTH] Listo para usarse.'
 			return True
@@ -79,14 +81,14 @@ class Checker(object):
 		"""Se determina la disponibilidad de la comunicación por medio del objeto Email.
 		@return: Se determina si la comunicación por este medio se puede realizar.
 		@rtype: bool"""
-		REMOTE_SERVER = "www.google.com"
+		TEST_REMOTE_SERVER = 'www.google.com'
 		try:
-			host = socket.gethostbyname(REMOTE_SERVER) # Obtiene el DNS
-			s = socket.create_connection((host, 80), 2) # Se determina si es alcanzable
+			remoteHost = socket.gethostbyname(TEST_REMOTE_SERVER)
+			testSocket = socket.create_connection((remoteHost, 80), 2) # Se determina si es alcanzable
 			if not self.emailInstance.isActive:
 				self.emailInstance.connect()
 				self.emailInstance.isActive = True
-				self.emailThread = threading.Thread(target = self.emailInstance.receivePacket, name = 'emailReceptor')
+				self.emailThread = threading.Thread(target = self.emailInstance.receive, name = 'emailReceptor')
 				self.emailThread.start()
 				print '[EMAIL] Listo para usarse.'
 			return True
@@ -104,7 +106,7 @@ class Checker(object):
 			if not self.smsInstance.isActive:
 				self.smsInstance.connect('/dev/' + modemsList[0])
 				self.smsInstance.isActive = True
-				self.smsThread = threading.Thread(target = self.smsInstance.waitSms, name = 'smsReceptor')
+				self.smsThread = threading.Thread(target = self.smsInstance.receive, name = 'smsReceptor')
 				self.smsThread.start()
 				print '[SMS] Listo para usarse.'
 			return True

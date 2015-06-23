@@ -9,46 +9,39 @@
 	@organization: UNC - Fcefyn
 	@date: Lunes 16 de Abril de 2015 """
 
-# Configuracion Email
+# Configuración Email
+EMAIL_SERVER = 'servidorcentral.datalogger@gmail.com'
+PASS_SERVER  = 'servidorcentral1234'
 SMTP_SERVER = 'smtp.gmail.com'
 IMAP_SERVER = 'imap.gmail.com'
 SMTP_PORT = 587
 IMAP_PORT = 993
 
-#Configuración de la cuenta para el servidor (debe ser una cuenta de gmail)
-EMAIL_SERVER = 'servidorcentral.datalogger@gmail.com'
-PASS_SERVER  = 'servidorcentral1234'
+# Configuración Ethernet
+LOCAL_HOST = '127.0.0.1'
+UDP_PORT = 5016
 
-# Configuracion Sms
+# Configuración Sms
 CLARO_MESSAGES_CENTER = 543200000001
 CLARO_WEB_PAGE = 876966
 
-# Configuracion Bluetooth local
+# Configuración Bluetooth
 BLUETOOTH_SERVICE_NAME = 'RFCOMM-Client01'
 BLUETOOTH_MAC		   = '00:24:7E:64:7B:4A'
 BLUETOOTH_UUID		   = '94f39d29-7d6d-437d-973b-fba39e49d4ee'
 
+# Direcciones IP y puertos permitidos
 allowedIpAddress = dict()
-allowedIpAddress = {'Client01': '192.168.1.1',
-				   'Client02': '127.0.0.1'}
+allowedIpAddress = {'Client02': ('192.168.1.2', 5006)}
 
-allowedPorts = dict()
-allowedPorts = {'Client01': 5005,
-				'Client02': 5006}
+# Direcciones MAC permitidas
+allowedMacAddress = dict()
+allowedMacAddress = {'Client02' : ('RFCOMM-Client02', '11:11:11:11:11:11', '94f39d29-7d6d-437d-973b-fba39e49d4ef')}
 
-destinationBluetooth = dict()
-destinationBluetooth = {'Client02' : ('RFCOMM-Client02', '11:11:11:11:11:11', '94f39d29-7d6d-437d-973b-fba39e49d4ef')}
-
-sourceBluetooth = dict()
-sourceBluetooth = {'11:11:11:11:11:11' : 'Client02'}
-
-allowedNumbers = dict()
-allowedNumbers = {3512560536 : 'Client02'}
-
-#Cuentas de correo permitidas para la interacción.
+# Cuentas de correo permitidas
 allowedEmails = dict()
-allowedEmails = {'Client01': 'cliente1.datalogger@gmail.com',
-				 'Client02': 'Cliente2.daalogger@gmail.com'}
+allowedEmails = {'Client02': 'client02.datalogger@gmail.com'}
 
+# Numeros de teléfono permitidos
 allowedNumbers = dict()
-allowedNumbers = {'Cliente01': '3512650513'}
+allowedNumbers = {'Client02' : 3512560536}

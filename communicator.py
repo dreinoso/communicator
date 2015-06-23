@@ -55,7 +55,7 @@ def send(contact, message):
 		ethernetPriority = configReader.priorityLevels['ethernet'] # Variable temporal para determinar la prioridad de ethernet
 		if not (contactList.allowedIpAddress.has_key(contact) and checkerInstance.availableEthernet)  : ethernetPriority = 0 # Se deshabilitan modos no registrados para el contacto o por no contar con el modo
 		bluetoothPriority = configReader.priorityLevels['bluetooth']
-		if not (contactList.destinationBluetooth.has_key(contact) and checkerInstance.availableBluetooth) : bluetoothPriority = 0 
+		if not (contactList.allowedMacAddress.has_key(contact) and checkerInstance.availableBluetooth) : bluetoothPriority = 0 
 		emailPriority = configReader.priorityLevels['email']
 		if not (contactList.allowedEmails.has_key(contact) and checkerInstance.availableEmail) : emailPriority = 0
 		smsPriority = configReader.priorityLevels['sms']
@@ -64,8 +64,8 @@ def send(contact, message):
 
 	if ((ethernetPriority >= bluetoothPriority) and (ethernetPriority >= emailPriority) and 	
 	(ethernetPriority >= smsPriority) and (ethernetPriority != 0)):
-		destinationIp = contactList.allowedIpAddress[contact]
-		destinationPort = contactList.allowedPorts[contact]
+		destinationIp = contactList.allowedIpAddress[contact][0]
+		destinationPort = contactList.allowedPorts[contact][1]
 		ethernetInstance.send(destinationIp, destinationPort, message)
 		acknowledge = True  #TODO True si el envio es correcto, de otro modo es False y en ese caso debe llamarse nuevamente a la función
 		if acknowledge:
@@ -75,9 +75,9 @@ def send(contact, message):
 			send(contact,message)
 
 	elif ((bluetoothPriority >= emailPriority) and (bluetoothPriority >= smsPriority) and (bluetoothPriority != 0)):
-		destinationServiceName = contactList.destinationBluetooth[contact][0]
-		destinationMAC = contactList.destinationBluetooth[contact][1]
-		destinationUUID = contactList.destinationBluetooth[contact][2]
+		destinationServiceName = contactList.allowedMacAddress[contact][0]
+		destinationMAC = contactList.allowedMacAddress[contact][1]
+		destinationUUID = contactList.allowedMacAddress[contact][2]
 		acknowledge = bluetoothInstance.send(destinationServiceName, destinationMAC, destinationUUID, message)
 		if acknowledge:
 			firstTry = True # Se limpia la bandera

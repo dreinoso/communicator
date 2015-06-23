@@ -81,7 +81,7 @@ class Sms(Modem):
 		self.sendAT('AT+CSCA="+' + str(contactList.CLARO_MESSAGES_CENTER) + '"\r') # Centro de mensajes CLARO
 		#print 'El modo SMS esta listo para usarse!'
 
-	def waitSms(self):
+	def receive(self):
 		""" Funcion que se encarga consultar al modem por algun mensaje SMS entrante. Envia al
 			mismo el comando AT que devuelve los mensajes de texto no leidos (que por ende seran
 			los nuevos) y que en caso de obtenerlos, los envia de a uno al modulo de procesamiento
@@ -92,6 +92,7 @@ class Sms(Modem):
 			de telefono dado por 'DESTINATION_NUMBER' un mensaje de actualizacion, que por el momento
 			estara compuesto de un 'TimeStamp'. """
 		while self.isActive:
+			
 			# Mientras no se haya recibido ningun mensaje de texto y el temporizador no haya expirado...
 			while self.smsAmount == 0 and self.isActive:
 				# ... sigo esperando hasta que llegue algun mensaje de texto o vensa el timer.
@@ -121,29 +122,27 @@ class Sms(Modem):
 				break
 			# ... sino, leemos los mensajes de texto recibidos
 			else:
-				print 'Ha(n) llegado ' + str(self.smsAmount) + ' nuevo(s) mensaje(s) de texto!'
+				print '[SMS] Ha(n) llegado ' + str(self.smsAmount) + ' nuevo(s) mensaje(s) de texto!'
 				for self.smsHeader, self.smsBody in zip(self.smsHeaderList, self.smsBodyList):
 					# Ejemplo smsHeader: +CMGL: 0,"REC UNREAD","+5493512560536",,"14/10/26,17:12:04-12"\r\n
 					# Ejemplo smsBody  : primero\r\n
-					self.telephoneNumber = self.processSmsHeader(self.smsHeader) # Obtenemos el numero de telefono
+					self.telephoneNumber = self.getTelephoneNumber(self.smsHeader) # Obtenemos el numero de telefono
 					print 'Procesando mensaje de ' + str(self.telephoneNumber)
 					# Comprobamos si el remitente del mensaje (un telefono) esta registrado...
-					if contactList.allowedNumbers.has_key(self.telephoneNumber):
-						self.smsMessage = self.processSmsBody(self.smsBody) # Obtenemos el mensaje de texto
-					# ... caso contrario, verificamos si el mensaje proviene de la pagina web de CLARO...
-					elif contactList.CLARO_WEB_PAGE == self.telephoneNumber:
-						print 'No es posible procesar mensajes enviados desde la pagina web!'
-					# ... sino, comunicamos al usuario desconocido que no es posible realizar la operacion solicitada.
+					if self.telephoneNumber in contactList.allowedNumbers.values():
+						self.smsMessage = self.getSmsBody(self.smsBody) # Obtenemos el mensaje de texto
 					else:
-						print 'Imposible procesar la solicitud. El numero no se encuentra registrado!'
-						self.smsMessage = 'Imposible procesar la solicitud. Usted no se encuentra registrado!'
-						self.sendSms(self.telephoneNumber, self.smsMessage)
-					self.smsAmount -= 1
-					if self.smsAmount == 0:
-						self.smsHeaderList = []
-						self.smsBodyList = []
-						self.removeSms()
-						break
+						# ... caso contrario, verificamos si el mensaje proviene de la pagina web de CLARO...
+						if self.telephoneNumber == contactList.CLARO_WEB_PAGE:
+							print '[SMS] No es posible procesar mensajes enviados desde la pagina web!'
+						# ... sino, comunicamos al usuario que no se encuentra registrado.
+						else:
+							print '[SMS] Imposible procesar la solicitud. El numero no se encuentra registrado!'
+							self.smsMessage = 'Imposible procesar la solicitud. Usted no se encuentra registrado!'
+							self.sendSms(self.telephoneNumber, self.smsMessage)
+				self.smsHeaderList = []
+				self.smsBodyList = []
+				self.removeSms()
 		print '[SMS] Funcion \'%s\' terminada.' % inspect.stack()[0][3]
 
 	def sendSms(self, telephoneNumber, smsMessage):
@@ -164,7 +163,7 @@ class Sms(Modem):
 			es muy limitada). """
 		self.sendAT('AT+CMGD=1,2\r') # Elimina todos los mensajes leidos y enviados
 
-	def processSmsHeader(self, smsHeader):
+	def getTelephoneNumber(self, smsHeader):
 		""" Procesa la cabecera del SMS.
 			@return: numero de telefono del remitente
 			@rtype: int """
@@ -184,7 +183,7 @@ class Sms(Modem):
 		telephoneNumber = int(headerList[2])
 		return telephoneNumber
 
-	def processSmsBody(self, smsBody):
+	def getSmsBody(self, smsBody):
 		""" Procesa el cuerpo del SMS.
 			@return: salida del procesamiento (de acuerdo al contenido del cuerpo del mensaje)
 			@rtype: list """
