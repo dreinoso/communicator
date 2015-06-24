@@ -18,7 +18,7 @@ SMTP_PORT = 587
 IMAP_PORT = 993
 
 # Configuración Ethernet
-LOCAL_HOST = '127.0.0.1'
+LOCAL_HOST = '192.168.1.124'
 UDP_PORT = 5016
 
 # Configuración Sms
@@ -32,11 +32,11 @@ BLUETOOTH_UUID		   = '94f39d29-7d6d-437d-973b-fba39e49d4ee'
 
 # Direcciones IP y puertos permitidos
 allowedIpAddress = dict()
-allowedIpAddress = {'Client02': ('192.168.1.2', 5006)}
+allowedIpAddress = {'Client02': ('192.168.1.110', 5025)}
 
 # Direcciones MAC permitidas
 allowedMacAddress = dict()
-allowedMacAddress = {'Client02' : ('RFCOMM-Client02', '11:11:11:11:11:11', '94f39d29-7d6d-437d-973b-fba39e49d4ef')}
+allowedMacAddress = {'Client02' : ('RFCOMM-Client02', '64:27:37:90:B5:B6', '94f39d29-7d6d-437d-973b-fba39e49d4ef')}
 
 # Cuentas de correo permitidas
 allowedEmails = dict()

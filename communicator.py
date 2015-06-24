@@ -65,7 +65,7 @@ def send(contact, message):
 	if ((ethernetPriority >= bluetoothPriority) and (ethernetPriority >= emailPriority) and 	
 	(ethernetPriority >= smsPriority) and (ethernetPriority != 0)):
 		destinationIp = contactList.allowedIpAddress[contact][0]
-		destinationPort = contactList.allowedPorts[contact][1]
+		destinationPort = contactList.allowedIpAddress[contact][1]
 		ethernetInstance.send(destinationIp, destinationPort, message)
 		acknowledge = True  #TODO True si el envio es correcto, de otro modo es False y en ese caso debe llamarse nuevamente a la función
 		if acknowledge:

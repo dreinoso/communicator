@@ -65,6 +65,7 @@ class Ethernet(object):
 		@type message: str """
 		try:
 			self.transmitterSocket.sendto(messageToSend, (destinationIp, destinationPort))
+			print '[ETHERNET] Mensaje enviado al cliente especificado.'
 			return True
 		except socket.error , msg:
 			return False

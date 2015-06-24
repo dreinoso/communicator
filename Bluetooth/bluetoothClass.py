@@ -48,23 +48,24 @@ class Bluetooth(object):
 		print 'Objeto ' + self.__class__.__name__ + ' destruido.'
 
 	def send(self, destinationServiceName, destinationMAC, destinationUUID, messageToSend):
-		print '[BLUETOOTH] Buscando el servicio \'%s\' sobre la direccion %s' % (destinationServiceName, destinationMAC)
+		print '[BLUETOOTH] Buscando el servicio \'%s\'.' % destinationServiceName
 		serviceMatches = bluetooth.find_service(uuid = destinationUUID, address = destinationMAC)
 		if len(serviceMatches) == 0:
-			print '[BLUETOOTH] No se pudo encontrar el servicio \'%s\'' % destinationServiceName
+			print '[BLUETOOTH] No se pudo encontrar el servicio \'%s\'.' % destinationServiceName
 			return False
 		else:
 			firstMatch = serviceMatches[0]
 			name = firstMatch['name']
 			host = firstMatch['host']
 			port = firstMatch['port']
-			print '[BLUETOOTH] Conectando al servicio \'%s\' sobre la direccion %s...' % (name, host)
+			print '[BLUETOOTH] Conectando con la direccion \'%s\'...' % host
 			# Crea un nuevo socket Bluetooth que usa el protocolo de transporte especificado
 			self.remoteSocket = bluetooth.BluetoothSocket(bluetooth.RFCOMM)
 			# Conecta el socket con el dispositivo remoto (host) sobre el puerto (channel) especificado
 			self.remoteSocket.connect((host, port))
 			print '[BLUETOOTH] Conectado con el dispositivo Bluetooth.'
 			self.remoteSocket.send(messageToSend)
+			print '[BLUETOOTH] Mensaje enviado al cliente especificado.'
 			# Cierra la conexion del socket cliente
 			self.remoteSocket.send('FIN')
 			self.remoteSocket.close()
@@ -77,8 +78,8 @@ class Bluetooth(object):
 				# Espera por una conexion entrante y devuelve un nuevo socket que representa la conexion, como asi tambien la direccion del cliente
 				remoteSocket, remoteAddress = self.localSocket.accept()
 				remoteSocket.settimeout(TIMEOUT)
-				print '[BLUETOOTH] Conexion desde ' + remoteAddress[0] + ' aceptada.'				
-				threadName = 'Thread%s' % remoteAddress[0]
+				print '[BLUETOOTH] Conexion desde \'%s\' aceptada.' % remoteAddress[0]
+				threadName = 'Thread-%s' % remoteAddress[0]
 				readerThread = bluetoothReader.BluetoothReader(threadName, remoteSocket, self.receptionBuffer)
 				readerThread.start()
 				queueThreads.put(readerThread)

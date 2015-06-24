@@ -12,7 +12,7 @@ class BluetoothReader(threading.Thread):
 	def __init__(self, threadName, remoteSocket, receptionBuffer):
 		threading.Thread.__init__(self, name = threadName)
 		self.remoteSocket = remoteSocket
-		self.receptionBuffer = _receptionBuffer
+		self.receptionBuffer = receptionBuffer
 
 	def run(self):
 		while not self.killReaderThread:
@@ -25,9 +25,9 @@ class BluetoothReader(threading.Thread):
 					self.killReaderThread = True
 				else:
 					self.receptionBuffer.append(dataReceived)
-					print self.getName() + ': %s' % dataReceived
+					print '[BLUETOOTH] \'%s\': %s' % (self.getName(), dataReceived)
 			except bluetooth.BluetoothError:
 				pass
 		# Cierra la conexion del socket cliente
 		self.remoteSocket.close()
-		print '\'' + self.getName() + '\' terminado y cliente desconectado.'
+		print '[BLUETOOTH] \'%s\' terminado y cliente desconectado.' % self.getName()
