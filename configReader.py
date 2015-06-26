@@ -9,28 +9,21 @@
 
 import os
 
-priorityLevels = dict()
+priorityLevels = dict() # Diccionario para la selección de envio por prioridades
 priorityLevels = {'ethernet': 4,
 				'bluetooth': 4,
 				'email': 2,
 				'sms': 0}
 
-ethernetPriority = 4
-bluetoothPriority = 4
-emailPriority =  2
-smsPriority = 0
-processNotifications = True
-warningNotifications = True
-errorNotifications = True
+consoleLoggingLevel = 'INFO' # Valores que determinan el nivel de notificaciones en consola y en archivo log
+fileLoggingLevel = 'DEBUG'
+
 
 def readConfigFile():
-	#global ethernetPriority, bluetoothPriority, emailPriority, smsPriority, processNotifications, warningNotifications, errorNotifications 
 	configurationFile =  open('properties.conf').readlines() # Apertura de Archivo
 	configurationFile = ''.join(configurationFile) # Conversión a String para ejecución
 	try:
 		exec(configurationFile)
+		return '[CONFIG READER] Archivo de configuración cargado correctamente.'
 	except Exception:
-		print '[COMUNICADOR-ERROR] El archivo properties.conf no esta bien configurado,\
-se usa la configuración por defecto.'
-
-readConfigFile()
+		return None

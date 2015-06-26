@@ -1,3 +1,5 @@
+ # coding=utf-8
+
 """	Permite crear una instancia que se encargara de proporcionar funciones
 	facilitando el manejo del modem. Entre las funcionalidades basicas con
 	las que cuenta, tenemos principalmente el envio y recepcion de mensajes
@@ -6,6 +8,8 @@
 	@author: Reinoso Ever Denis
 	@organization: UNC - Fcefyn
 	@date: Miercoles 17 de Junio de 2015 """
+import logger
+
 import time
 import serial
 import inspect
@@ -32,7 +36,7 @@ class Modem(object):
 		""" Destructor de la clase 'Modem'. Cierra la conexion establecida
 			con el modem. """
 		self.modemInstance.close()
-		print 'Objeto ' + self.__class__.__name__ + ' destruido.'
+		logger.write('INFO', '[SMS] Objeto destruido.')
 
 	def sendAT(self, atCommand):
 		""" Se encarga de enviarle un comando AT el modem. Espera la respuesta
@@ -122,28 +126,28 @@ class Sms(Modem):
 				break
 			# ... sino, leemos los mensajes de texto recibidos
 			else:
-				print '[SMS] Ha(n) llegado ' + str(self.smsAmount) + ' nuevo(s) mensaje(s) de texto!'
+				logger.write('DEBUG', '[SMS] Ha(n) llegado ' + str(self.smsAmount) + ' nuevo(s) mensaje(s) de texto!')
 				for self.smsHeader, self.smsBody in zip(self.smsHeaderList, self.smsBodyList):
 					# Ejemplo smsHeader: +CMGL: 0,"REC UNREAD","+5493512560536",,"14/10/26,17:12:04-12"\r\n
 					# Ejemplo smsBody  : primero\r\n
 					self.telephoneNumber = self.getTelephoneNumber(self.smsHeader) # Obtenemos el numero de telefono
-					print 'Procesando mensaje de ' + str(self.telephoneNumber)
+					logger.write('DEBUG','Procesando mensaje de ' + str(self.telephoneNumber))
 					# Comprobamos si el remitente del mensaje (un telefono) esta registrado...
 					if self.telephoneNumber in contactList.allowedNumbers.values():
 						self.smsMessage = self.getSmsBody(self.smsBody) # Obtenemos el mensaje de texto
 					else:
 						# ... caso contrario, verificamos si el mensaje proviene de la pagina web de CLARO...
 						if self.telephoneNumber == contactList.CLARO_WEB_PAGE:
-							print '[SMS] No es posible procesar mensajes enviados desde la pagina web!'
+							logger.write('DEBUG','[SMS] No es posible procesar mensajes enviados desde la pagina web!')
 						# ... sino, comunicamos al usuario que no se encuentra registrado.
 						else:
-							print '[SMS] Imposible procesar la solicitud. El numero no se encuentra registrado!'
+							logger.write('WARNING','[SMS] Imposible procesar una solicitud. El número no se encuentra registrado!')
 							self.smsMessage = 'Imposible procesar la solicitud. Usted no se encuentra registrado!'
 							self.sendSms(self.telephoneNumber, self.smsMessage)
 				self.smsHeaderList = []
 				self.smsBodyList = []
 				self.removeSms()
-		print '[SMS] Funcion \'%s\' terminada.' % inspect.stack()[0][3]
+		logger.write('WARNING', '[SMS] Funcion \'%s\' terminada.' % inspect.stack()[0][3])
 
 	def sendSms(self, telephoneNumber, smsMessage):
 		""" Envia el comando AT correspondiente para enviar un mensaje de texto.

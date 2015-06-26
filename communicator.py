@@ -8,7 +8,8 @@ import checkerClass
 import emailClass
 import modemClass
 import ethernetClass
-import contactList
+import contactList 
+import logger
 
 currentPath = ''.join(( os.popen('pwd').readlines())) # Se busca el Path del modo bluetooth para añadirlo al sistema
 currentPath = currentPath[0:len(currentPath)-1]
@@ -30,14 +31,20 @@ bluetoothPriority = True
 emailPriority = True
 smsPriority = True
 
+logger.set('communicatorLogger') # Solo se setea una vez, todos los objetos usan esta misma configuración.
+configResult = configReader.readConfigFile() # Se determina el resultado de la configuración 
+if configResult != None: logger.write('INFO', configResult)
+else: logger.write('ERROR', '[CONFIG READER] El archivo properties.conf no esta bien configurado,\
+se usa la configuración por defecto.')
+
 def open():
 	"""Se realiza la apertura, inicialización de los componentes que se tengan disponibles
 	"""
 	global checkerInstance, ethernetInstance, bluetoothInstance, smsInstance, emailInstance
-	ethernetInstance = ethernetClass.Ethernet(receptionBuffer, configReader.processNotifications, configReader.warningNotifications, configReader.errorNotifications)
-	bluetoothInstance = bluetoothClass.Bluetooth(receptionBuffer, configReader.processNotifications, configReader.warningNotifications, configReader.errorNotifications)
+	ethernetInstance = ethernetClass.Ethernet(receptionBuffer)
+	bluetoothInstance = bluetoothClass.Bluetooth(receptionBuffer)
 	smsInstance = modemClass.Sms()
-	emailInstance = emailClass.Email(receptionBuffer, configReader.processNotifications, configReader.warningNotifications, configReader.errorNotifications)
+	emailInstance = emailClass.Email(receptionBuffer)
 	checkerInstance = checkerClass.Checker(smsInstance, ethernetInstance, bluetoothInstance, emailInstance) # Al iniciar determina el estado de las conexiones
 	checkerThread = threading.Thread(target = checkerInstance.verifyConnections, name = 'checkerThread')
 	checkerThread.start()
@@ -70,6 +77,7 @@ def send(contact, message):
 		acknowledge = True  #TODO True si el envio es correcto, de otro modo es False y en ese caso debe llamarse nuevamente a la función
 		if acknowledge:
 			firstTry = True # Se limpia la bandera
+			logger.write('INFO', '[ETHERNET] Se envio mensaje al contacto: ' + contact)
 		else:
 			ethernetPriority = 0 # Entonces se descarta para la proxima selección
 			send(contact,message)
@@ -81,6 +89,7 @@ def send(contact, message):
 		acknowledge = bluetoothInstance.send(destinationServiceName, destinationMAC, destinationUUID, message)
 		if acknowledge:
 			firstTry = True # Se limpia la bandera
+			logger.write('INFO', '[BLUETOOTH] Se envio mensaje al contacto: ' + contact)
 		else:
 			bluetoothPriority = 0 # Entonces se descarta para la proxima selección
 			send(contact,message)
@@ -91,6 +100,7 @@ def send(contact, message):
 		acknowledge  = emailInstance.send(destination, contact + ' - Proyecto Datalogger', message)
 		if acknowledge:
 			firstTry = True # Se limpia la bandera
+			logger.write('INFO', '[EMAIL] Se envio mensaje al contacto: ' + contact)
 		else:
 			emailPriority = 0 # Entonces se descarta para la proxima selección
 			send(contact,message)
@@ -99,12 +109,14 @@ def send(contact, message):
 		acknowledge = True
 		if acknowledge:
 			firstTry = True # Se limpia la bandera
+			logger.write('INFO', '[SMS] Se envio mensaje al contacto: ' + contact)
 		else:
 			smsPriority = 0 # Entonces se descarta para la proxima selección
 			send(contact,message)
 
 	else:
-		if (configReader.warningNotifications): print '[COMUNICADOR] No hay modulos para el envio de mensajes a ' + contact
+		#print '[COMUNICADOR] No hay modulos para el envio de mensajes a ' + contact
+		logger.write('WARNING', '[COMUNICADOR] No hay modulos para el envio de mensajes a ' + contact)
 
 def recieve():
 	"""Se obtiene de un buffer circular el mensaje recibido mas antiguo.
@@ -112,14 +124,16 @@ def recieve():
 	@rtype: str"""
 	global emailInstance, ethernetInstance, receptionBuffer
 	if not(checkerInstance.availableEthernet or checkerInstance.availableBluetooth or checkerInstance.availableEmail or checkerInstance.availableSms):
-		if (configReader.warningNotifications): print '[COMUNICADOR] No hay modulos para la recepción de mensajes'
+		logger.write('WARNING','[COMUNICADOR] No hay modulos para la recepción de mensajes')
+		#print '[COMUNICADOR] No hay modulos para la recepción de mensajes'
 	if len(receptionBuffer) > 0:
 		message = receptionBuffer.pop()
 		#print 'Mensaje leido: ' + message
 		return message
 	else:
-	    if (configReader.warningNotifications): print '[COMUNICADOR] El buffer de mensajes esta vacio.'
-	    return None
+		logger.write('INFO','[COMUNICADOR] El buffer de mensajes esta vacio.')
+		#print '[COMUNICADOR] El buffer de mensajes esta vacio.'
+		return None
 	# determinar de quien es el mensaje que se quiere leer?
 	#TODO: puede que se hallan agregado mensajes y que se hayan deshabilitado los modulos, se deberia poder tomar el mensaje.
 

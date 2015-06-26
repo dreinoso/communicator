@@ -15,6 +15,8 @@ import inspect
 import threading
 import subprocess
 
+import logger
+
 class Checker(object):
 
 	killChecker = False
@@ -30,7 +32,7 @@ class Checker(object):
 		self.emailInstance = _emailInstance
 
 	def __del__(self):
-		print 'Objeto ' + self.__class__.__name__ + ' destruido.'
+		logger.write('INFO', '[CHECKER] Objeto destruido.') # self.__class__.__name__ 
 	
 	def verifyEthernetConnection(self):
 		"""Se determina la disponibilidad de la comunicación por medio del objeto Ethernet.
@@ -55,7 +57,8 @@ class Checker(object):
 				self.ethernetInstance.isActive = True
 				ethernetThread = threading.Thread(target = self.ethernetInstance.receive, name = 'ethernetReceptor')
 				ethernetThread.start()
-				print '[ETHERNET] Listo para usarse.'
+				logger.write('INFO','[ETHERNET] Listo para usarse.')
+				#print '[ETHERNET] Listo para usarse.'
 			return True
 		else:
 			if self.ethernetInstance.isActive:
@@ -70,7 +73,8 @@ class Checker(object):
 				self.bluetoothInstance.isActive = True
 				bluetoothThread = threading.Thread(target = self.bluetoothInstance.receive, name = 'bluetoothReceptor')
 				bluetoothThread.start()
-				print '[BLUETOOTH] Listo para usarse.'
+				logger.write('INFO','[BLUETOOTH] Listo para usarse.')
+				#print '[BLUETOOTH] Listo para usarse.'
 			return True
 		else:
 			if self.bluetoothInstance.isActive:
@@ -90,7 +94,8 @@ class Checker(object):
 				self.emailInstance.isActive = True
 				self.emailThread = threading.Thread(target = self.emailInstance.receive, name = 'emailReceptor')
 				self.emailThread.start()
-				print '[EMAIL] Listo para usarse.'
+				logger.write('INFO','[EMAIL] Listo para usarse.')
+				#print '[EMAIL] Listo para usarse.'
 			return True
 		except:
 			if self.emailInstance.isActive:
@@ -108,7 +113,8 @@ class Checker(object):
 				self.smsInstance.isActive = True
 				self.smsThread = threading.Thread(target = self.smsInstance.receive, name = 'smsReceptor')
 				self.smsThread.start()
-				print '[SMS] Listo para usarse.'
+				logger.write('INFO','[SMS] Listo para usarse.')
+				#print '[SMS] Listo para usarse.'
 			return True
 		else:
 			if self.smsInstance.isActive:
@@ -126,4 +132,4 @@ class Checker(object):
 		self.bluetoothInstance.isActive = False
 		self.emailInstance.isActive = False
 		self.ethernetInstance.isActive = False
-		print '[CHECKER] Funcion \'%s\' terminada.' % inspect.stack()[0][3]
+		logger.write('INFO', '[CHECKER] Funcion \'%s\' terminada.' % inspect.stack()[0][3]) #No es una advertencia porque se espera que se termine

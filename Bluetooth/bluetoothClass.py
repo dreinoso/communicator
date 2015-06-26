@@ -1,9 +1,12 @@
-import Queue
-import inspect
-import bluetooth
+ # coding=utf-8
 
 import contactList
 import bluetoothReader
+import logger
+
+import Queue
+import inspect
+import bluetooth
 
 CONNECTIONS = 3
 TIMEOUT = 1.5
@@ -18,15 +21,10 @@ class Bluetooth(object):
 	isActive = False
 
 	receptionBuffer = list()
-	processNotifications = True
-	warningNotifications = True
-	errorNotifications = True
+	
 
-	def __init__(self, _receptionBuffer, _processNotifications, _warningNotifications, _errorNotifications):
+	def __init__(self, _receptionBuffer):
 		self.receptionBuffer = _receptionBuffer
-		self.processNotifications = _processNotifications
-		self.warningNotifications = _warningNotifications
-		self.errorNotifications = _errorNotifications
 		# Creamos un nuevo socket Bluetooth que usa el protocolo de transporte especificado
 		self.localSocket = bluetooth.BluetoothSocket(bluetooth.RFCOMM)
 		# Enlazamos al adaptador local algun puerto disponible usando SDP (Service Discovery Protocol)
@@ -45,27 +43,27 @@ class Bluetooth(object):
 
 	def __del__(self):
 		self.localSocket.close()
-		print 'Objeto ' + self.__class__.__name__ + ' destruido.'
+		logger.write('INFO', '[BLUETOOTH] Objeto destruido.')
 
 	def send(self, destinationServiceName, destinationMAC, destinationUUID, messageToSend):
-		print '[BLUETOOTH] Buscando el servicio \'%s\'.' % destinationServiceName
+		logger.write('DEBUG','[BLUETOOTH] Buscando el servicio \'%s\'.' % destinationServiceName)
 		serviceMatches = bluetooth.find_service(uuid = destinationUUID, address = destinationMAC)
 		if len(serviceMatches) == 0:
-			print '[BLUETOOTH] No se pudo encontrar el servicio \'%s\'.' % destinationServiceName
+			logger.write('DEBUG', '[BLUETOOTH] No se pudo encontrar el servicio \'%s\'.' % destinationServiceName)
 			return False
 		else:
 			firstMatch = serviceMatches[0]
 			name = firstMatch['name']
 			host = firstMatch['host']
 			port = firstMatch['port']
-			print '[BLUETOOTH] Conectando con la direccion \'%s\'...' % host
+			logger.write('DEBUG', '[BLUETOOTH] Conectando con la direccion \'%s\'...' % host)
 			# Crea un nuevo socket Bluetooth que usa el protocolo de transporte especificado
 			self.remoteSocket = bluetooth.BluetoothSocket(bluetooth.RFCOMM)
 			# Conecta el socket con el dispositivo remoto (host) sobre el puerto (channel) especificado
 			self.remoteSocket.connect((host, port))
-			print '[BLUETOOTH] Conectado con el dispositivo Bluetooth.'
+			logger.write('DEBUG', '[BLUETOOTH] Conectado con el dispositivo Bluetooth.')
 			self.remoteSocket.send(messageToSend)
-			print '[BLUETOOTH] Mensaje enviado al cliente especificado.'
+			#print '[BLUETOOTH] Mensaje enviado al cliente especificado.'
 			# Cierra la conexion del socket cliente
 			self.remoteSocket.send('FIN')
 			self.remoteSocket.close()
@@ -78,7 +76,7 @@ class Bluetooth(object):
 				# Espera por una conexion entrante y devuelve un nuevo socket que representa la conexion, como asi tambien la direccion del cliente
 				remoteSocket, remoteAddress = self.localSocket.accept()
 				remoteSocket.settimeout(TIMEOUT)
-				print '[BLUETOOTH] Conexion desde \'%s\' aceptada.' % remoteAddress[0]
+				logger.write('DEBUG', '[BLUETOOTH] Conexion desde \'%s\' aceptada.' % remoteAddress[0])
 				threadName = 'Thread-%s' % remoteAddress[0]
 				readerThread = bluetoothReader.BluetoothReader(threadName, remoteSocket, self.receptionBuffer)
 				readerThread.start()
@@ -90,4 +88,4 @@ class Bluetooth(object):
 		while not queueThreads.empty():
 			readerThread = queueThreads.get()
 			readerThread.killReaderThread = True
-		print '[BLUETOOTH] Funcion \'%s\' terminada.' % inspect.stack()[0][3]
+		logger.write('WARNING','[BLUETOOTH] Funcion \'%s\' terminada.' % inspect.stack()[0][3])

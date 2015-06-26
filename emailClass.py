@@ -8,6 +8,7 @@
 	@date: Lunes 16 de Abril de 2015 """
 
 import contactList
+import logger
 
 import time
 import email
@@ -30,11 +31,8 @@ class Email(object):
 	isActive = False
 
 	receptionBuffer = list()
-	processNotifications = True
-	warningNotifications = True
-	errorNotifications = True
 
-	def __init__(self, _receptionBuffer, _processNotifications, _warningNotifications, _errorNotifications):
+	def __init__(self, _receptionBuffer):
 		""" Configura el protocolo SMTP y el protocolo IMAP. El primero se encargara
 		de enviar correos electronicos, mientras que el segungo a recibirlos.
 		mbos disponen de una misma cuenta asociada a GMAIL para tales fines (y
@@ -42,9 +40,6 @@ class Email(object):
 		@param _receptionBuffer: Buffer para la recepción de datos
 		@type: list"""
 		self.receptionBuffer = _receptionBuffer
-		self.processNotifications = _processNotifications
-		self.warningNotifications = _warningNotifications
-		self.errorNotifications = _errorNotifications
 		socket.setdefaulttimeout(TIMEOUT) # Establecemos tiempo maximo antes de reintentar lectura
 
 	def __del__(self):
@@ -52,8 +47,8 @@ class Email(object):
 		conexiones ocupados en el Host"""
 		self.smtpServer.close()  # Cerramos la sesion con el servidor SMTP
 		self.imapServer.logout() # Cerramos la sesion con el servidor IMAP
-		print 'Objeto ' + self.__class__.__name__ + ' destruido.'
-		#if (self.warningNotifications): print '[MODO EMAIL] Se terminó la sesión.'
+		logger.write('INFO','[EMAIL] Objeto destruido.' )
+		#print 'Objeto ' + self.__class__.__name__ + ' destruido.'
 
 	def connect(self):
 		self.smtpServer = smtplib.SMTP(contactList.SMTP_SERVER, contactList.SMTP_PORT)      # Establecemos servidor y puerto SMTP
@@ -109,7 +104,7 @@ class Email(object):
 			else:
 				emailIdsList = emailIds[0].split()
 				emailAmount = len(emailIdsList) # Cantidad de emails no leidos
-				print '[EMAIL] Ha(n) llegado ' + str(emailAmount) + ' nuevo(s) mensaje(s) de correo electronico!'
+				logger.write('DEBUG', '[EMAIL] Ha(n) llegado ' + str(emailAmount) + ' nuevo(s) mensaje(s) de correo electronico!')
 				# Recorremos los emails recibidos...
 				for i in emailIdsList:
 					#result, emailData = self.imapServer.fetch(i, '(RFC822)')
@@ -120,17 +115,16 @@ class Email(object):
 					sourceName = headerList[0]                          # Almacenamos el nombre del remitente
 					sourceEmail = headerList[1]                         # Almacenamos el correo del remitente
 					emailSubject = headerList[2]                        # Almacenamos el asunto correspondiente
-					print '[EMAIL] Procesando correo de ' + sourceName + ' - ' + sourceEmail
+					logger.write('DEBUG', '[EMAIL] Procesando correo de ' + sourceName + ' - ' + sourceEmail)
 					# Comprobamos si el remitente del mensaje (un correo) esta registrado...
 					if sourceEmail in contactList.allowedEmails.values():
 						emailBody = self.getEmailBody(emailReceived) # Obtenemos el cuerpo del email
 						self.receptionBuffer.append(emailBody)
 					else:
-						print '[EMAIL] Imposible procesar la solicitud. El correo no se encuentra registrado!'
+						logger.write('WARNING', '[EMAIL] Imposible procesar la solicitud. El correo no se encuentra registrado!')
 						emailMessage = 'Imposible procesar la solicitud. Usted no se encuentra registrado!'
 						self.send(sourceEmail, emailSubject, emailMessage)
-		print '[EMAIL] Funcion \'%s\' terminada.' % inspect.stack()[0][3]
-		#if (self.warningNotifications): print '[MODO EMAIL] Este modo ha dejado de esperar mensajes.'
+		logger.write('WARNING', '[EMAIL] Funcion \'%s\' terminada.' % inspect.stack()[0][3])
 
 	def processEmailHeader(self, emailReceived):
 		""" Procesa la cabecera del EMAIL.
@@ -213,7 +207,7 @@ class Email(object):
 			result, emailIds = self.imapServer.search(None, '(UNSEEN)') # Buscamos emails sin leer (nuevos)
 				# Ejemplo de emailIds: ['35 36 37']
 		except Exception as e:					       # Timeout or something else
-			if (self.errorNotifications): print '[MODO EMAIL] Error: en "recieve()" No hay conexion a Internet.'
+			print '[MODO EMAIL] Error: en "recieve()" No hay conexion a Internet.'
 			time.sleep(5)           # ... sigo esperando por alguno de los anteriores.
 		emailIdsList = emailIds[0].split()
 		emailAmount = len(emailIdsList) # Cantidad de emails no leidos

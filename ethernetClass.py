@@ -6,13 +6,13 @@
 	@author: Reinoso Ever Denis
 	@organization: UNC - Fcefyn
 	@date: Lunes 16 de Mayo de 2015 """
+import contactList
+import logger
 
 import time
 import socket
 import inspect
 import threading
-
-import contactList
 
 class Ethernet(object):
 
@@ -23,34 +23,29 @@ class Ethernet(object):
 	isActive = False
 
 	receptionBuffer = list()
-	processNotifications = True
-	warningNotifications = True
-	errorNotifications = True
 
-	def __init__(self, _receptionBuffer, _processNotifications, _warningNotifications, _errorNotifications):
+	def __init__(self, _receptionBuffer):
 		"""Se crean los sockets para envío y recepción. Se activa el hilo para la recepción 
 		y se asigna el buffer también para la recepción.
 		@param _receptionBuffer: Buffer para la recepción de datos
 		@type: list"""
 		self.receptionBuffer = _receptionBuffer
-		self.processNotifications = _processNotifications
-		self.warningNotifications = _warningNotifications
-		self.errorNotifications = _errorNotifications
 		try:
 			self.transmitterSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 			self.receiverSocket	   = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 			self.receiverSocket.bind((self.localHost, self.localPort))
 			self.receiverSocket.settimeout(2)
 		except socket.error , msg:
-			print 'Bind failed. Error Code : ' + str(msg[0]) + ' Message ' + msg[1]
-		#if (self.warningNotifications): print '[MODO ETHERNET] Listo para usarse.'
+			logger.write('ERROR', '[ETHERNET]' + str(msg[0]) + ' Message ' + msg[1])
+			#print 'Bind failed. Error Code : ' + str(msg[0]) + ' Message ' + msg[1]
 
 	def __del__(self):
 		"""Elminación de la instancia de esta clase, cerrando conexiones establecidas, para no dejar
 		puertos ocupados en el Host"""
 		self.transmitterSocket.close()
 		self.receiverSocket.close()
-		print 'Objeto ' + self.__class__.__name__ + ' destruido.'
+		logger.write('INFO','[ETHERNET] Objeto destruido.' )
+		#print 'Objeto ' + self.__class__.__name__ + ' destruido.'
 
 	def connect(self):
 		pass
@@ -65,7 +60,8 @@ class Ethernet(object):
 		@type message: str """
 		try:
 			self.transmitterSocket.sendto(messageToSend, (destinationIp, destinationPort))
-			print '[ETHERNET] Mensaje enviado al cliente especificado.'
+			
+			#print '[ETHERNET] Mensaje enviado al cliente especificado.'
 			return True
 		except socket.error , msg:
 			return False
@@ -87,5 +83,5 @@ class Ethernet(object):
 			except socket.error , msg:
 				# Para que el bloque 'try' no se quede esperando indefinidamente
 				pass
-		print '[ETHERNET] Funcion \'%s\' terminada.' % inspect.stack()[0][3]
-		#if (self.warningNotifications): print '[MODO ETHERNET] Ya no se estan recibiendo paquetes.'
+		logger.write('WARNING', '[ETHERNET] Funcion \'%s\' terminada.' % inspect.stack()[0][3])
+		#print '[ETHERNET] Funcion \'%s\' terminada.' % inspect.stack()[0][3]
