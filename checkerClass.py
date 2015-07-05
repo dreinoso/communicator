@@ -5,7 +5,7 @@
 	@author: Gonzalez Leonardo Mauricio
 	@author: Reinoso Ever Denis
 	@organization: UNC - FCEFYN
-	@date: Lunes 16 de Abril de 2015 """
+	@date: Lunes 16 de Junio de 2015 """
 
 import os
 import re

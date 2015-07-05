@@ -1,4 +1,12 @@
  # coding=utf-8
+
+"""Modulo principal que se encarga del control de los demás objetos y submódulos
+	para permitir la comunicación. 
+	@author: Gonzalez Leonardo Mauricio
+	@author: Reinoso Ever Denis
+	@organization: UNC - Fcefyn
+	@date: Lunes 16 de Mayo de 2015 """
+
 import sys
 import threading
 import os
