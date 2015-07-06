@@ -7,7 +7,6 @@
 	@date: Lunes 16 de Abril de 2015 """
 
 import logging
-import sys
 import configReader
 
 loggingLevels = {'DEBUG': logging.DEBUG,
@@ -17,11 +16,10 @@ loggingLevels = {'DEBUG': logging.DEBUG,
             'CRITICAL': logging.CRITICAL}
 
 configReader.readConfigFile()
-consoleLoggingLevel = configReader.consoleLoggingLevel.upper()
+consoleLoggingLevel = configReader.consoleLoggingLevel.upper() # Se requiere nombres en mayúscula
 fileLoggingLevel =  configReader.fileLoggingLevel.upper()
 
 logger = ''
-fileHandler = ''
 
 def set(name):
 	"""Se configura el logger, los manejadores (junto con los niveles de mensajes) 
@@ -39,14 +37,11 @@ def set(name):
 	consoleHandler.setFormatter(consoleFormatter)
 	logger.addHandler(consoleHandler) # Se añade el manejador al objeto logger
 
-	fileHandler = logging.FileHandler('Historial_de_Eventos.log') # Se crea el manejador para archivo de log
+	fileHandler = logging.FileHandler('Historial_de_Eventos.log') # Se crea el manejador para archivo de log (no requiere cierre)
 	fileHandler.setLevel(fileLoggingLevel) # Se define el nivel para almacenar mensajes
 	fileFormatter = logging.Formatter('[%(asctime)s][%(levelname)s] %(message)s') # Se crea y configura el formato
 	fileHandler.setFormatter(fileFormatter)
 	logger.addHandler(fileHandler) # Se añade el manejador al objeto logger
-
-#def close():
-#	fileHandler.close()
 
 def write(logType, message):
 	"""Se añade un mensaje al logger si es correcto el tipo de mensaje, el mensaje

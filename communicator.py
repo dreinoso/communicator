@@ -34,21 +34,23 @@ smsInstance = modemClass.Sms
 emailInstance = emailClass.Email
 
 firstTry = True # Para el control de envio recursivo por prioridades
-ethernetPriority = True
-bluetoothPriority = True
-emailPriority = True
-smsPriority = True
-
-logger.set('communicatorLogger') # Solo se setea una vez, todos los objetos usan esta misma configuración.
-configResult = configReader.readConfigFile() # Se determina el resultado de la configuración 
-if configResult != None: logger.write('INFO', configResult)
-else: logger.write('ERROR', '[CONFIG READER] El archivo properties.conf no esta bien configurado,\
-se usa la configuración por defecto.')
+ethernetPriority = 0 # Por defecto se deshabilitan los modos de envio
+bluetoothPriority = 0
+emailPriority = 0
+smsPriority = 0
 
 def open():
 	"""Se realiza la apertura, inicialización de los componentes que se tengan disponibles
 	"""
 	global checkerInstance, ethernetInstance, bluetoothInstance, smsInstance, emailInstance
+	
+	logger.set('communicatorLogger') # Solo se setea una vez, todos los objetos usan esta misma configuración.
+	
+	configResult = configReader.readConfigFile() # Se determina el resultado de la configuración 
+	if configResult != None: logger.write('INFO', configResult)
+	else: logger.write('ERROR', '[CONFIG READER] El archivo properties.conf no esta bien configurado,\
+	se usa la configuración por defecto.')
+
 	ethernetInstance = ethernetClass.Ethernet(receptionBuffer)
 	bluetoothInstance = bluetoothClass.Bluetooth(receptionBuffer)
 	smsInstance = modemClass.Sms()
@@ -64,17 +66,17 @@ def send(contact, message):
 	@type contact: str
 	@param message: Mensaje a ser enviado
 	@type contact: str"""
-	global emailInstance, ethernetInstance, bluetoothInstance, firstTry, ethernetPriority, bluetoothPriority, emailPriority, smsPriority
+	global ethernetInstance, bluetoothInstance, emailInstance, smsInstance, firstTry, ethernetPriority, bluetoothPriority, emailPriority, smsPriority
 
 	if firstTry: # Solo la primer vez que intente enviar incia las prioridades, para poder modificar temporalmente
-		ethernetPriority = configReader.priorityLevels['ethernet'] # Variable temporal para determinar la prioridad de ethernet
-		if not (contactList.allowedIpAddress.has_key(contact) and checkerInstance.availableEthernet)  : ethernetPriority = 0 # Se deshabilitan modos no registrados para el contacto o por no contar con el modo
-		bluetoothPriority = configReader.priorityLevels['bluetooth']
-		if not (contactList.allowedMacAddress.has_key(contact) and checkerInstance.availableBluetooth) : bluetoothPriority = 0 
-		emailPriority = configReader.priorityLevels['email']
-		if not (contactList.allowedEmails.has_key(contact) and checkerInstance.availableEmail) : emailPriority = 0
-		smsPriority = configReader.priorityLevels['sms']
-		if not (contactList.allowedNumbers.has_key(contact) and checkerInstance.availableSms) : smsPriority = 0
+		if (contactList.allowedIpAddress.has_key(contact) and checkerInstance.availableEthernet): # Si esta registrado el contacto y disponible el modo se habilita y carga la prioridad
+			ethernetPriority = configReader.priorityLevels['ethernet'] 
+		if (contactList.allowedMacAddress.has_key(contact) and checkerInstance.availableBluetooth): 
+			bluetoothPriority = configReader.priorityLevels['bluetooth']
+		if (contactList.allowedEmails.has_key(contact) and checkerInstance.availableEmail): 
+			emailPriority = configReader.priorityLevels['email']
+		if (contactList.allowedNumbers.has_key(contact) and checkerInstance.availableSms):
+			smsPriority = configReader.priorityLevels['sms']
 		firstTry = False
 
 	if ((ethernetPriority >= bluetoothPriority) and (ethernetPriority >= emailPriority) and 	
@@ -114,7 +116,7 @@ def send(contact, message):
 			send(contact,message)
 
 	elif smsPriority != 0:
-		acknowledge = True
+		acknowledge = True #TODO cambiar esta linea a envio de SMS
 		if acknowledge:
 			firstTry = True # Se limpia la bandera
 			logger.write('INFO', '[SMS] Se envio mensaje al contacto: ' + contact)
