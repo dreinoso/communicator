@@ -13,6 +13,7 @@ import time
 import socket
 import inspect
 import threading
+import Queue
 
 class Ethernet(object):
 
@@ -22,7 +23,7 @@ class Ethernet(object):
 	receiverSocket = socket.socket
 	isActive = False
 
-	receptionBuffer = list()
+	receptionBuffer = Queue.Queue()
 
 	def __init__(self, _receptionBuffer):
 		"""Se crean los sockets para envío y recepción. Se activa el hilo para la recepción 
@@ -79,7 +80,7 @@ class Ethernet(object):
 		while self.isActive:
 			try:
 				data, addr = self.receiverSocket.recvfrom(1024) # buffer size is 1024 bytes
-				self.receptionBuffer.append(data)
+				self.receptionBuffer.put(data)
 			except socket.error , msg:
 				# Para que el bloque 'try' no se quede esperando indefinidamente
 				pass

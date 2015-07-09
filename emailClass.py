@@ -17,6 +17,7 @@ import inspect
 import smtplib
 import imaplib
 import threading
+import Queue
 
 from email.header import decode_header
 from email.header import make_header
@@ -30,7 +31,7 @@ class Email(object):
 	imapServer = imaplib.IMAP4_SSL
 	isActive = False
 
-	receptionBuffer = list()
+	receptionBuffer = Queue.Queue()
 
 	def __init__(self, _receptionBuffer):
 		""" Configura el protocolo SMTP y el protocolo IMAP. El primero se encargara
@@ -119,7 +120,7 @@ class Email(object):
 					# Comprobamos si el remitente del mensaje (un correo) esta registrado...
 					if sourceEmail in contactList.allowedEmails.values():
 						emailBody = self.getEmailBody(emailReceived) # Obtenemos el cuerpo del email
-						self.receptionBuffer.append(emailBody)
+						self.receptionBuffer.put(emailBody)
 					else:
 						logger.write('WARNING', '[EMAIL] Imposible procesar la solicitud. El correo no se encuentra registrado!')
 						emailMessage = 'Imposible procesar la solicitud. Usted no se encuentra registrado!'

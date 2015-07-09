@@ -20,7 +20,7 @@ class Bluetooth(object):
 	remoteSocket = bluetooth.BluetoothSocket
 	isActive = False
 
-	receptionBuffer = list()
+	receptionBuffer = Queue.Queue()
 	
 
 	def __init__(self, _receptionBuffer):

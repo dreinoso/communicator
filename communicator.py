@@ -10,6 +10,8 @@
 import sys
 import threading
 import os
+import Queue
+
 
 import configReader
 import checkerClass
@@ -19,13 +21,14 @@ import ethernetClass
 import contactList 
 import logger
 
+
 currentPath = ''.join(( os.popen('pwd').readlines())) # Se busca el Path del modo bluetooth para añadirlo al sistema
 currentPath = currentPath[0:len(currentPath)-1]
 bluetoothPath = currentPath + '/Bluetooth'
 sys.path.append(bluetoothPath)
 import bluetoothClass
 
-receptionBuffer = list()
+receptionBuffer = Queue.Queue()
 
 checkerInstance = checkerClass.Checker
 ethernetInstance = ethernetClass.Ethernet
@@ -136,8 +139,8 @@ def recieve():
 	if not(checkerInstance.availableEthernet or checkerInstance.availableBluetooth or checkerInstance.availableEmail or checkerInstance.availableSms):
 		logger.write('WARNING','[COMUNICADOR] No hay modulos para la recepción de mensajes')
 		#print '[COMUNICADOR] No hay modulos para la recepción de mensajes'
-	if len(receptionBuffer) > 0:
-		message = receptionBuffer.pop()
+	if receptionBuffer.qsize() > 0:
+		message = receptionBuffer.get(False) # False implica que no se bloquee esperando un elemento
 		#print 'Mensaje leido: ' + message
 		return message
 	else:
@@ -147,13 +150,20 @@ def recieve():
 	# determinar de quien es el mensaje que se quiere leer?
 	#TODO: puede que se hallan agregado mensajes y que se hayan deshabilitado los modulos, se deberia poder tomar el mensaje.
 
+def len():
+	"""Devuelve el tamaño del buffer de recepción.
+	@return: Cantidad de elementos en el buffer
+	@rtype: int"""
+	if receptionBuffer.qsize() == None: return 0
+	else: return receptionBuffer.qsize()
+
 def close():
 	"""Se cierran los componentes del sistema, unicamente los abiertos previamente"""
 	global receptionBuffer, checkerInstance, smsInstance, ethernetInstance, bluetoothInstance, emailInstance
 	receptionBuffer = list() #Se limpia el buffer de recepción
 	checkerInstance.killChecker = True
 	del(checkerInstance)
-	del smsInstance
+	del(smsInstance)
 	del(ethernetInstance)
 	del(emailInstance)
 	del(bluetoothInstance)

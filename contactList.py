@@ -40,7 +40,8 @@ allowedMacAddress = {'Client02' : ('RFCOMM-Client02', '64:27:37:90:B5:B6', '94f3
 
 # Cuentas de correo permitidas
 allowedEmails = dict()
-allowedEmails = {'Client02': 'client02.datalogger@gmail.com'}
+allowedEmails = {'Cliente01': 'cliente1.datalogger@gmail.com',
+				'Client02': 'client02.datalogger@gmail.com'}
 
 # Numeros de teléfono permitidos
 allowedNumbers = dict()
