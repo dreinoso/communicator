@@ -1,5 +1,6 @@
  # coding=utf-8
 
+import configReader
 import contactList
 import bluetoothReader
 import logger
@@ -14,8 +15,8 @@ TIMEOUT = 1.5
 class Bluetooth(object):
 
 	localPort = ''
-	localServiceName = contactList.BLUETOOTH_SERVICE_NAME
-	localUUID = contactList.BLUETOOTH_UUID
+	localServiceName = configReader.BLUETOOTH_SERVICE_NAME
+	localUUID = configReader.BLUETOOTH_UUID
 	localSocket = bluetooth.BluetoothSocket
 	remoteSocket = bluetooth.BluetoothSocket
 	isActive = False

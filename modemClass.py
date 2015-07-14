@@ -8,6 +8,8 @@
 	@author: Reinoso Ever Denis
 	@organization: UNC - Fcefyn
 	@date: Miercoles 17 de Junio de 2015 """
+
+import configReader
 import logger
 
 import time
@@ -82,7 +84,7 @@ class Sms(Modem):
 		self.sendAT('AT+CMGF=1\r')				# Modo para Sms
 		self.sendAT('AT+CPMS="ME","ME","ME"\r') # Lugar de almacenamiento de los mensajes (memoria del dispositivo)
 		self.sendAT('AT+CNMI=1,1,0,0,0\r')		# Habilito notificacion de mensaje entrante
-		self.sendAT('AT+CSCA="+' + str(contactList.CLARO_MESSAGES_CENTER) + '"\r') # Centro de mensajes CLARO
+		self.sendAT('AT+CSCA="+' + str(configReader.CLARO_MESSAGES_CENTER) + '"\r') # Centro de mensajes CLARO
 		#print 'El modo SMS esta listo para usarse!'
 
 	def receive(self):
@@ -137,7 +139,7 @@ class Sms(Modem):
 						self.smsMessage = self.getSmsBody(self.smsBody) # Obtenemos el mensaje de texto
 					else:
 						# ... caso contrario, verificamos si el mensaje proviene de la pagina web de CLARO...
-						if self.telephoneNumber == contactList.CLARO_WEB_PAGE:
+						if self.telephoneNumber == configReader.CLARO_WEB_PAGE:
 							logger.write('DEBUG','[SMS] No es posible procesar mensajes enviados desde la pagina web!')
 						# ... sino, comunicamos al usuario que no se encuentra registrado.
 						else:

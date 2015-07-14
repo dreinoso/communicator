@@ -7,6 +7,30 @@
 	@organization: UNC - FCEFYN
 	@date: 17 de Abril de 2015 """
 
+#  Configuraciones LAN 
+LAN_PROTOCOL = 'TCP'
+LOCAL_HOST = '192.168.1.124'
+UDP_PORT = 5016
+CLOSE_PORT = True # Para cerrar el puerto en caso de estar ocupado
+
+# Configuraciones Bluetooth 
+BLUETOOTH_PROTOCOL = 'TCP'
+BLUETOOTH_SERVICE_NAME = 'RFCOMM-Client01'
+BLUETOOTH_MAC		   = '00:24:7E:64:7B:4A'
+BLUETOOTH_UUID		   = '94f39d29-7d6d-437d-973b-fba39e49d4ee'
+
+# Configuraciones Email 
+EMAIL_SERVER = 'servidorcentral.datalogger@gmail.com'
+PASS_SERVER  = 'servidorcentral1234'
+SMTP_SERVER = 'smtp.gmail.com'
+IMAP_SERVER = 'imap.gmail.com'
+SMTP_PORT = 587
+IMAP_PORT = 993
+
+# Configuraciones Sms 
+CLARO_MESSAGES_CENTER = 543200000001
+CLARO_WEB_PAGE = 876966
+
 priorityLevels = dict() # Diccionario para la selección de envio por prioridades
 priorityLevels = {'ethernet': 4,
 				'bluetooth': 4,

@@ -7,6 +7,7 @@
 	@organization: UNC - Fcefyn
 	@date: Lunes 16 de Abril de 2015 """
 
+import configReader
 import contactList
 import logger
 
@@ -52,12 +53,12 @@ class Email(object):
 		#print 'Objeto ' + self.__class__.__name__ + ' destruido.'
 
 	def connect(self):
-		self.smtpServer = smtplib.SMTP(contactList.SMTP_SERVER, contactList.SMTP_PORT)      # Establecemos servidor y puerto SMTP
-		self.imapServer = imaplib.IMAP4_SSL(contactList.IMAP_SERVER, contactList.IMAP_PORT) # Establecemos servidor y puerto IMAP
+		self.smtpServer = smtplib.SMTP(configReader.SMTP_SERVER, configReader.SMTP_PORT)      # Establecemos servidor y puerto SMTP
+		self.imapServer = imaplib.IMAP4_SSL(configReader.IMAP_SERVER, configReader.IMAP_PORT) # Establecemos servidor y puerto IMAP
 		self.smtpServer.starttls()
 		self.smtpServer.ehlo()
-		self.smtpServer.login(contactList.EMAIL_SERVER, contactList.PASS_SERVER)            # Nos logueamos en el servidor SMTP
-		self.imapServer.login(contactList.EMAIL_SERVER, contactList.PASS_SERVER)            # Nos logueamos en el servidor IMAP
+		self.smtpServer.login(configReader.EMAIL_SERVER, configReader.PASS_SERVER)            # Nos logueamos en el servidor SMTP
+		self.imapServer.login(configReader.EMAIL_SERVER, configReader.PASS_SERVER)            # Nos logueamos en el servidor IMAP
 		self.imapServer.select('INBOX')                                                     # Seleccionamos la Bandeja de Entrada
 
 	def send(self, emailDestination, emailSubject, emailMessage):
@@ -70,7 +71,7 @@ class Email(object):
 		@type emailMessage: str """
 		# Se construye un mensaje simple
 		simpleMessage = MIMEText(emailMessage)
-		simpleMessage['From'] = contactList.EMAIL_SERVER
+		simpleMessage['From'] = configReader.EMAIL_SERVER
 		simpleMessage['To'] = emailDestination
 		simpleMessage['Subject'] = emailSubject
 		# Se envia el mensaje, al correo destino correspondiente

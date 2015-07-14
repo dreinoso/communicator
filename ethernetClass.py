@@ -6,19 +6,22 @@
 	@author: Reinoso Ever Denis
 	@organization: UNC - Fcefyn
 	@date: Lunes 16 de Mayo de 2015 """
+
+import configReader
 import contactList
 import logger
 
-import time
-import socket
 import inspect
-import threading
+import os
 import Queue
+import socket
+import threading
+import time
 
 class Ethernet(object):
 
-	localHost = contactList.LOCAL_HOST
-	localPort = contactList.UDP_PORT
+	localHost = configReader.LOCAL_HOST
+	localPort = configReader.UDP_PORT
 	transmitterSocket = socket.socket
 	receiverSocket = socket.socket
 	isActive = False
@@ -34,6 +37,10 @@ class Ethernet(object):
 		try:
 			self.transmitterSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 			self.receiverSocket	   = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+			if(configReader.CLOSE_PORT): # Para cerrar el puerto en caso de estar ocupado
+				comand = 'fuser -k -s ' + str(self.localPort) + '/udp' # -k = kill;  -s: modo silecioso
+    			os.system(comand)
+    			#TODO anda bien pero la siguiente vez despues de el mal cierre no lo toma, averiguar
 			self.receiverSocket.bind((self.localHost, self.localPort))
 			self.receiverSocket.settimeout(2)
 		except socket.error , msg:
