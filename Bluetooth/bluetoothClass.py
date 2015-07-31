@@ -14,22 +14,21 @@ TIMEOUT = 1.5
 
 class Bluetooth(object):
 
-	localPort = ''
 	localServiceName = configReader.BLUETOOTH_SERVICE_NAME
 	localUUID = configReader.BLUETOOTH_UUID
+	localPort = bluetooth.PORT_ANY
 	localSocket = bluetooth.BluetoothSocket
 	remoteSocket = bluetooth.BluetoothSocket
 	isActive = False
 
 	receptionBuffer = Queue.Queue()
-	
 
 	def __init__(self, _receptionBuffer):
 		self.receptionBuffer = _receptionBuffer
 		# Creamos un nuevo socket Bluetooth que usa el protocolo de transporte especificado
 		self.localSocket = bluetooth.BluetoothSocket(bluetooth.RFCOMM)
 		# Enlazamos al adaptador local algun puerto disponible usando SDP (Service Discovery Protocol)
-		self.localSocket.bind(('', bluetooth.PORT_ANY))
+		self.localSocket.bind(('', self.localPort))
 		# Especificamos el numero de conexiones permitidas (todavia sin aceptar) antes de rechazar las nuevas entrantes
 		self.localSocket.listen(CONNECTIONS)
 		# Especificamos el tiempo de espera de conexiones

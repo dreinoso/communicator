@@ -24,6 +24,7 @@ class Ethernet(object):
 	localPort = configReader.UDP_PORT
 	transmitterSocket = socket.socket
 	receiverSocket = socket.socket
+	bindFailed = False
 	isActive = False
 
 	receptionBuffer = Queue.Queue()
@@ -41,11 +42,11 @@ class Ethernet(object):
 				comand = 'fuser -k -s ' + str(self.localPort) + '/udp' # -k = kill;  -s: modo silecioso
     			os.system(comand)
     			#TODO anda bien pero la siguiente vez despues de el mal cierre no lo toma, averiguar
-			self.receiverSocket.bind((self.localHost, self.localPort))
 			self.receiverSocket.settimeout(2)
+			self.receiverSocket.bind((self.localHost, self.localPort))
 		except socket.error , msg:
-			logger.write('ERROR', '[ETHERNET]' + str(msg[0]) + ' Message ' + msg[1])
-			#print 'Bind failed. Error Code : ' + str(msg[0]) + ' Message ' + msg[1]
+			self.bindFailed = True
+			logger.write('ERROR', '[ETHERNET] Bind failed. ' + msg[1])
 
 	def __del__(self):
 		"""Elminación de la instancia de esta clase, cerrando conexiones establecidas, para no dejar
@@ -68,12 +69,9 @@ class Ethernet(object):
 		@type message: str """
 		try:
 			self.transmitterSocket.sendto(messageToSend, (destinationIp, destinationPort))
-			
-			#print '[ETHERNET] Mensaje enviado al cliente especificado.'
 			return True
 		except socket.error , msg:
 			return False
-			#if (self.processNotifications): print '[MODO ETHERNET] Se envio un mensaje.'
 
 	def receive(self):
 		""" Esta función es ejecutada en un hilo, se queda esperando los paquetes

@@ -10,10 +10,10 @@ class BluetoothReader(threading.Thread):
 	killReaderThread = False
 	receptionBuffer = Queue.Queue()
 
-	def __init__(self, threadName, remoteSocket, receptionBuffer):
-		threading.Thread.__init__(self, name = threadName)
-		self.remoteSocket = remoteSocket
-		self.receptionBuffer = receptionBuffer
+	def __init__(self, _threadName, _remoteSocket, _receptionBuffer):
+		threading.Thread.__init__(self, name = _threadName)
+		self.remoteSocket = _remoteSocket
+		self.receptionBuffer = _receptionBuffer
 
 	def run(self):
 		while not self.killReaderThread:

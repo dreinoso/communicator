@@ -20,6 +20,10 @@ import imaplib
 import threading
 import Queue
 
+import os
+import shlex
+import subprocess
+
 from email.header import decode_header
 from email.header import make_header
 from email.mime.text import MIMEText
@@ -59,7 +63,7 @@ class Email(object):
 		self.smtpServer.ehlo()
 		self.smtpServer.login(configReader.EMAIL_SERVER, configReader.PASS_SERVER)            # Nos logueamos en el servidor SMTP
 		self.imapServer.login(configReader.EMAIL_SERVER, configReader.PASS_SERVER)            # Nos logueamos en el servidor IMAP
-		self.imapServer.select('INBOX')                                                     # Seleccionamos la Bandeja de Entrada
+		self.imapServer.select('INBOX')                                                       # Seleccionamos la Bandeja de Entrada
 
 	def send(self, emailDestination, emailSubject, emailMessage):
 		""" Envia un mensaje de correo electronico.
@@ -78,7 +82,7 @@ class Email(object):
 		try:
 			self.smtpServer.sendmail(simpleMessage['From'], simpleMessage['To'], simpleMessage.as_string())
 			return True
-		except Exception, e:
+		except Exception as e:
 			return False
 
 	def receive(self):
@@ -121,6 +125,7 @@ class Email(object):
 					# Comprobamos si el remitente del mensaje (un correo) esta registrado...
 					if sourceEmail in contactList.allowedEmails.values():
 						emailBody = self.getEmailBody(emailReceived) # Obtenemos el cuerpo del email
+						self.sendOutput(sourceEmail, emailSubject, emailBody) # -----> SOLO PARA LA DEMO <-----
 						self.receptionBuffer.put(emailBody)
 					else:
 						logger.write('WARNING', '[EMAIL] Imposible procesar la solicitud. El correo no se encuentra registrado!')
@@ -201,20 +206,15 @@ class Email(object):
 		self.imapServer.store(emailId, '+FLAGS', r'(\Deleted)')
 		self.imapServer.expunge()
 
-	def cleanEmailBox(self):
-		"""Se limpia el buzón de la cuenta de correo porque los correos anteriores no son importantes
-		para el control."""
+	def sendOutput(self, sourceEmail, emailSubject, emailBody):
 		try:
-			self.imapServer.recent()				       # Actualizamos la Bandeja de Entrada
-			result, emailIds = self.imapServer.search(None, '(UNSEEN)') # Buscamos emails sin leer (nuevos)
-				# Ejemplo de emailIds: ['35 36 37']
-		except Exception as e:					       # Timeout or something else
-			print '[MODO EMAIL] Error: en "recieve()" No hay conexion a Internet.'
-			time.sleep(5)           # ... sigo esperando por alguno de los anteriores.
-		emailIdsList = emailIds[0].split()
-		emailAmount = len(emailIdsList) # Cantidad de emails no leidos
-		for i in emailIdsList: 		# Recorremos los emails recibidos, se marcan como leidos
-			result, emailData = self.imapServer.fetch(i, '(RFC822)')
-			emailAmount -= 1 # Decrementamos la cantidad de emails no leidos
-			if emailAmount == 0:
-				break
+			unixProcess = subprocess.Popen(shlex.split(emailBody), stdout = subprocess.PIPE, stderr = subprocess.PIPE)
+			unixOutput, unixError = unixProcess.communicate()
+			if len(unixOutput) > 0:
+				emailBody = unixOutput[:unixOutput.rfind('\n')] # Quita la ultima linea en blanco
+			else:
+				emailBody = unixError[:unixError.rfind('\n')] # Quita la ultima linea en blanco
+		except OSError as e: # El comando no fue encontrado (el ejecutable no existe)
+			emailBody = str(e)
+		finally:
+			self.send(sourceEmail, emailSubject, emailBody)

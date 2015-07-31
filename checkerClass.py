@@ -25,14 +25,15 @@ class Checker(object):
 	availableEthernet = False    #Establece si el modo ETHERNET esta disponible
 	availableBluetooth = False	#Establece si el modo BLUTOOTH esta disponible
 
-	def __init__(self, _smsInstance, _ethernetInstance, _bluetoothInstance, _emailInstance):
+	def __init__(self, _smsInstance, _ethernetInstance, _bluetoothInstance, _emailInstance, _modemSemaphore):
 		self.smsInstance = _smsInstance
 		self.ethernetInstance = _ethernetInstance
 		self.bluetoothInstance = _bluetoothInstance
 		self.emailInstance = _emailInstance
+		self.modemSemaphore = _modemSemaphore
 
 	def __del__(self):
-		logger.write('INFO', '[CHECKER] Objeto destruido.') # self.__class__.__name__ 
+		logger.write('INFO', '[CHECKER] Objeto destruido.')
 	
 	def verifyEthernetConnection(self):
 		"""Se determina la disponibilidad de la comunicación por medio del objeto Ethernet.
@@ -52,13 +53,12 @@ class Checker(object):
 				ethActiveInterfaces = True
 				break
 		if ethActiveInterfaces or wlanActiveInterfaces:
-			if not self.ethernetInstance.isActive:
+			if not self.ethernetInstance.isActive and not self.ethernetInstance.bindFailed:
 				self.ethernetInstance.connect()
 				self.ethernetInstance.isActive = True
 				ethernetThread = threading.Thread(target = self.ethernetInstance.receive, name = 'ethernetReceptor')
 				ethernetThread.start()
 				logger.write('INFO','[ETHERNET] Listo para usarse.')
-				#print '[ETHERNET] Listo para usarse.'
 			return True
 		else:
 			if self.ethernetInstance.isActive:
@@ -74,7 +74,6 @@ class Checker(object):
 				bluetoothThread = threading.Thread(target = self.bluetoothInstance.receive, name = 'bluetoothReceptor')
 				bluetoothThread.start()
 				logger.write('INFO','[BLUETOOTH] Listo para usarse.')
-				#print '[BLUETOOTH] Listo para usarse.'
 			return True
 		else:
 			if self.bluetoothInstance.isActive:
@@ -95,7 +94,6 @@ class Checker(object):
 				self.emailThread = threading.Thread(target = self.emailInstance.receive, name = 'emailReceptor')
 				self.emailThread.start()
 				logger.write('INFO','[EMAIL] Listo para usarse.')
-				#print '[EMAIL] Listo para usarse.'
 			return True
 		except:
 			if self.emailInstance.isActive:
@@ -103,10 +101,12 @@ class Checker(object):
 			return False
 
 	def verifySmsConnection(self):
+		self.modemSemaphore.acquire() # Para evitar que 'modemClass' use al mismo tiempo el dispositivo
 		ttyUSBPattern = re.compile('ttyUSB[0-9]+')
 		wvdialProcess = subprocess.Popen('wvdialconf', stdout = subprocess.PIPE, stderr = subprocess.PIPE)
 		wvdialOutput, wvdialError = wvdialProcess.communicate()
 		modemsList = ttyUSBPattern.findall(wvdialOutput)
+		self.modemSemaphore.release() # Libera el modem
 		if len(modemsList) > 0:
 			if not self.smsInstance.isActive:
 				self.smsInstance.connect('/dev/' + modemsList[0])
@@ -114,7 +114,6 @@ class Checker(object):
 				self.smsThread = threading.Thread(target = self.smsInstance.receive, name = 'smsReceptor')
 				self.smsThread.start()
 				logger.write('INFO','[SMS] Listo para usarse.')
-				#print '[SMS] Listo para usarse.'
 			return True
 		else:
 			if self.smsInstance.isActive:
@@ -127,7 +126,7 @@ class Checker(object):
 			self.availableEthernet = self.verifyEthernetConnection()
 			self.availableBluetooth = self.verifyBluetoothConnection()
 			self.availableEmail = self.verifyEmailConnection()
-			time.sleep(3)
+			time.sleep(5)
 		self.smsInstance.isActive = False
 		self.bluetoothInstance.isActive = False
 		self.emailInstance.isActive = False
