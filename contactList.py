@@ -11,17 +11,18 @@
 
 # Direcciones IP y puertos permitidos
 allowedIpAddress = dict()
-allowedIpAddress = {'Client02': ('192.168.1.110', 5025)}
+allowedIpAddress = {'client02': ('192.168.1.110', 5025)}
 
 # Direcciones MAC permitidas
 allowedMacAddress = dict()
-allowedMacAddress = {'Client02' : ('RFCOMM-Client02', '64:27:37:90:B5:B6', '94f39d29-7d6d-437d-973b-fba39e49d4ef')}
+allowedMacAddress = {'client02' : ('RFCOMM-Client02', '64:27:37:90:B5:B6', '94f39d29-7d6d-437d-973b-fba39e49d4ef')}
 
 # Cuentas de correo permitidas
 allowedEmails = dict()
-allowedEmails = {'Cliente01': 'cliente1.datalogger@gmail.com',
-				'Client02': 'client02.datalogger@gmail.com'}
+allowedEmails = {'client02' : 'client02.datalogger@gmail.com',
+				 'client03' : 'meschoyez@gmail.com'}
 
 # Numeros de teléfono permitidos
 allowedNumbers = dict()
-allowedNumbers = {'Client02' : 3512560536}
+allowedNumbers = {'client02' : 3512560536,
+				  'client03' : 123456789}

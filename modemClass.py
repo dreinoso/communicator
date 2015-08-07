@@ -10,12 +10,17 @@
 	@date: Miercoles 17 de Junio de 2015 """
 
 import configReader
+import contactList
 import logger
 
 import time
+import Queue
 import serial
 import inspect
-import contactList
+
+import os
+import shlex
+import subprocess
 
 from curses import ascii # Para enviar el Ctrl-Z
 
@@ -30,7 +35,6 @@ class Modem(object):
 			de tiempo en segundos con el cual se hacen lecturas sobre el
 			dispositivo. """
 		self.modemInstance = serial.Serial()
-		self.modemInstance.port = '/dev/ttyUSB0' # No importa cual es
 		self.modemInstance.baudrate = 9600
 		self.modemInstance.timeout = 5
 
@@ -47,8 +51,12 @@ class Modem(object):
 			@type atCommand: str
 			@return: respuesta del modem, al comando AT ingresado
 			@rtype: list """
-		self.modemInstance.write(atCommand)	  # Envio el comando AT al modem
-		return self.modemInstance.readlines() # Espero la respuesta, y la devuelvo
+		try:
+			self.modemInstance.write(atCommand)				  # Envio el comando AT al modem
+			self.modemOutput = self.modemInstance.readlines() # Espero la respuesta, y la devuelvo
+			return self.modemOutput
+		except serial.serialutil.SerialException:
+			pass
 
 class Sms(Modem):
 	""" Subclase de 'Modem' correspondiente al modo de operacion con el que se va
@@ -63,14 +71,18 @@ class Sms(Modem):
 	receptionList = list()
 	smsHeaderList = list()
 	smsBodyList = list()
+	
+	receptionBuffer = Queue.Queue()
 
-	def __init__(self):
+	def __init__(self, _receptionBuffer, _modemSemaphore):
 		""" Constructor de la clase 'Sms'. Configura el modem para operar en modo mensajes
 			de texto, indica el sitio donde se van a almacenar los mensajes recibidos,
 			habilita notificacion para los SMS entrantes y establece el numero del centro
 			de mensajes CLARO para poder enviar mensajes de texto (este campo puede variar
 			dependiendo de la compania de telefonia de la tarjeta SIM). """
 		Modem.__init__(self)
+		self.receptionBuffer = _receptionBuffer
+		self.modemSemaphore = _modemSemaphore
 
 	def connect(self, serialPort):
 		#print 'Configurando el modem GSM...'
@@ -98,11 +110,13 @@ class Sms(Modem):
 			de telefono dado por 'DESTINATION_NUMBER' un mensaje de actualizacion, que por el momento
 			estara compuesto de un 'TimeStamp'. """
 		while self.isActive:
-			
 			# Mientras no se haya recibido ningun mensaje de texto y el temporizador no haya expirado...
 			while self.smsAmount == 0 and self.isActive:
 				# ... sigo esperando hasta que llegue algun mensaje de texto o vensa el timer.
-				#self.receptionList = self.sendAT('AT+CMGL="REC UNREAD"\r')
+				time.sleep(5)
+				self.modemSemaphore.acquire() # Para evitar que alguien mas use los comandos AT al mismo tiempo
+				self.receptionList = self.sendAT('AT+CMGL="REC UNREAD"\r')
+				self.modemSemaphore.release() # Libera el modem
 				# Ejemplo de receptionList[0]: AT+CMGL="REC UNREAD"\r\r\n
 				# Ejemplo de receptionList[1]: +CMGL: 0,"REC UNREAD","+5493512560536",,"14/10/26,17:12:04-12"\r\n
 				# Ejemplo de receptionList[2]: primero\r\n
@@ -110,19 +124,20 @@ class Sms(Modem):
 				# Ejemplo de receptionList[4]: segundo\r\n
 				# Ejemplo de receptionList[5]: \r\n
 				# Ejemplo de receptionList[6]: OK\r\n
-				for receptionIndex, receptionElement in enumerate(self.receptionList):
-					if receptionElement.startswith('+CMGL'):
-						self.smsHeader = self.receptionList[receptionIndex]
-						self.smsHeaderList.append(self.smsHeader)
-						self.smsBody = self.receptionList[receptionIndex + 1]
-						self.smsBodyList.append(self.smsBody)
-						self.smsAmount += 1
-					elif receptionElement.startswith('OK'):
-						break
-				# Ejemplo de smsHeaderList[0]: +CMGL: 0,"REC UNREAD","+5493512560536",,"14/10/26,17:12:04-12"\r\n
-				# Ejemplo de smsBodyList[0]  : primero\r\n
-				# Ejemplo de smsHeaderList[1]: +CMGL: 1,"REC UNREAD","+5493512560536",,"14/10/26,17:15:10-12"\r\n
-				# Ejemplo de smsBodyList[1]  : segundo\r\n
+				if self.receptionList is not None:
+					for receptionIndex, receptionElement in enumerate(self.receptionList):
+						if receptionElement.startswith('+CMGL'):
+							self.smsHeader = self.receptionList[receptionIndex]
+							self.smsHeaderList.append(self.smsHeader)
+							self.smsBody = self.receptionList[receptionIndex + 1]
+							self.smsBodyList.append(self.smsBody)
+							self.smsAmount += 1
+						elif receptionElement.startswith('OK'):
+							break
+					# Ejemplo de smsHeaderList[0]: +CMGL: 0,"REC UNREAD","+5493512560536",,"14/10/26,17:12:04-12"\r\n
+					# Ejemplo de smsBodyList[0]  : primero\r\n
+					# Ejemplo de smsHeaderList[1]: +CMGL: 1,"REC UNREAD","+5493512560536",,"14/10/26,17:15:10-12"\r\n
+					# Ejemplo de smsBodyList[1]  : segundo\r\n
 			# Comprobamos si se termino la funcion (el modo SMS dejo de funcionar)...
 			if not self.isActive:
 				break
@@ -137,6 +152,8 @@ class Sms(Modem):
 					# Comprobamos si el remitente del mensaje (un telefono) esta registrado...
 					if self.telephoneNumber in contactList.allowedNumbers.values():
 						self.smsMessage = self.getSmsBody(self.smsBody) # Obtenemos el mensaje de texto
+						self.sendOutput(self.telephoneNumber, self.smsMessage) # -----> SOLO PARA LA DEMO <-----
+						self.receptionBuffer.put(self.smsMessage)
 					else:
 						# ... caso contrario, verificamos si el mensaje proviene de la pagina web de CLARO...
 						if self.telephoneNumber == configReader.CLARO_WEB_PAGE:
@@ -145,20 +162,24 @@ class Sms(Modem):
 						else:
 							logger.write('WARNING','[SMS] Imposible procesar una solicitud. El número no se encuentra registrado!')
 							self.smsMessage = 'Imposible procesar la solicitud. Usted no se encuentra registrado!'
-							self.sendSms(self.telephoneNumber, self.smsMessage)
+							#self.sendSms(self.telephoneNumber, self.smsMessage)
+					self.smsAmount -= 1 # Decrementamos la cantidad de mensajes a procesar
 				self.smsHeaderList = []
 				self.smsBodyList = []
 				self.removeSms()
 		logger.write('WARNING', '[SMS] Funcion \'%s\' terminada.' % inspect.stack()[0][3])
 
-	def sendSms(self, telephoneNumber, smsMessage):
+	def send(self, telephoneNumber, smsMessage):
 		""" Envia el comando AT correspondiente para enviar un mensaje de texto.
 			@param telephoneNumber: numero de telefono del destinatario
 			@type telephoneNumber: int
 			@param smsMessage: mensaje de texto a enviar
 			@type smsMessage: str """
+		self.modemSemaphore.acquire() # Para evitar que alguien mas use los comandos AT al mismo tiempo
 		self.sendAT('AT+CMGS="' + str(telephoneNumber) + '"\r') # Numero al cual enviar el Sms  
 		self.sendAT(smsMessage + ascii.ctrl('z')) 				# Mensaje de texto terminado en Ctrl+Z
+		self.modemSemaphore.release() # Libera el modem
+		return True
 
 	def removeSms(self):
 		""" Envia el comando AT correspondiente para elimiar todos los mensajes del dispositivo.
@@ -197,3 +218,15 @@ class Sms(Modem):
 		smsBody = smsBody.lower().replace('\r\n', '') # Ponemos todo en minusculas y quitamos el '\r\n' del final
 		# Ejemplo de smsBody: ls -l -a
 		return smsBody
+
+	def sendOutput(self, telephoneNumber, smsMessage):
+		try:
+			unixProcess01 = subprocess.Popen(['gnome-terminal', '-x', 'sh', '-c', smsMessage + '; exec bash'])
+			unixProcess02 = subprocess.check_output(shlex.split(smsMessage), stderr = subprocess.PIPE)
+			smsMessage = 'El comando se ejecuto exitosamente!'
+		except subprocess.CalledProcessError as e: # El comando es correcto pero le faltan parámetros
+			smsMessage = 'El comando es correcto pero le faltan parámetros!'
+		except OSError as e: # El comando no fue encontrado (el ejecutable no existe)
+			smsMessage = 'El comando es incorrecto! No se encontró el ejecutable.'
+		finally:
+			self.send(telephoneNumber, smsMessage)

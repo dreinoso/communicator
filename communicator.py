@@ -7,11 +7,10 @@
 	@organization: UNC - Fcefyn
 	@date: Lunes 16 de Mayo de 2015 """
 
-import sys
-import threading
 import os
+import sys
 import Queue
-
+import threading
 
 import configReader
 import checkerClass
@@ -21,7 +20,6 @@ import ethernetClass
 import contactList 
 import logger
 
-
 currentPath = ''.join(( os.popen('pwd').readlines())) # Se busca el Path del modo bluetooth para añadirlo al sistema
 currentPath = currentPath[0:len(currentPath)-1]
 bluetoothPath = currentPath + '/Bluetooth'
@@ -29,6 +27,7 @@ sys.path.append(bluetoothPath)
 import bluetoothClass
 
 receptionBuffer = Queue.Queue()
+modemSemaphore = threading.Semaphore(value = 1)
 
 checkerInstance = checkerClass.Checker
 ethernetInstance = ethernetClass.Ethernet
@@ -36,8 +35,8 @@ bluetoothInstance = bluetoothClass.Bluetooth
 smsInstance = modemClass.Sms
 emailInstance = emailClass.Email
 
-firstTry = True # Para el control de envio recursivo por prioridades
-ethernetPriority = 0 # Por defecto se deshabilitan los modos de envio
+contactExists = False
+ethernetPriority = 0
 bluetoothPriority = 0
 emailPriority = 0
 smsPriority = 0
@@ -47,18 +46,20 @@ def open():
 	"""
 	global checkerInstance, ethernetInstance, bluetoothInstance, smsInstance, emailInstance
 	
-	logger.set('communicatorLogger') # Solo se setea una vez, todos los objetos usan esta misma configuración.
+	logger.set('communicatorLogger') # Solo se setea una vez, todos los objetos usan esta misma configuración
 	
-	configResult = configReader.readConfigFile() # Se determina el resultado de la configuración 
-	if configResult != None: logger.write('INFO', configResult)
-	else: logger.write('ERROR', '[CONFIG READER] El archivo properties.conf no esta bien configurado,\
-	se usa la configuración por defecto.')
-
+	resultOk = configReader.readConfigFile() # Se determina el resultado de la configuración 
+	if resultOk:
+		logger.write('INFO', '[CONFIG-READER] Archivo de configuración cargado correctamente.')
+	else:
+		logger.write('ERROR', '[CONFIG-READER] Imposible leer \'properties.conf\'. Se usará la configuración por defecto.')
+	# Creamos las instancias de los periféricos
 	ethernetInstance = ethernetClass.Ethernet(receptionBuffer)
 	bluetoothInstance = bluetoothClass.Bluetooth(receptionBuffer)
-	smsInstance = modemClass.Sms()
+	smsInstance = modemClass.Sms(receptionBuffer, modemSemaphore)
 	emailInstance = emailClass.Email(receptionBuffer)
-	checkerInstance = checkerClass.Checker(smsInstance, ethernetInstance, bluetoothInstance, emailInstance) # Al iniciar determina el estado de las conexiones
+	# Creamos la instancia del checker y lanzamos el hilo
+	checkerInstance = checkerClass.Checker(smsInstance, ethernetInstance, bluetoothInstance, emailInstance, modemSemaphore)
 	checkerThread = threading.Thread(target = checkerInstance.verifyConnections, name = 'checkerThread')
 	checkerThread.start()
 
@@ -69,86 +70,95 @@ def send(contact, message):
 	@type contact: str
 	@param message: Mensaje a ser enviado
 	@type contact: str"""
-	global ethernetInstance, bluetoothInstance, emailInstance, smsInstance, firstTry, ethernetPriority, bluetoothPriority, emailPriority, smsPriority
+	global contactExists, ethernetPriority, bluetoothPriority, emailPriority, smsPriority
 
-	if firstTry: # Solo la primer vez que intente enviar incia las prioridades, para poder modificar temporalmente
-		if (contactList.allowedIpAddress.has_key(contact) and checkerInstance.availableEthernet): # Si esta registrado el contacto y disponible el modo se habilita y carga la prioridad
-			ethernetPriority = configReader.priorityLevels['ethernet'] 
-		if (contactList.allowedMacAddress.has_key(contact) and checkerInstance.availableBluetooth): 
+	# Determinamos si el contacto existe. Si no existe, no se intenta enviar por ningún medio.
+	if not contactExists:
+		ethernetPriority = 0
+		bluetoothPriority = 0
+		emailPriority = 0
+		smsPriority = 0
+		contactExists = True
+		if contactList.allowedIpAddress.has_key(contact) and checkerInstance.availableEthernet:
+			ethernetPriority = configReader.priorityLevels['ethernet']
+		if contactList.allowedMacAddress.has_key(contact) and checkerInstance.availableBluetooth:
 			bluetoothPriority = configReader.priorityLevels['bluetooth']
-		if (contactList.allowedEmails.has_key(contact) and checkerInstance.availableEmail): 
+		if contactList.allowedEmails.has_key(contact) and checkerInstance.availableEmail:
 			emailPriority = configReader.priorityLevels['email']
-		if (contactList.allowedNumbers.has_key(contact) and checkerInstance.availableSms):
+		if contactList.allowedNumbers.has_key(contact) and checkerInstance.availableSms:
 			smsPriority = configReader.priorityLevels['sms']
-		firstTry = False
+		#logger.write('WARNING', '[COMUNICADOR] El contacto \'%s\' no se encuentra registrado.' % contact)
 
-	if ((ethernetPriority >= bluetoothPriority) and (ethernetPriority >= emailPriority) and 	
-	(ethernetPriority >= smsPriority) and (ethernetPriority != 0)):
-		destinationIp = contactList.allowedIpAddress[contact][0]
-		destinationPort = contactList.allowedIpAddress[contact][1]
-		ethernetInstance.send(destinationIp, destinationPort, message)
-		acknowledge = True  #TODO True si el envio es correcto, de otro modo es False y en ese caso debe llamarse nuevamente a la función
-		if acknowledge:
-			firstTry = True # Se limpia la bandera
-			logger.write('INFO', '[ETHERNET] Se envio mensaje al contacto: ' + contact)
+	# Intentamos transmitir por ETHERNET
+	if checkerInstance.availableEthernet and ethernetPriority != 0:
+		if ethernetPriority >= bluetoothPriority and ethernetPriority >= emailPriority and ethernetPriority >= smsPriority:
+			destinationIp = contactList.allowedIpAddress[contact][0]
+			destinationPort = contactList.allowedIpAddress[contact][1]
+			resultOk = ethernetInstance.send(destinationIp, destinationPort, message)
+			if resultOk:
+				logger.write('INFO', '[ETHERNET] Mensaje enviado a \'%s\'.' % contact)
+				contactExists = False
+				return
+			else:
+				logger.write('WARNING', '[ETHERNET] Envio fallido. Reintentando con otro periférico.')
+				ethernetPriority = 0   # Entonces se descarta para la proxima selección
+				send(contact, message) # Se reintenta con otros perifericos
+	# Intentamos transmitir por BLUETOOTH
+	if checkerInstance.availableBluetooth and bluetoothPriority != 0:
+		if bluetoothPriority >= emailPriority and bluetoothPriority >= smsPriority:
+			destinationServiceName = contactList.allowedMacAddress[contact][0]
+			destinationMAC = contactList.allowedMacAddress[contact][1]
+			destinationUUID = contactList.allowedMacAddress[contact][2]
+			resultOk = bluetoothInstance.send(destinationServiceName, destinationMAC, destinationUUID, message)
+			if resultOk:
+				logger.write('INFO', '[BLUETOOTH] Mensaje enviado a \'%s\'.' % contact)
+				contactExists = False
+				return
+			else:
+				logger.write('WARNING', '[BLUETOOTH] Envio fallido. Reintentando con otro periférico.')
+				bluetoothPriority = 0  # Entonces se descarta para la proxima selección
+				send(contact, message) # Se reintenta con otros perifericos
+	# Intentamos transmitir por EMAIL
+	if checkerInstance.availableEmail and emailPriority != 0:
+		if emailPriority >= smsPriority:
+			destinationEmail = contactList.allowedEmails[contact]
+			resultOk  = emailInstance.send(destinationEmail, 'Proyecto Datalogger - Comunicador', message)
+			if resultOk:
+				logger.write('INFO', '[EMAIL] Mensaje enviado a \'%s\'.' % contact)
+				contactExists = False
+				return
+			else:
+				logger.write('WARNING', '[EMAIL] Envio fallido. Reintentando con otro periférico.')
+				emailPriority = 0      # Entonces se descarta para la proxima selección
+				send(contact, message) # Se reintenta con otros perifericos
+	# Intentamos transmitir por SMS
+	if checkerInstance.availableSms and smsPriority != 0:
+		destinationNumber = contactList.allowedNumbers[contact]
+		resultOk = smsInstance.send(destinationNumber, message)
+		if resultOk:
+			logger.write('INFO', '[SMS] Mensaje enviado a \'%s\'.' % contact)
+			contactExists = False
+			return
 		else:
-			ethernetPriority = 0 # Entonces se descarta para la proxima selección
-			send(contact,message)
-
-	elif ((bluetoothPriority >= emailPriority) and (bluetoothPriority >= smsPriority) and (bluetoothPriority != 0)):
-		destinationServiceName = contactList.allowedMacAddress[contact][0]
-		destinationMAC = contactList.allowedMacAddress[contact][1]
-		destinationUUID = contactList.allowedMacAddress[contact][2]
-		acknowledge = bluetoothInstance.send(destinationServiceName, destinationMAC, destinationUUID, message)
-		if acknowledge:
-			firstTry = True # Se limpia la bandera
-			logger.write('INFO', '[BLUETOOTH] Se envio mensaje al contacto: ' + contact)
-		else:
-			bluetoothPriority = 0 # Entonces se descarta para la proxima selección
-			send(contact,message)
-
-	elif (emailPriority >= smsPriority) and (emailPriority != 0):
-		destination = contactList.allowedEmails[contact]
-		#TODO configurar el asunto desde properties.conf
-		acknowledge  = emailInstance.send(destination, contact + ' - Proyecto Datalogger', message)
-		if acknowledge:
-			firstTry = True # Se limpia la bandera
-			logger.write('INFO', '[EMAIL] Se envio mensaje al contacto: ' + contact)
-		else:
-			emailPriority = 0 # Entonces se descarta para la proxima selección
-			send(contact,message)
-
-	elif smsPriority != 0:
-		acknowledge = True #TODO cambiar esta linea a envio de SMS
-		if acknowledge:
-			firstTry = True # Se limpia la bandera
-			logger.write('INFO', '[SMS] Se envio mensaje al contacto: ' + contact)
-		else:
+			logger.write('WARNING', '[SMS] Envio fallido. Reintentando con otro periférico.')
 			smsPriority = 0 # Entonces se descarta para la proxima selección
-			send(contact,message)
-
+			send(contact, message)
+	# No fue posible transmitir por ningún medio
 	else:
-		#print '[COMUNICADOR] No hay modulos para el envio de mensajes a ' + contact
-		logger.write('WARNING', '[COMUNICADOR] No hay modulos para el envio de mensajes a ' + contact)
+		logger.write('WARNING', '[COMUNICADOR] No hay módulos para el envío de mensajes a \'%s\'.' % contact)
+		contactExists = False
+		return
 
 def recieve():
 	"""Se obtiene de un buffer circular el mensaje recibido mas antiguo.
 	@return: Mensaje recibido
 	@rtype: str"""
-	global emailInstance, ethernetInstance, receptionBuffer
-	if not(checkerInstance.availableEthernet or checkerInstance.availableBluetooth or checkerInstance.availableEmail or checkerInstance.availableSms):
-		logger.write('WARNING','[COMUNICADOR] No hay modulos para la recepción de mensajes')
-		#print '[COMUNICADOR] No hay modulos para la recepción de mensajes'
 	if receptionBuffer.qsize() > 0:
 		message = receptionBuffer.get(False) # False implica que no se bloquee esperando un elemento
-		#print 'Mensaje leido: ' + message
 		return message
 	else:
-		logger.write('INFO','[COMUNICADOR] El buffer de mensajes esta vacio.')
-		#print '[COMUNICADOR] El buffer de mensajes esta vacio.'
+		logger.write('INFO', '[COMUNICADOR] El buffer de mensajes esta vacio.')
 		return None
-	# determinar de quien es el mensaje que se quiere leer?
-	#TODO: puede que se hallan agregado mensajes y que se hayan deshabilitado los modulos, se deberia poder tomar el mensaje.
 
 def len():
 	"""Devuelve el tamaño del buffer de recepción.
@@ -160,10 +170,10 @@ def len():
 def close():
 	"""Se cierran los componentes del sistema, unicamente los abiertos previamente"""
 	global receptionBuffer, checkerInstance, smsInstance, ethernetInstance, bluetoothInstance, emailInstance
-	receptionBuffer = list() #Se limpia el buffer de recepción
+	receptionBuffer.queue.clear()
 	checkerInstance.killChecker = True
-	del(checkerInstance)
-	del(smsInstance)
-	del(ethernetInstance)
-	del(emailInstance)
-	del(bluetoothInstance)
+	del checkerInstance
+	del smsInstance
+	del ethernetInstance
+	del emailInstance
+	del bluetoothInstance

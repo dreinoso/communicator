@@ -10,10 +10,10 @@ class BluetoothReader(threading.Thread):
 	killReaderThread = False
 	receptionBuffer = Queue.Queue()
 
-	def __init__(self, threadName, remoteSocket, receptionBuffer):
-		threading.Thread.__init__(self, name = threadName)
-		self.remoteSocket = remoteSocket
-		self.receptionBuffer = receptionBuffer
+	def __init__(self, _threadName, _remoteSocket, _receptionBuffer):
+		threading.Thread.__init__(self, name = _threadName)
+		self.remoteSocket = _remoteSocket
+		self.receptionBuffer = _receptionBuffer
 
 	def run(self):
 		while not self.killReaderThread:
@@ -22,7 +22,7 @@ class BluetoothReader(threading.Thread):
 					Cuando el otro extremo este desconectado y todos los caracteres hayan sido leidos, la funcion retorna
 					una cadena vacia. '''
 				dataReceived = self.remoteSocket.recv(BUFFER_SIZE)
-				if dataReceived == 'FIN':
+				if dataReceived == 'END':
 					self.killReaderThread = True
 				else:
 					self.receptionBuffer.put(dataReceived)
