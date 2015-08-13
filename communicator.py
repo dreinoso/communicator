@@ -16,7 +16,7 @@ import configReader
 import checkerClass
 import emailClass
 import modemClass
-import ethernetClass
+import lanClass
 import contactList 
 import logger
 
@@ -30,13 +30,13 @@ receptionBuffer = Queue.Queue()
 modemSemaphore = threading.Semaphore(value = 1)
 
 checkerInstance = checkerClass.Checker
-ethernetInstance = ethernetClass.Ethernet
+lanInstance = lanClass.Lan
 bluetoothInstance = bluetoothClass.Bluetooth
 smsInstance = modemClass.Sms
 emailInstance = emailClass.Email
 
 contactExists = False
-ethernetPriority = 0
+lanPriority = 0
 bluetoothPriority = 0
 emailPriority = 0
 smsPriority = 0
@@ -44,7 +44,7 @@ smsPriority = 0
 def open():
 	"""Se realiza la apertura, inicialización de los componentes que se tengan disponibles
 	"""
-	global checkerInstance, ethernetInstance, bluetoothInstance, smsInstance, emailInstance
+	global checkerInstance, lanInstance, bluetoothInstance, smsInstance, emailInstance
 	
 	logger.set('communicatorLogger') # Solo se setea una vez, todos los objetos usan esta misma configuración
 	
@@ -54,12 +54,12 @@ def open():
 	else:
 		logger.write('ERROR', '[CONFIG-READER] Imposible leer \'properties.conf\'. Se usará la configuración por defecto.')
 	# Creamos las instancias de los periféricos
-	ethernetInstance = ethernetClass.Ethernet(receptionBuffer)
+	lanInstance = lanClass.Lan(receptionBuffer)
 	bluetoothInstance = bluetoothClass.Bluetooth(receptionBuffer)
 	smsInstance = modemClass.Sms(receptionBuffer, modemSemaphore)
 	emailInstance = emailClass.Email(receptionBuffer)
 	# Creamos la instancia del checker y lanzamos el hilo
-	checkerInstance = checkerClass.Checker(smsInstance, ethernetInstance, bluetoothInstance, emailInstance, modemSemaphore)
+	checkerInstance = checkerClass.Checker(smsInstance, lanInstance, bluetoothInstance, emailInstance, modemSemaphore)
 	checkerThread = threading.Thread(target = checkerInstance.verifyConnections, name = 'checkerThread')
 	checkerThread.start()
 
@@ -70,16 +70,16 @@ def send(contact, message):
 	@type contact: str
 	@param message: Mensaje a ser enviado
 	@type contact: str"""
-	global contactExists, ethernetPriority, bluetoothPriority, emailPriority, smsPriority
+	global contactExists, lanPriority, bluetoothPriority, emailPriority, smsPriority
 
 	# Determinamos si el contacto existe. Si no existe, no se intenta enviar por ningún medio.
 	if not contactExists:
-		ethernetPriority = 0
+		lanPriority = 0
 		bluetoothPriority = 0
 		emailPriority = 0
 		smsPriority = 0
-		if contactList.allowedIpAddress.has_key(contact) and checkerInstance.availableEthernet:
-			ethernetPriority = configReader.priorityLevels['ethernet']
+		if contactList.allowedIpAddress.has_key(contact) and checkerInstance.availableLan:
+			lanPriority = configReader.priorityLevels['lan']
 			contactExists = True
 		if contactList.allowedMacAddress.has_key(contact) and checkerInstance.availableBluetooth:
 			bluetoothPriority = configReader.priorityLevels['bluetooth']
@@ -94,18 +94,18 @@ def send(contact, message):
 			logger.write('WARNING', '[COMUNICADOR] El contacto \'%s\' no se encuentra registrado.' % contact)
 			return False
 
-	# Intentamos transmitir por ETHERNET
-	if ethernetPriority != 0 and ethernetPriority >= bluetoothPriority and ethernetPriority >= emailPriority and ethernetPriority >= smsPriority:
+	# Intentamos transmitir por LAN
+	if lanPriority != 0 and lanPriority >= bluetoothPriority and lanPriority >= emailPriority and lanPriority >= smsPriority:
 		destinationIp = contactList.allowedIpAddress[contact][0]
 		destinationPort = contactList.allowedIpAddress[contact][1]
-		resultOk = ethernetInstance.send(destinationIp, destinationPort, message)
+		resultOk = lanInstance.send(destinationIp, destinationPort, message)
 		if resultOk:
-			logger.write('INFO', '[ETHERNET] Mensaje enviado a \'%s\'.' % contact)
+			logger.write('INFO', '[LAN] Mensaje enviado a \'%s\'.' % contact)
 			contactExists = False
 			return True
 		else:
-			logger.write('WARNING', '[ETHERNET] Envio fallido. Reintentando con otro periférico.')
-			ethernetPriority = 0   # Entonces se descarta para la proxima selección
+			logger.write('WARNING', '[LAN] Envio fallido. Reintentando con otro periférico.')
+			lanPriority = 0   # Entonces se descarta para la proxima selección
 			send(contact, message) # Se reintenta con otros perifericos
 	# Intentamos transmitir por BLUETOOTH
 	elif bluetoothPriority != 0 and bluetoothPriority >= emailPriority and bluetoothPriority >= smsPriority:
@@ -171,11 +171,11 @@ def len():
 
 def close():
 	"""Se cierran los componentes del sistema, unicamente los abiertos previamente"""
-	global receptionBuffer, checkerInstance, smsInstance, ethernetInstance, bluetoothInstance, emailInstance
+	global receptionBuffer, checkerInstance, smsInstance, lanInstance, bluetoothInstance, emailInstance
 	receptionBuffer.queue.clear()
 	checkerInstance.killChecker = True
 	del checkerInstance
 	del smsInstance
-	del ethernetInstance
+	del lanInstance
 	del emailInstance
 	del bluetoothInstance

@@ -34,7 +34,7 @@ CLARO_WEB_PAGE         = 876966
 CLARO_CHARACTER_LIMIT  = 160
 
 priorityLevels = dict() # Diccionario para la selección de envio por prioridades
-priorityLevels = {'ethernet' : 0,
+priorityLevels = {'lan' : 0,
 				  'bluetooth': 0,
 				  'email'	 : 0,
 				  'sms'		 : 4}

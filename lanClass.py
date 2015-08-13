@@ -18,7 +18,7 @@ import socket
 import threading
 import time
 
-class Ethernet(object):
+class Lan(object):
 
 	localHost = configReader.LOCAL_HOST
 	localPort = configReader.UDP_PORT
@@ -42,19 +42,18 @@ class Ethernet(object):
 				comand = 'fuser -k -s ' + str(self.localPort) + '/udp' # -k = kill;  -s: modo silecioso
     			os.system(comand)
     			#TODO anda bien pero la siguiente vez despues de el mal cierre no lo toma, averiguar
-			self.receiverSocket.settimeout(2)
+			self.receiverSocket.settimeout(2) #Para no parase en recevie from a causa de saltar excepción en bind
 			self.receiverSocket.bind((self.localHost, self.localPort))
 		except socket.error , msg:
 			self.bindFailed = True
-			logger.write('ERROR', '[ETHERNET] Bind failed. ' + msg[1])
+			logger.write('ERROR', '[LAN] Fallo de enlace. ' + msg[1])
 
 	def __del__(self):
 		"""Elminación de la instancia de esta clase, cerrando conexiones establecidas, para no dejar
 		puertos ocupados en el Host"""
 		self.transmitterSocket.close()
 		self.receiverSocket.close()
-		logger.write('INFO','[ETHERNET] Objeto destruido.' )
-		#print 'Objeto ' + self.__class__.__name__ + ' destruido.'
+		logger.write('INFO','[LAN] Objeto destruido.' )
 
 	def connect(self):
 		pass
@@ -89,5 +88,5 @@ class Ethernet(object):
 			except socket.error , msg:
 				# Para que el bloque 'try' no se quede esperando indefinidamente
 				pass
-		logger.write('WARNING', '[ETHERNET] Funcion \'%s\' terminada.' % inspect.stack()[0][3])
-		#print '[ETHERNET] Funcion \'%s\' terminada.' % inspect.stack()[0][3]
+		logger.write('WARNING', '[LAN] Funcion \'%s\' terminada.' % inspect.stack()[0][3])
+		#print '[LAN] Funcion \'%s\' terminada.' % inspect.stack()[0][3]
