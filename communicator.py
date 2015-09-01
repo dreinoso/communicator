@@ -16,14 +16,16 @@ import configReader
 import checkerClass
 import emailClass
 import modemClass
-import lanClass
 import contactList 
 import logger
 
 currentPath = ''.join(( os.popen('pwd').readlines())) # Se busca el Path del modo bluetooth para añadirlo al sistema
 currentPath = currentPath[0:len(currentPath)-1]
+lanPath = currentPath + '/Lan'
+sys.path.append(lanPath)
 bluetoothPath = currentPath + '/Bluetooth'
 sys.path.append(bluetoothPath)
+import lanClass
 import bluetoothClass
 
 receptionBuffer = Queue.Queue()
@@ -50,9 +52,9 @@ def open():
 	
 	resultOk = configReader.readConfigFile() # Se determina el resultado de la configuración 
 	if resultOk:
-		logger.write('INFO', '[CONFIG-READER] Archivo de configuración cargado correctamente.')
+		logger.write('INFO', '[CONFIG READER] Archivo de configuración cargado correctamente.')
 	else:
-		logger.write('ERROR', '[CONFIG-READER] Imposible leer \'properties.conf\'. Se usará la configuración por defecto.')
+		logger.write('ERROR', '[CONFIG READER] Imposible leer \'properties.conf\'. Se usará la configuración por defecto.')
 	# Creamos las instancias de los periféricos
 	lanInstance = lanClass.Lan(receptionBuffer)
 	bluetoothInstance = bluetoothClass.Bluetooth(receptionBuffer)
@@ -63,7 +65,7 @@ def open():
 	checkerThread = threading.Thread(target = checkerInstance.verifyConnections, name = 'checkerThread')
 	checkerThread.start()
 
-def send(contact, message):
+def send(contact, message, isPacket):
 	"""Se envia de modo inteligente un paquete de datos a un contacto previamente registrado
 	el mensaje se envia por el medio mas óptimo encontrado.
 	@param contact: Nombre de contacto previamente registrado
@@ -97,8 +99,10 @@ def send(contact, message):
 	# Intentamos transmitir por LAN
 	if lanPriority != 0 and lanPriority >= bluetoothPriority and lanPriority >= emailPriority and lanPriority >= smsPriority:
 		destinationIp = contactList.allowedIpAddress[contact][0]
-		destinationPort = contactList.allowedIpAddress[contact][1]
-		resultOk = lanInstance.send(destinationIp, destinationPort, message)
+		destinationTcpPort = contactList.allowedIpAddress[contact][1]
+		destinationUdpPort = contactList.allowedIpAddress[contact][2]
+		if isPacket: resultOk = lanInstance.sendPacket(destinationIp, destinationTcpPort, destinationUdpPort, message) # message corresponde al nombre del paquete
+		else: resultOk = lanInstance.send(destinationIp, destinationTcpPort, destinationUdpPort, message)
 		if resultOk:
 			logger.write('INFO', '[LAN] Mensaje enviado a \'%s\'.' % contact)
 			contactExists = False
@@ -106,7 +110,7 @@ def send(contact, message):
 		else:
 			logger.write('WARNING', '[LAN] Envio fallido. Reintentando con otro periférico.')
 			lanPriority = 0   # Entonces se descarta para la proxima selección
-			send(contact, message) # Se reintenta con otros perifericos
+			send(contact, message, isPacket) # Se reintenta con otros perifericos
 	# Intentamos transmitir por BLUETOOTH
 	elif bluetoothPriority != 0 and bluetoothPriority >= emailPriority and bluetoothPriority >= smsPriority:
 		destinationServiceName = contactList.allowedMacAddress[contact][0]
@@ -120,7 +124,7 @@ def send(contact, message):
 		else:
 			logger.write('WARNING', '[BLUETOOTH] Envio fallido. Reintentando con otro periférico.')
 			bluetoothPriority = 0  # Entonces se descarta para la proxima selección
-			send(contact, message) # Se reintenta con otros perifericos
+			send(contact, message, isPacket) # Se reintenta con otros perifericos
 	# Intentamos transmitir por EMAIL
 	elif emailPriority != 0 and emailPriority >= smsPriority:
 		destinationEmail = contactList.allowedEmails[contact]
@@ -132,7 +136,7 @@ def send(contact, message):
 		else:
 			logger.write('WARNING', '[EMAIL] Envio fallido. Reintentando con otro periférico.')
 			emailPriority = 0      # Entonces se descarta para la proxima selección
-			send(contact, message) # Se reintenta con otros perifericos
+			send(contact, message, isPacket) # Se reintenta con otros perifericos
 	# Intentamos transmitir por SMS
 	elif smsPriority != 0:
 		destinationNumbsmsPriorityer = contactList.allowedNumbers[contact]
@@ -144,7 +148,7 @@ def send(contact, message):
 		else:
 			logger.write('WARNING', '[SMS] Envio fallido. Reintentando con otro periférico.')
 			smsPriority = 0 # Entonces se descarta para la proxima selección
-			send(contact, message)
+			send(contact, message, isPacket)
 	# No fue posible transmitir por ningún medio
 	else:
 		logger.write('WARNING', '[COMUNICADOR] No hay módulos para el envío de mensajes a \'%s\'.' % contact)

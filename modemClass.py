@@ -1,4 +1,4 @@
- # coding=utf-8
+# coding=utf-8
 
 """	Permite crear una instancia que se encargara de proporcionar funciones
 	facilitando el manejo del modem. Entre las funcionalidades basicas con

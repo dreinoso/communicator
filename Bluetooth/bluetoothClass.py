@@ -56,6 +56,9 @@ class Bluetooth(object):
 		self.localSocketRFCOMM.close()
 		logger.write('INFO', '[BLUETOOTH] Objeto destruido.')
 
+	def connect(self):
+		pass #TODO
+
 	def send(self, destinationServiceName, destinationMAC, destinationUUID, messageToSend):
 		logger.write('DEBUG','[BLUETOOTH] Buscando el servicio \'%s\'.' % destinationServiceName)
 		serviceMatches = bluetooth.find_service(uuid = destinationUUID, address = destinationMAC)
