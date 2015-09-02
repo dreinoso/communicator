@@ -18,17 +18,25 @@ import inspect
 import smtplib
 import imaplib
 import threading
+import mimetypes
 import Queue
 
 import os
 import shlex
 import subprocess
 
+from email import encoders
 from email.header import decode_header
 from email.header import make_header
+
+from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+from email.mime.audio import MIMEAudio
+from email.mime.image import MIMEImage
+from email.mime.base import MIMEBase
 
 TIMEOUT = 5
+ATTACHMENTS = 'attachments'
 
 class Email(object):
 
@@ -51,8 +59,9 @@ class Email(object):
 	def __del__(self):
 		"""Elminación de la instancia de esta clase, cerrando conexiones establecidas, para no dejar
 		conexiones ocupados en el Host"""
-		self.smtpServer.close()  # Cerramos la sesion con el servidor SMTP
-		self.imapServer.logout() # Cerramos la sesion con el servidor IMAP
+		self.smtpServer.quit()   # Terminamos la sesión SMTP y cerramos la conexión
+		self.smtpServer.close()  # Cerramos el buzón seleccionado actualmente
+		self.imapServer.logout() # Cerramos la conexión IMAP
 		logger.write('INFO','[EMAIL] Objeto destruido.' )
 		#print 'Objeto ' + self.__class__.__name__ + ' destruido.'
 
@@ -65,25 +74,87 @@ class Email(object):
 		self.imapServer.login(configReader.EMAIL_SERVER, configReader.PASS_SERVER)            # Nos logueamos en el servidor IMAP
 		self.imapServer.select('INBOX')                                                       # Seleccionamos la Bandeja de Entrada
 
-	def send(self, emailDestination, emailSubject, emailMessage):
+	def send(self, emailDestination, emailSubject, messageToSend):
 		""" Envia un mensaje de correo electronico.
 		@param emailDestination: correo electronico del destinatario
 		@type emailDestination: str
 		@param emailSubject: asunto del mensaje
 		@type emailSubject: str
-		@param emailMessage: correo electronico a enviar
-		@type emailMessage: str """
-		# Se construye un mensaje simple
-		simpleMessage = MIMEText(emailMessage)
-		simpleMessage['From'] = configReader.EMAIL_SERVER
-		simpleMessage['To'] = emailDestination
-		simpleMessage['Subject'] = emailSubject
-		# Se envia el mensaje, al correo destino correspondiente
+		@param messageToSend: correo electronico a enviar
+		@type messageToSend: str """
 		try:
-			self.smtpServer.sendmail(simpleMessage['From'], simpleMessage['To'], simpleMessage.as_string())
+			# Se construye un mensaje simple
+			mimeText = MIMEText(messageToSend)
+			mimeText['From'] = '%s <%s>' % (configReader.NAME_SERVER, configReader.EMAIL_SERVER)
+			mimeText['To'] = emailDestination
+			mimeText['Subject'] = emailSubject
+			self.smtpServer.sendmail(mimeText['From'], mimeText['To'], mimeText.as_string())
 			return True
 		except Exception as e:
 			return False
+
+	def sendAttachment(self, emailDestination, fileToSend, messageToSend = 'Este email tiene un archivo adjunto.'):
+		relativePath = fileToSend
+		absolutePath = os.path.abspath(relativePath)
+		if os.path.isfile(absolutePath):
+			try:
+				fileDirectory, fileName = os.path.split(absolutePath)
+				cType = mimetypes.guess_type(absolutePath)[0]
+				mainType, subType = cType.split('/', 1)
+				mimeMultipart = MIMEMultipart()
+				mimeMultipart['Subject'] = 'Contenido de %s' % fileDirectory
+				mimeMultipart['From'] = '%s <%s>' % (configReader.NAME_SERVER, configReader.EMAIL_SERVER)
+				mimeMultipart['To'] = emailDestination
+				if mainType == 'text':
+					fileObject = open(absolutePath)
+					# Note: we should handle calculating the charset
+					attachmentFile = MIMEText(fileObject.read(), _subtype = subType)
+					fileObject.close()
+				elif mainType == 'image':
+					fileObject = open(absolutePath, 'rb')
+					attachmentFile = MIMEImage(fileObject.read(), _subtype = subType)
+					fileObject.close()
+				elif mainType == 'audio':
+					fileObject = open(absolutePath, 'rb')
+					attachmentFile = MIMEAudio(fileObject.read(), _subtype = subType)
+					fileObject.close()
+				else:
+					fileObject = open(absolutePath, 'rb')
+					attachmentFile = MIMEBase(mainType, subType)
+					attachmentFile.set_payload(fileObject.read())
+					fileObject.close()
+					# Codificamos el payload (carga útil) usando Base64
+					encoders.encode_base64(attachmentFile)
+				# Agregamos una cabecera al email, de nombre 'Content-Disposition' y valor 'attachment' ('filename' es el parámetro)
+				attachmentFile.add_header('Content-Disposition', 'attachment', filename = fileName)
+				mimeText = MIMEText(messageToSend, _subtype = 'plain')
+				mimeMultipart.attach(attachmentFile)
+				mimeMultipart.attach(mimeText)
+				self.smtpServer.sendmail(mimeMultipart['From'], mimeMultipart['To'], mimeMultipart.as_string())
+				print 'Mensaje enviado.'
+				return True
+			except Exception as e:
+				print 'Hubo un problema con el envío. Inténtelo nuevamente.'
+				return False
+		else:
+			print 'El archivo no existe!'
+			return False
+
+	def receiveAttachment(self, emailHeader):
+		currentDirectory = os.getcwd()                                   # Obtenemos el directorio actual de trabajo
+		fileName = emailHeader.get_filename()                            # Obtenemos el nombre del archivo adjunto
+		filePath = os.path.join(currentDirectory, ATTACHMENTS, fileName) # Obtenemos el path relativo del archivo a descargar
+		# Verificamos si el directorio 'ATTACHMENTS' no está creado en el directorio actual
+		if ATTACHMENTS not in os.listdir(currentDirectory):
+			os.mkdir(ATTACHMENTS)
+		# Verificamos si el archivo a descargar no existe en la carpeta 'ATTACHMENTS'
+		if not os.path.isfile(filePath):
+			fileObject = open(filePath, 'w+')
+			fileObject.write(emailHeader.get_payload(decode = True))
+			fileObject.close()
+			logger.write('INFO', '[EMAIL] Archivo adjunto \'%s\' descargado.' % fileName)
+		else:
+			logger.write('WARNING', '[EMAIL] El archivo \'%s\' ya existe! Imposible descargar.' % fileName)
 
 	def receive(self):
 		""" Funcion que se encarga de consultar el correo electronico asociado al modulo
@@ -103,74 +174,70 @@ class Email(object):
 					# Ejemplo de emailIds: ['35 36 37']
 				except Exception as e:
 					pass
-			# Comprobamos si se termino la funcion (el modo EMAIL dejo de funcionar)...
-			if not self.isActive:
-				break
-			# ... sino, leemos los mensajes recibidos
-			else:
+			# Si no se terminó la función (el modo EMAIL no dejó de funcionar), leemos los mensajes recibidos...
+			if self.isActive:
 				emailIdsList = emailIds[0].split()
 				emailAmount = len(emailIdsList) # Cantidad de emails no leidos
 				logger.write('DEBUG', '[EMAIL] Ha(n) llegado ' + str(emailAmount) + ' nuevo(s) mensaje(s) de correo electronico!')
 				# Recorremos los emails recibidos...
 				for i in emailIdsList:
-					#result, emailData = self.imapServer.fetch(i, '(RFC822)')
 					result, emailData = self.imapServer.uid('fetch', i, '(RFC822)')
 					# Retorna un objeto 'message', y podemos acceder a los items de su cabecera como un diccionario.
 					emailReceived = email.message_from_string(emailData[0][1])
-					headerList = self.processEmailHeader(emailReceived) # Almacenamos una lista con los elementos del email recibido
-					sourceName = headerList[0]                          # Almacenamos el nombre del remitente
-					sourceEmail = headerList[1]                         # Almacenamos el correo del remitente
-					emailSubject = headerList[2]                        # Almacenamos el asunto correspondiente
+					sourceName = self.getSourceName(emailReceived)     # Almacenamos el nombre del remitente
+					sourceEmail = self.getSourceEmail(emailReceived)   # Almacenamos el correo del remitente
+					emailSubject = self.getEmailSubject(emailReceived) # Almacenamos el asunto correspondiente
 					logger.write('DEBUG', '[EMAIL] Procesando correo de ' + sourceName + ' - ' + sourceEmail)
 					# Comprobamos si el remitente del mensaje (un correo) esta registrado...
 					if sourceEmail in contactList.allowedEmails.values():
+						for emailHeader in emailReceived.walk():
+							if emailHeader.get('Content-Disposition') is not None:
+								self.receiveAttachment(emailHeader)
 						emailBody = self.getEmailBody(emailReceived) # Obtenemos el cuerpo del email
-						self.sendOutput(sourceEmail, emailSubject, emailBody) # -----> SOLO PARA LA DEMO <-----
-						self.receptionBuffer.put(emailBody)
+						if emailBody is not None:
+							#self.sendOutput(sourceEmail, emailSubject, emailBody) # -----> SOLO PARA LA DEMO <-----
+							self.receptionBuffer.put(emailBody)
 					else:
 						logger.write('WARNING', '[EMAIL] Imposible procesar la solicitud. El correo no se encuentra registrado!')
-						emailMessage = 'Imposible procesar la solicitud. Usted no se encuentra registrado!'
-						self.send(sourceEmail, emailSubject, emailMessage)
+						messageToSend = 'Imposible procesar la solicitud. Usted no se encuentra registrado!'
+						self.send(sourceEmail, emailSubject, messageToSend)
+			# ... sino, dejamos de esperar mensajes
+			else:
+				break
 		logger.write('WARNING', '[EMAIL] Funcion \'%s\' terminada.' % inspect.stack()[0][3])
 
-	def processEmailHeader(self, emailReceived):
-		""" Procesa la cabecera del EMAIL.
-		@param emailReceived: correo electronico entrante
-		@type emailReceived: message
-		@return: elementos de la cabecera (nombre del remitente, asunto y cuerpo del email)
-		@rtype: list """
-		headerList = list()
-		senderInformation = self.getSource(emailReceived)
+	def getSourceName(self, emailReceived):
+		sourceNameList = list()
+		decodedHeader = decode_header(emailReceived.get('From'))
+		senderInformation = unicode(make_header(decodedHeader)).encode('utf-8')
 		# Ejemplo de senderInformation: Mauricio Gonzalez <mauriciolg.90@gmail.com>
-		senderSubject = self.getSubject(emailReceived)
-		# Ejemplo de senderSubject: Importante!
-		senderInformationList = senderInformation.split(' <')
-		# Ejemplo senderInformationList: ['Mauricio Gonzalez', 'mauriciolg.90@gmail.com>']
-		sourceEmail = senderInformationList[1].replace('>', '')
-		# Ejemplo sourceEmail: mauriciolg.90@gmail.com
-		headerList.append(senderInformationList[0])
-		headerList.append(sourceEmail)
-		headerList.append(senderSubject)
-		# Ejemplo headerList: ['Mauricio Gonzalez', 'mauriciolg.90@gmail.com', 'Importante!']
-		return headerList
+		for senderElement in senderInformation.split():
+			if not senderElement.startswith('<') and not senderElement.endswith('>'):
+				sourceNameList.append(senderElement)
+		# Ejemplo de sourceNameList: ['Mauricio', 'Gonzalez']
+		sourceName = ' '.join(sourceNameList)
+		# Ejemplo de sourceName: Mauricio Gonzalez
+		return sourceName
 
-	def getSource(self, emailReceived):
-		""" Obtiene la direccion de correo del remitente.
-		@param emailReceived: correo electronico entrante
-		@type emailReceived: message
-		@return: direccion de correo del remitente
-		@rtype: str """
-		h = decode_header(emailReceived.get('From'))
-		return unicode(make_header(h)).encode('utf-8')
+	def getSourceEmail(self, emailReceived):
+		sourceEmail = ''
+		decodedHeader = decode_header(emailReceived.get('From'))
+		senderInformation = unicode(make_header(decodedHeader)).encode('utf-8')
+		# Ejemplo de senderInformation: Mauricio Gonzalez <mauriciolg.90@gmail.com>
+		for senderElement in senderInformation.split():
+			if senderElement.startswith('<') and senderElement.endswith('>'):
+				sourceEmail = senderElement.replace('<', '').replace('>', '')
+		# Ejemplo sourceEmail: mauriciolg.90@gmail.com
+		return sourceEmail
 		
-	def getSubject(self, emailReceived):
+	def getEmailSubject(self, emailReceived):
 		""" Obtiene el asunto del correo entrante.
 		@param emailReceived: correo electronico entrante
 		@type emailReceived: message
 		@return: asunto del correo entrante
 		@rtype: str """
-		h = decode_header(emailReceived.get('subject'))
-		return unicode(make_header(h)).encode('utf-8')
+		decodedHeader = decode_header(emailReceived.get('subject'))
+		return unicode(make_header(decodedHeader)).encode('utf-8')
 
 	def getEmailBody(self, emailReceived):
 		""" Decodifica el cuerpo del email. Detecta el conjunto de caracteres si la cabecera no esta
@@ -179,27 +246,17 @@ class Email(object):
 		@type emailReceived: message
 		@return: cuerpo del mensaje como string unicode
 		@rtype: str """
-		text = ""
-		if emailReceived.is_multipart():
-			html = None
-			for part in emailReceived.get_payload():
-				#print "%s, %s" % (part.get_content_type(), part.get_content_charset())
-				if part.get_content_charset() is None:
-					# We cannot know the character set, so return decoded "something"
-					text = part.get_payload(decode=True)
-					continue	 
-				charset = part.get_content_charset()
-				if part.get_content_type() == 'text/plain':
-					text = unicode(part.get_payload(decode=True), str(charset), "ignore").encode('utf8', 'replace')
-				if part.get_content_type() == 'text/html':
-					html = unicode(part.get_payload(decode=True), str(charset), "ignore").encode('utf8', 'replace')
-			if text is not None:
-				return text.strip()
-			else:
-				return html.strip()
+		plainText = None
+		for emailHeader in emailReceived.walk():
+			if emailHeader.get_content_type() == 'text/plain':
+				plainText = emailHeader.get_payload()
+				plainText = plainText[:plainText.rfind('\r\n')] # Elimina el salto de línea del final
+				break
+		# Si el cuerpo del email no está vacío, retornamos el texto plano
+		if plainText:
+			return plainText
 		else:
-			text = unicode(emailReceived.get_payload(decode=True), emailReceived.get_content_charset(), 'ignore').encode('utf8', 'replace')
-			return text.strip()
+			return None
 
 	def deleteEmail(self, emailId):
 		self.imapServer.copy(emailId, '[Gmail]/Trash')
