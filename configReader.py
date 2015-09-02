@@ -8,9 +8,10 @@
 	@date: 17 de Abril de 2015 """
 
 # Configuraciones LAN 
-LAN_PROTOCOL = 'UDP'
-LOCAL_HOST   = '192.168.1.124'
-UDP_PORT     = 5024
+LAN_PROTOCOL = 'TCP'
+LOCAL_HOST   = 'localhost'
+TCP_PORT 	 = 6000 
+UDP_PORT     = 6010
 CLOSE_PORT   = True # Para cerrar el puerto en caso de estar ocupado
 
 # Configuraciones Bluetooth 
@@ -35,7 +36,7 @@ CLARO_WEB_PAGE         = 876966
 CLARO_CHARACTER_LIMIT  = 160
 
 priorityLevels = dict() # Diccionario para la selección de envio por prioridades
-priorityLevels = {'ethernet' : 0,
+priorityLevels = {'lan' : 0,
 				  'bluetooth': 0,
 				  'email'	 : 0,
 				  'sms'		 : 4}

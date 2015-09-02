@@ -20,23 +20,24 @@ import logger
 class Checker(object):
 
 	killChecker = False
-	availableSms = False			#Establece si el modo SMS esta disponible
 	availableEmail = False		#Establece si el modo EMAIL esta disponible
-	availableEthernet = False    #Establece si el modo ETHERNET esta disponible
+	availableLan = False    #Establece si el modo LAN esta disponible
 	availableBluetooth = False	#Establece si el modo BLUTOOTH esta disponible
+	availableSms = False			#Establece si el modo SMS esta disponible
 
-	def __init__(self, _smsInstance, _ethernetInstance, _bluetoothInstance, _emailInstance, _modemSemaphore):
-		self.smsInstance = _smsInstance
-		self.ethernetInstance = _ethernetInstance
+
+	def __init__(self, _smsInstance, _lanInstance, _bluetoothInstance, _emailInstance, _modemSemaphore):
+		self.lanInstance = _lanInstance
 		self.bluetoothInstance = _bluetoothInstance
 		self.emailInstance = _emailInstance
+		self.smsInstance = _smsInstance
 		self.modemSemaphore = _modemSemaphore
 
 	def __del__(self):
 		logger.write('INFO', '[CHECKER] Objeto destruido.')
 	
-	def verifyEthernetConnection(self):
-		"""Se determina la disponibilidad de la comunicación por medio del objeto Ethernet.
+	def verifyLanConnection(self):
+		"""Se determina la disponibilidad de la comunicación por medio de comunicación Lan.
 		@return: Se determina si la comunicación por este medio se puede realizar.
 		@rtype: bool"""
 		ethernetDevices = os.popen('ip link show').readlines()
@@ -53,23 +54,26 @@ class Checker(object):
 				ethActiveInterfaces = True
 				break
 		if ethActiveInterfaces or wlanActiveInterfaces:
-			if not self.ethernetInstance.isActive and not self.ethernetInstance.bindFailed:
-				self.ethernetInstance.connect()
-				self.ethernetInstance.isActive = True
-				ethernetThread = threading.Thread(target = self.ethernetInstance.receive, name = 'ethernetReceptor')
-				ethernetThread.start()
-				logger.write('INFO','[ETHERNET] Listo para usarse.')
+			if not self.lanInstance.isActive and not self.lanInstance.bindFailed:
+				self.lanInstance.connect()
+				self.lanInstance.isActive = True
+				self.lanInstance.receive()
+				logger.write('INFO','[LAN] Listo para usarse.')
 			return True
 		else:
-			if self.ethernetInstance.isActive:
-				self.ethernetInstance.isActive = False
+			if self.lanInstance.isActive:
+				self.lanInstance.isActive = False
 			return False
 
 	def verifyBluetoothConnection(self):
+		"""Se determina la disponibilidad de la comunicación por medio de comunicación Bluetooth.
+		@return: Se determina si la comunicación por este medio se puede realizar.
+		@rtype: bool"""
 		bluetoothDevices = os.popen('hcitool dev').readlines()
 		bluetoothDevices.pop(0)
 		if len(bluetoothDevices) > 0:
 			if not self.bluetoothInstance.isActive:
+				self.bluetoothInstance.connect()
 				self.bluetoothInstance.isActive = True
 				self.bluetoothInstance.receive()
 				logger.write('INFO','[BLUETOOTH] Listo para usarse.')
@@ -80,7 +84,8 @@ class Checker(object):
 			return False
 
 	def verifyEmailConnection(self):
-		"""Se determina la disponibilidad de la comunicación por medio del objeto Email.
+		"""Se determina la disponibilidad de la comunicación por medio de comunicación 
+		a través Email.
 		@return: Se determina si la comunicación por este medio se puede realizar.
 		@rtype: bool"""
 		TEST_REMOTE_SERVER = 'www.google.com'
@@ -100,6 +105,9 @@ class Checker(object):
 			return False
 
 	def verifySmsConnection(self):
+		"""Se determina la disponibilidad de la comunicación por medio comunicación SMS.
+		@return: Se determina si la comunicación por este medio se puede realizar.
+		@rtype: bool"""
 		self.modemSemaphore.acquire() # Para evitar que 'modemClass' use al mismo tiempo el dispositivo
 		ttyUSBPattern = re.compile('ttyUSB[0-9]+')
 		wvdialProcess = subprocess.Popen('wvdialconf', stdout = subprocess.PIPE, stderr = subprocess.PIPE)
@@ -121,13 +129,13 @@ class Checker(object):
 
 	def verifyConnections(self):
 		while not self.killChecker:
-			self.availableSms = self.verifySmsConnection()
-			self.availableEthernet = self.verifyEthernetConnection()
+			self.availableLan = self.verifyLanConnection()
 			self.availableBluetooth = self.verifyBluetoothConnection()
 			self.availableEmail = self.verifyEmailConnection()
+			self.availableSms = self.verifySmsConnection()
 			time.sleep(5)
 		self.smsInstance.isActive = False
 		self.bluetoothInstance.isActive = False
 		self.emailInstance.isActive = False
-		self.ethernetInstance.isActive = False
+		self.lanInstance.isActive = False
 		logger.write('INFO', '[CHECKER] Funcion \'%s\' terminada.' % inspect.stack()[0][3]) #No es una advertencia porque se espera que se termine
