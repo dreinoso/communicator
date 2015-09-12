@@ -1,6 +1,6 @@
 # coding=utf-8
 """	Modulo cuya finalidad es proporcionar funciones que se encarguen del envio
-	de paquetes de datos y mensajes en la red local.
+	de paquetes de datos y mensajes en la red local por el protocolo TCP.
 	@author: Gonzalez Leonardo Mauricio
 	@author: Reinoso Ever Denis
 	@organization: UNC - Fcefyn
@@ -12,38 +12,28 @@ import threading
 import time
 import inspect
 import Queue
+import os
 
 # Tamano del buffer en bytes (cantidad de caracteres)
 BUFFER_SIZE = 1024
 
-class LanTransmitter(threading.Thread):
+class TcpLanTransmitter(threading.Thread):
 
-	receptionBuffer = Queue.Queue()
 	isActive = False
 	destinationIp = ''
 	destinationPort = 0
 
-	def __init__(self, _threadName, _receptionBuffer, _isActive, _destinationIp, _destinationPort, _packetName):
+	def __init__(self, _threadName, _isActive, _destinationIp, _destinationPort, _packetName):
 		threading.Thread.__init__(self, name = _threadName)
-		self.receptionBuffer = _receptionBuffer
 		self.isActive = _isActive
 		self.destinationIp = _destinationIp
 		self.destinationPort = _destinationPort
 		self.packetName = _packetName
-
+		
 	def run(self):
 		"""Comienzo de la ejecución y se envia el paquete ya sea por protocolo 
 		TCP o UDP dependiendo de como este implementado."""
-		if (self.getName == 'ThreadUDP'):
-			resultOk = self.sendUdpPacket()
-		else:
-			resultOk = self.sendTcpPacket()
-		return resultOk
-
-	def sendUdpPacket(self):
-		"""Envia un paquete por medio del protocolo UDP, realiza varios envios
- 		de mensajes para sincronización."""
-		pass
+		self.sendTcpPacket()
 
  	def sendTcpPacket(self):
  		"""Envia un paquete por medio del protocolo TCP, realiza varios envios
@@ -51,7 +41,7 @@ class LanTransmitter(threading.Thread):
  		try:
 			tcpPacketSocket = socket.socket()
 			tcpPacketSocket.connect((self.destinationIp, self.destinationPort))
-			print 'Conexión establecida'
+			#print 'Conexión establecida'
 			packet = open(self.packetName, "rb")
 			outputData = packet.read(BUFFER_SIZE)
 			#tcpPacketSocket.send('START_OF_PACKET',len('START_OF_PACKET')) Ver si conviene asi..

@@ -9,8 +9,10 @@
 import configReader
 import contactList #TODO averiguar por que los toma bien
 import logger
-import lanReceptor
-import lanTransmitter
+import tcpLanReceptor
+import tcpLanTransmitter
+import udpLanReceptor
+import udpLanTransmitter
 
 import inspect
 import os
@@ -29,10 +31,11 @@ class Lan(object):
 	udpReceptionPort = configReader.UDP_PORT
 	tcpReceptionPort = configReader.TCP_PORT
 	lanProtocol = configReader.LAN_PROTOCOL
+	udpConnectionPortList = [configReader.UDP_PORT + 1, configReader.UDP_PORT + 2, configReader.UDP_PORT + 3,
+	configReader.UDP_PORT + 4, configReader.UDP_PORT + 5]
 	tcpReceptionSocket = socket.socket
 	udpTransmissionSocket = socket.socket
 	udpReceptionSocket = socket.socket
-	bindFailed = False # TODO... para que es esto?
 	isActive = False
 	receptionBuffer = Queue.Queue()
 
@@ -50,7 +53,7 @@ class Lan(object):
 		self.udpTransmissionSocket.close()
 		self.udpReceptionSocket.close()
 		self.tcpReceptionSocket.close()
-		logger.write('INFO','[LAN] Objeto destruido.' )
+		logger.write('INFO','[LAN] Objeto destruido.')
 
 	def connect(self):
 		'''Se realizan las conexiones de los protocolos UDP y TCP para la comunicación
@@ -59,10 +62,8 @@ class Lan(object):
 			self.udpTransmissionSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 			self.udpReceptionSocket	   = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 			if(configReader.CLOSE_PORT): # Para cerrar el puerto en caso de estar ocupado
-				comand = 'fuser -k -s ' + str(self.udpReceptionPort) + '/udp' # -k = kill;  -s: modo silecioso
-    			os.system(comand)
-    			os.system(comand)
-    			#TODO anda bien pero la siguiente vez despues de el mal cierre no lo toma, averiguar
+				udpCommand = 'fuser -k -s ' + str(self.udpReceptionPort) + '/udp' # -k = kill;  -s: modo silecioso
+    			os.system(udpCommand + '\n' + udpCommand)
 			self.udpReceptionSocket.settimeout(TIMEOUT) #Para no parase en recevie from a causa de saltar excepción en bind
 			self.udpReceptionSocket.bind((self.localHost, self.udpReceptionPort))
 		except socket.error , errorMessage:
@@ -70,9 +71,8 @@ class Lan(object):
 			logger.write('WARNING', '[LAN] Excepción en "' + str(inspect.stack()[0][3]) + ' para UDP " (' +str(errorMessage) + ')')
 		try: # Intenta conexión TCP
 			if(configReader.CLOSE_PORT): # Para cerrar el puerto en caso de estar ocupado
-				comand = 'fuser -k -s ' + str(self.tcpReceptionPort) + '/tcp'
-				os.system(comand)
-				os.system(comand)
+				tcpCommand = 'fuser -k -s ' + str(self.tcpReceptionPort) + '/tcp'
+				os.system(tcpCommand + '\n' + tcpCommand)
 			self.tcpReceptionSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 			#self.tcpReceptionSocket.setblocking(0) No se usa porque tira un error.. osea como que sigue de largo.. para el informe..
 			self.tcpReceptionSocket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -123,13 +123,16 @@ class Lan(object):
 		@param message: cadena de texto a enviar
 		@type message: str """
 		if (self.lanProtocol == 'UDP'):
-			threadName = 'ThreadUDP'
-			transmitterThread = lanTransmitter.LanTransmitter(threadName, self.receptionBuffer, self.isActive, destinationIp, destinationUdpPort, packetName)
-			transmitterThread.start()
-			return True # Se supone un envio exitoso, de no ocurrir se expresara por una adevertencia. Esto es asi para evitar la espera de envio
+			if len(self.udpConnectionPortList) > 0:
+				threadName = 'UDP_TRANSMITTER_THREAD'
+				transmitterThread = udpLanTransmitter.UdpLanTransmitter(threadName, self.isActive, destinationIp, destinationUdpPort, packetName, self.localHost, self.udpConnectionPortList)
+				transmitterThread.start()
+				return True # Se supone un envio exitoso, de no ocurrir se expresara por una adevertencia. Esto es asi para evitar la espera de envio
+			else:
+				return False
 		else:
-			threadName = 'ThreadTCP'
-			transmitterThread = lanTransmitter.LanTransmitter(threadName, self.receptionBuffer, self.isActive, destinationIp, destinationTcpPort, packetName)
+			threadName = 'TCP_TRANSMITTER_THREAD'
+			transmitterThread = tcpLanTransmitter.TcpLanTransmitter(threadName, self.isActive, destinationIp, destinationTcpPort, packetName)
 			transmitterThread.start()
 			return True # Se supone un envio exitoso, de no ocurrir se expresara por una adevertencia. Esto es asi para evitar la espera de envio
 			
@@ -142,20 +145,6 @@ class Lan(object):
 		udpLanThread.start()
 		tcpLanThread.start()
 
-	def receiveUdp(self):
-		""" Esta función es ejecutada en un hilo, se queda esperando los paquetes
-		y mensajes que lleguen al puerto UDP establecido para guardarlos en el buffer."""	
-		while self.isActive:
-			try:
-				data, addr = self.udpReceptionSocket.recvfrom(PACKET_SIZE) 
-				self.receptionBuffer.put(data)
-				print 'Recibido UDP: ' + data
-			except socket.timeout, errorMessage:
-				pass # Esta excepción es parte de la ejecución, no implica un error
-			except socket.error, errorMessage:
-				logger.write('WARNING', '[LAN] Excepción en "' + str(inspect.stack()[0][3]) + '" (' +str(errorMessage) + ')')
-		logger.write('WARNING', '[LAN] Funcion \'%s\' terminada' % inspect.stack()[0][3])
-
 	def receiveTcp(self):
 		""" Esta función es ejecutada en un hilo, se queda esperando los paquetes
 		y mensajes que lleguen al puerto TCP establecido para guardarlos en el buffer."""
@@ -163,8 +152,8 @@ class Lan(object):
 			try:
 				connectionSocket, addr = self.tcpReceptionSocket.accept()
 				connectionSocket.settimeout(TIMEOUT)
-				threadName = 'ThreadTCP'
-				receptorThread = lanReceptor.LanReceptor(threadName, connectionSocket, self.receptionBuffer, self.isActive)
+				threadName = 'TCP_RECEPTOR_THREAD'
+				receptorThread = tcpLanReceptor.TcpLanReceptor(threadName, connectionSocket, self.receptionBuffer, self.isActive)
 				receptorThread.start()
 			except socket.timeout, errorMessage:
 				pass
@@ -175,3 +164,24 @@ class Lan(object):
 		except Exception, e:
 			logger.write('WARNING', '[LAN] Excepción en "' + str(inspect.stack()[0][3]) + '" (' +str(errorMessage) + ')')
 		logger.write('WARNING', '[LAN] Funcion \'%s\' terminada.' % inspect.stack()[0][3])
+
+	def receiveUdp(self):
+		""" Esta función es ejecutada en un hilo, se queda esperando los paquetes
+		y mensajes que lleguen al puerto UDP establecido para guardarlos en el buffer."""	
+		while self.isActive:
+			try:
+				data, addr = self.udpReceptionSocket.recvfrom(PACKET_SIZE) 
+				if data.startswith('START_OF_PACKET'):
+					if len(self.udpConnectionPortList) > 0:
+						threadName = 'UDP_RECEPTOR_THREAD'
+						receptorThread = udpLanReceptor.UdpLanReceptor(threadName, self.receptionBuffer, self.isActive, data, self.localHost, self.udpConnectionPortList)
+						receptorThread.start()
+					else: 
+						logger.write('WARNING', '[LAN] No quedan puertos disponibles para recepción de paquetes UDP')
+				else:
+					self.receptionBuffer.put(data)
+			except socket.timeout, errorMessage:
+				pass # Esta excepción es parte de la ejecución, no implica un error
+			except socket.error, errorMessage:
+				logger.write('WARNING', '[LAN] Excepción en "' + str(inspect.stack()[0][3]) + '" (' +str(errorMessage) + ')')
+		logger.write('WARNING', '[LAN] Funcion \'%s\' terminada' % inspect.stack()[0][3])
