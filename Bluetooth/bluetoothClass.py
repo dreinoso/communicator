@@ -2,7 +2,7 @@
 
 import configReader
 import contactList
-import bluetoothReader
+import bluetoothReceptor
 import logger
 
 import Queue
@@ -22,8 +22,8 @@ class Bluetooth(object):
 	localSocketL2CAP = bluetooth.BluetoothSocket
 	localPortRFCOMM = ''
 	localPortL2CAP = ''
-	isActive = False
 
+	isActive = False
 	receptionBuffer = Queue.Queue()
 
 	def __init__(self, _receptionBuffer):
@@ -77,7 +77,6 @@ class Bluetooth(object):
 			remoteSocket.connect((host, port))
 			logger.write('DEBUG', '[BLUETOOTH] Conectado con el dispositivo Bluetooth.')
 			remoteSocket.send(messageToSend)
-			#print '[BLUETOOTH] Mensaje enviado al cliente especificado.'
 			# Cierra la conexion del socket cliente
 			remoteSocket.send('END')
 			remoteSocket.close()
@@ -86,9 +85,9 @@ class Bluetooth(object):
 	def receive(self):
 		rfcommThread = threading.Thread(target = self.receiveRFCOMM, name = 'rfcommReceptor')
 		rfcommThread.start()
+		rfcommThread.join()
 
 	def receiveRFCOMM(self):
-		queueThreads = Queue.Queue() # BORRAR: el cliente seria el que termina el thread creado. por lo que no haria falta
 		while self.isActive:
 			try:
 				# Espera por una conexion entrante y devuelve un nuevo socket que representa la conexion, como asi tambien la direccion del cliente
@@ -96,16 +95,12 @@ class Bluetooth(object):
 				remoteSocket.settimeout(TIMEOUT)
 				logger.write('DEBUG', '[BLUETOOTH] Conexion desde \'%s\' aceptada.' % remoteAddress[0])
 				threadName = 'Thread-%s' % remoteAddress[0]
-				readerThread = bluetoothReader.BluetoothReader(threadName, remoteSocket, self.receptionBuffer)
-				readerThread.start()
-				queueThreads.put(readerThread)
+				receptorThread = bluetoothReceptor.BluetoothReceptor(threadName, remoteSocket, self.receptionBuffer)
+				receptorThread.isActive = True
+				receptorThread.start()
 			except bluetooth.BluetoothError, msg:
 				# Para que el bloque 'try' (en la funcion 'accept') no se quede esperando indefinidamente
 				pass
-		# Terminamos los hilos creados (por la opcion 'Salir' del menu principal)
-		while not queueThreads.empty():
-			readerThread = queueThreads.get()
-			readerThread.killReaderThread = True
 		logger.write('WARNING','[BLUETOOTH] Funcion \'%s\' terminada.' % inspect.stack()[0][3])
 
 	def receiveL2CAP(self):
@@ -117,14 +112,15 @@ class Bluetooth(object):
 				remoteSocket.settimeout(TIMEOUT)
 				logger.write('DEBUG', '[BLUETOOTH] Conexion desde \'%s\' aceptada.' % remoteAddress[0])
 				threadName = 'Thread-%s' % remoteAddress[0]
-				readerThread = bluetoothReader.BluetoothReader(threadName, remoteSocket, self.receptionBuffer)
-				readerThread.start()
-				queueThreads.put(readerThread)
+				receptorThread = bluetoothReceptor.BluetoothReceptor(threadName, remoteSocket, self.receptionBuffer)
+				receptorThread.isActive = True
+				receptorThread.start()
+				queueThreads.put(receptorThread)
 			except bluetooth.BluetoothError, msg:
 				# Para que el bloque 'try' (en la funcion 'accept') no se quede esperando indefinidamente
 				pass
 		# Terminamos los hilos creados (por la opcion 'Salir' del menu principal)
 		while not queueThreads.empty():
-			readerThread = queueThreads.get()
-			readerThread.killReaderThread = True
+			receptorThread = queueThreads.get()
+			receptorThread.isActive = False
 		logger.write('WARNING','[BLUETOOTH] Funcion \'%s\' terminada.' % inspect.stack()[0][3])

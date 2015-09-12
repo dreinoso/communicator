@@ -12,30 +12,33 @@ import sys
 import Queue
 import threading
 
+sys.path.append(os.path.abspath('Lan/'))
+sys.path.append(os.path.abspath('Email/'))
+sys.path.append(os.path.abspath('Modem/'))
+sys.path.append(os.path.abspath('Bluetooth/'))
+
+import lanClass
+import modemClass
+import emailClass
+import bluetoothClass
+
+import logger
+import contactList
 import configReader
 import checkerClass
-import emailClass
-import modemClass
-import contactList 
-import logger
-
-currentPath = ''.join(( os.popen('pwd').readlines())) # Se busca el Path del modo bluetooth para añadirlo al sistema
-currentPath = currentPath[0:len(currentPath)-1]
-lanPath = currentPath + '/Lan'
-sys.path.append(lanPath)
-bluetoothPath = currentPath + '/Bluetooth'
-sys.path.append(bluetoothPath)
-import lanClass
-import bluetoothClass
 
 receptionBuffer = Queue.Queue()
 modemSemaphore = threading.Semaphore(value = 1)
 
-checkerInstance = checkerClass.Checker
-lanInstance = lanClass.Lan
-bluetoothInstance = bluetoothClass.Bluetooth
-smsInstance = modemClass.Sms
-emailInstance = emailClass.Email
+# Creamos las instancias de los periféricos
+lanInstance = lanClass.Lan(receptionBuffer)
+emailInstance = emailClass.Email(receptionBuffer)
+smsInstance = modemClass.Sms(receptionBuffer, modemSemaphore)
+bluetoothInstance = bluetoothClass.Bluetooth(receptionBuffer)
+
+# Creamos la instancia del checker y el hilo que va a verificar las conexiones
+checkerInstance = checkerClass.Checker(modemSemaphore, lanInstance, smsInstance, emailInstance, bluetoothInstance)
+checkerThread = threading.Thread(target = checkerInstance.verifyConnections, name = 'checkerThread')
 
 contactExists = False
 lanPriority = 0
@@ -46,7 +49,7 @@ smsPriority = 0
 def open():
 	"""Se realiza la apertura, inicialización de los componentes que se tengan disponibles
 	"""
-	global checkerInstance, lanInstance, bluetoothInstance, smsInstance, emailInstance
+	global checkerInstance, checkerThread
 	
 	logger.set('communicatorLogger') # Solo se setea una vez, todos los objetos usan esta misma configuración
 	
@@ -55,14 +58,8 @@ def open():
 		logger.write('INFO', '[CONFIG READER] Archivo de configuración cargado correctamente.')
 	else:
 		logger.write('ERROR', '[CONFIG READER] Imposible leer \'properties.conf\'. Se usará la configuración por defecto.')
-	# Creamos las instancias de los periféricos
-	lanInstance = lanClass.Lan(receptionBuffer)
-	bluetoothInstance = bluetoothClass.Bluetooth(receptionBuffer)
-	smsInstance = modemClass.Sms(receptionBuffer, modemSemaphore)
-	emailInstance = emailClass.Email(receptionBuffer)
-	# Creamos la instancia del checker y lanzamos el hilo
-	checkerInstance = checkerClass.Checker(smsInstance, lanInstance, bluetoothInstance, emailInstance, modemSemaphore)
-	checkerThread = threading.Thread(target = checkerInstance.verifyConnections, name = 'checkerThread')
+	# Lanzamos el hilo que comprueba las conexiones
+	checkerInstance.isActive = True
 	checkerThread.start()
 
 def send(contact, message, isPacket):
@@ -95,7 +92,6 @@ def send(contact, message, isPacket):
 		if not contactExists:
 			logger.write('WARNING', '[COMUNICADOR] El contacto \'%s\' no se encuentra registrado.' % contact)
 			return False
-
 	# Intentamos transmitir por LAN
 	if lanPriority != 0 and lanPriority >= bluetoothPriority and lanPriority >= emailPriority and lanPriority >= smsPriority:
 		destinationIp = contactList.allowedIpAddress[contact][0]
@@ -175,9 +171,10 @@ def len():
 
 def close():
 	"""Se cierran los componentes del sistema, unicamente los abiertos previamente"""
-	global receptionBuffer, checkerInstance, smsInstance, lanInstance, bluetoothInstance, emailInstance
+	global checkerThread, receptionBuffer, checkerInstance, smsInstance, lanInstance, bluetoothInstance, emailInstance
 	receptionBuffer.queue.clear()
-	checkerInstance.killChecker = True
+	checkerInstance.isActive = False
+	checkerThread.join()
 	del checkerInstance
 	del smsInstance
 	del lanInstance
