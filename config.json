@@ -1,0 +1,66 @@
+{
+# --------- CONFIGURACIÓN LAN ---------
+"LAN":
+	{
+	"LOCAL_HOST" : "localhost",
+	"PROTOCOL"   : "TCP",
+	"TCP_PORT"   : 6000,
+	"UDP_PORT"   : 6010
+	},
+# ------- CONFIGURACIÓN BLUETOOTH -------
+	# PROTOCOL
+	# 0 ---> L2CAP
+	# 1 ---> HCI
+	# 2 ---> SCO
+	# 3 ---> RFCOMM
+"BLUETOOTH":
+	{
+	"PROTOCOL"     : 3,
+	"MAC"          : "00:24:7E:64:7B:4A",
+	"SERVICE"      : "BLUETOOTH-Client01",
+	"UUID"         : "94f39d29-7d6d-437d-973b-fba39e49d4ee"
+	},
+# ------- CONFIGURACIÓN EMAIL -------
+"EMAIL":
+	{
+	"NAME"        : "client01",
+	"ACCOUNT"     : "client01.datalogger@gmail.com",
+	"PASSWORD"    : "client01dl",
+	"SMTP_SERVER" : "smtp.gmail.com",
+	"IMAP_SERVER" : "imap.gmail.com",
+	"SMTP_PORT"   : 587,
+	"IMAP_PORT"   : 993
+	},
+# ------- CONFIGURACIÓN SMS -------
+"SMS":
+	{
+	"CLARO_MESSAGES_CENTER"  : 543200000001,
+	"CLARO_TELEPHONE_NUMBER" : 3516178949,
+	"CLARO_WEB_PAGE"         : 876966,
+	"CLARO_CHARACTER_LIMIT"  : 160
+	},
+# ------- NIVELES DE PRIORIDAD -------
+	# 4 --> Alto
+	# 3 --> Normal
+	# 2 --> Bajo
+	# 1 --> Muy bajo
+	# 0 --> Inhabilidato
+"PRIORITY_LEVELS":
+	{
+	"LAN"       : 4,
+	"SMS"       : 3,
+	"EMAIL"     : 2,
+	"BLUETOOTH" : 1
+	},
+# ------- TIPOS DE NOTIFICACIONES -------
+	# DEBUG    --> Depuración
+	# INFO     --> Información
+	# WARNING  --> Advertencia
+	# ERROR    --> Error
+	# CRITICAL --> Situación crítica
+# Para el archivo log, por defecto se imprimen todas las notificaciones ('DEBUG')
+# Para la consola,  por defecto se descartan los mesajes de depuración mostrando sólo lo más relevante ('INFO')
+"FILE_LOGGING_LEVEL"    : "DEBUG",
+"CONSOLE_LOGGING_LEVEL" : "INFO"
+}
+
