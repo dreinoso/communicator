@@ -13,9 +13,9 @@ import inspect
 import Queue
 
 # Tamano del buffer en bytes (cantidad de caracteres)
-PACKET_SIZE = 1024
+BUFFER_SIZE = 1024
 
-class LanReceptor(threading.Thread):
+class TcpLanReceptor(threading.Thread):
 	
 	isActive = False
 	remoteSocket = ''
@@ -31,18 +31,16 @@ class LanReceptor(threading.Thread):
 		"""Comienzo de la ejecución, en caso de ser TCP debe determinar si se 
 		trata de un mensaje o un paquete, mientras que para UDP siempre se tratará
 		de un paquete, ya que la recepción es inmediata. No requiere una conexión."""
-		if (self.getName == 'ThreadUDP'):
-			self.receiveUdpPacket() # No se pretende un hilo para recepción de mensajes UDP, no genera conexión ni retardo
-		else:
-			self.receiveTcpMessage()
+		self.receiveTcpMessage()
 
 	def receiveTcpMessage(self):
 		'''Se recibe el mensaje a partir de la conexión previamente establecida, 
 		de modo que se determine si se trata de un paquete, se llama otra función 
-		para encargarse de la recepción. Mientras que si se trata de un mensaje 
+		para encargarse de la recepción por el protocolo TCP. Mientras que si se 
+		trata de un mensaje 
 		simplemente lo guarda en el buffer.'''
 		try:
-			inputData = self.remoteSocket.recv(PACKET_SIZE)
+			inputData = self.remoteSocket.recv(BUFFER_SIZE)
 			if (inputData == 'START_OF_PACKET'):
 				self.receiveTcpPacket()
 			else:
@@ -60,7 +58,7 @@ class LanReceptor(threading.Thread):
 		end = False
 		try:
 			self.remoteSocket.send('ACK')
-			packetName = self.remoteSocket.recv(PACKET_SIZE)
+			packetName = self.remoteSocket.recv(BUFFER_SIZE)
 			print 'Recibiendo.. ' + packetName
 			packet = open(packetName, "wb")
 			self.remoteSocket.send('ACK')
@@ -68,7 +66,7 @@ class LanReceptor(threading.Thread):
 			logger.write('WARNING', '[LAN] No se pudo recibir paquete (' + packetName + '). Excepción en "' + str(inspect.stack()[0][3]) + '" (' +str(errorMessage) + ')')
 		while not end and self.isActive:
 			try:
-				inputData = self.remoteSocket.recv(PACKET_SIZE)
+				inputData = self.remoteSocket.recv(BUFFER_SIZE)
 				if inputData != 'END_OF_PACKET':
 					packet.write(inputData)
 				else: 
@@ -80,6 +78,3 @@ class LanReceptor(threading.Thread):
 			except Exception, errorMessage:
 				logger.write('WARNING', '[LAN] No se pudo recibir paquete (' + packetName + '). Excepción en "' + str(inspect.stack()[0][3]) + '" (' +str(errorMessage) + ')')
 				break
-
-	def receiveUdpPacket(self):
-		pass

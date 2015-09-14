@@ -85,7 +85,7 @@ class Checker(object):
 				ethActiveInterfaces = True
 				break
 		if ethActiveInterfaces or wlanActiveInterfaces:
-			if not self.lanInstance.isActive and not self.lanInstance.bindFailed:
+			if not self.lanInstance.isActive:
 				self.lanInstance.connect()
 				self.lanInstance.isActive = True
 				self.lanThread.start()
