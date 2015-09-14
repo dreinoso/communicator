@@ -17,13 +17,16 @@ import serial
 import signal
 import inspect
 import subprocess
+import commentjson
 
 import logger
 import errorList
 import contactList
-import configReader
 
 from curses import ascii # Para enviar el Ctrl-Z
+
+JSON_FILE = 'config.json'
+JSON_CONFIG = commentjson.load(open(JSON_FILE))
 
 class Modem(object):
 	""" Clase 'Modem'. Permite la creacion de una instancia del dispositivo. """
@@ -110,10 +113,6 @@ class Sms(Modem):
 			dependiendo de la compania de telefonia de la tarjeta SIM). """
 		Modem.__init__(self, _modemSemaphore)
 		self.receptionBuffer = _receptionBuffer
-		self.sendAT('AT+CMGF=1\r')				# Modo para Sms
-		self.sendAT('AT+CPMS="ME","ME","ME"\r') # Lugar de almacenamiento de los mensajes (memoria del dispositivo)
-		self.sendAT('AT+CNMI=1,1,0,0,0\r')		# Habilito notificacion de mensaje entrante
-		self.sendAT('AT+CSCA="+' + str(configReader.CLARO_MESSAGES_CENTER) + '"\r') # Centro de mensajes CLARO
 
 	def connect(self, _serialPort):
 		self.modemInstance.port = _serialPort
@@ -125,7 +124,7 @@ class Sms(Modem):
 		self.sendAT('AT+CMGF=1\r')				# Modo para Sms
 		self.sendAT('AT+CPMS="ME","ME","ME"\r') # Lugar de almacenamiento de los mensajes (memoria del dispositivo)
 		self.sendAT('AT+CNMI=1,1,0,0,0\r')		# Habilito notificacion de mensaje entrante
-		self.sendAT('AT+CSCA="+' + str(configReader.CLARO_MESSAGES_CENTER) + '"\r') # Centro de mensajes CLARO
+		self.sendAT('AT+CSCA="+' + str(JSON_CONFIG["SMS"]["CLARO_MESSAGES_CENTER"]) + '"\r') # Centro de mensajes CLARO
 
 	def receive(self):
 		""" Funcion que se encarga consultar al modem por algun mensaje SMS entrante. Envia al
@@ -179,7 +178,7 @@ class Sms(Modem):
 						print 'Mensaje procesado correctamente.'
 					else:
 						# ... caso contrario, verificamos si el mensaje proviene de la pagina web de CLARO...
-						if self.telephoneNumber == configReader.CLARO_WEB_PAGE:
+						if self.telephoneNumber == JSON_CONFIG["SMS"]["CLARO_WEB_PAGE"]:
 							logger.write('DEBUG','[SMS] No es posible procesar mensajes enviados desde la pagina web!')
 						# ... sino, comunicamos al usuario que no se encuentra registrado.
 						else:

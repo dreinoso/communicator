@@ -46,7 +46,6 @@ class UdpLanReceptor(threading.Thread):
 		try:
 			udpConnectionPort = self.udpConnectionPortList.pop() # Se usa la lista para pasar el valor por referencia y modifcar desde el hilo
 			receptionSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-			#if(configReader.CLOSE_PORT): # Para cerrar el puerto en caso de estar ocupado
 			command = 'fuser -k -s ' + str(udpConnectionPort) + '/udp' # -k = kill;  -s: modo silecioso
 			os.system(command + '\n' + command)			
 			receptionSocket.settimeout(TIMEOUT) # En caso de no recibir el paquete salir y no dejar la espera indeterminada.

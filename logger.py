@@ -9,7 +9,6 @@
 import sys
 import logging
 import commentjson
-import configReader
 
 JSON_FILE = 'config.json'
 JSON_CONFIG = commentjson.load(open(JSON_FILE))

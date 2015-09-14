@@ -7,11 +7,13 @@
 	@organization: UNC - Fcefyn
 	@date: Lunes 16 de Abril de 2015 """
 
-import configReader
-import contactList
 import logger
+import contactList
 
+import os
 import time
+import shlex
+import Queue
 import email
 import socket
 import inspect
@@ -19,11 +21,8 @@ import smtplib
 import imaplib
 import threading
 import mimetypes
-import Queue
-
-import os
-import shlex
 import subprocess
+import commentjson
 
 from email import encoders
 from email.header import decode_header
@@ -37,6 +36,9 @@ from email.mime.base import MIMEBase
 
 TIMEOUT = 5
 ATTACHMENTS = 'attachments'
+
+JSON_FILE = 'config.json'
+JSON_CONFIG = commentjson.load(open(JSON_FILE))
 
 class Email(object):
 
@@ -66,12 +68,12 @@ class Email(object):
 		#print 'Objeto ' + self.__class__.__name__ + ' destruido.'
 
 	def connect(self):
-		self.smtpServer = smtplib.SMTP(configReader.SMTP_SERVER, configReader.SMTP_PORT)      # Establecemos servidor y puerto SMTP
-		self.imapServer = imaplib.IMAP4_SSL(configReader.IMAP_SERVER, configReader.IMAP_PORT) # Establecemos servidor y puerto IMAP
+		self.smtpServer = smtplib.SMTP(JSON_CONFIG["EMAIL"]["SMTP_SERVER"], JSON_CONFIG["EMAIL"]["SMTP_PORT"])      # Establecemos servidor y puerto SMTP
+		self.imapServer = imaplib.IMAP4_SSL(JSON_CONFIG["EMAIL"]["IMAP_SERVER"], JSON_CONFIG["EMAIL"]["IMAP_PORT"]) # Establecemos servidor y puerto IMAP
 		self.smtpServer.starttls()
 		self.smtpServer.ehlo()
-		self.smtpServer.login(configReader.EMAIL_SERVER, configReader.PASS_SERVER)            # Nos logueamos en el servidor SMTP
-		self.imapServer.login(configReader.EMAIL_SERVER, configReader.PASS_SERVER)            # Nos logueamos en el servidor IMAP
+		self.smtpServer.login(JSON_CONFIG["EMAIL"]["ACCOUNT"], JSON_CONFIG["EMAIL"]["PASSWORD"]) # Nos logueamos en el servidor SMTP
+		self.imapServer.login(JSON_CONFIG["EMAIL"]["ACCOUNT"], JSON_CONFIG["EMAIL"]["PASSWORD"])            # Nos logueamos en el servidor IMAP
 		self.imapServer.select('INBOX')                                                       # Seleccionamos la Bandeja de Entrada
 
 	def send(self, emailDestination, emailSubject, messageToSend):
@@ -85,7 +87,7 @@ class Email(object):
 		try:
 			# Se construye un mensaje simple
 			mimeText = MIMEText(messageToSend)
-			mimeText['From'] = '%s <%s>' % (configReader.NAME_SERVER, configReader.EMAIL_SERVER)
+			mimeText['From'] = '%s <%s>' % (JSON_CONFIG["EMAIL"]["NAME_SERVER"], JSON_CONFIG["EMAIL"]["EMAIL_SERVER"])
 			mimeText['To'] = emailDestination
 			mimeText['Subject'] = emailSubject
 			self.smtpServer.sendmail(mimeText['From'], mimeText['To'], mimeText.as_string())
@@ -103,7 +105,7 @@ class Email(object):
 				mainType, subType = cType.split('/', 1)
 				mimeMultipart = MIMEMultipart()
 				mimeMultipart['Subject'] = 'Contenido de %s' % fileDirectory
-				mimeMultipart['From'] = '%s <%s>' % (configReader.NAME_SERVER, configReader.EMAIL_SERVER)
+				mimeMultipart['From'] = '%s <%s>' % (JSON_CONFIG["EMAIL"]["NAME_SERVER"], JSON_CONFIG["EMAIL"]["EMAIL_SERVER"])
 				mimeMultipart['To'] = emailDestination
 				if mainType == 'text':
 					fileObject = open(absolutePath)

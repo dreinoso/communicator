@@ -1,23 +1,26 @@
  # coding=utf-8
 
-import configReader
+import logger
 import contactList
 import bluetoothReceptor
-import logger
 
 import Queue
 import inspect
 import threading
 import bluetooth
+import commentjson
 
 CONNECTIONS = 3
 TIMEOUT = 1.5
 
+JSON_FILE = 'config.json'
+JSON_CONFIG = commentjson.load(open(JSON_FILE))
+
 class Bluetooth(object):
 
-	bluetoothProtocol = configReader.BLUETOOTH_PROTOCOL
-	localServiceName = configReader.BLUETOOTH_SERVICE_NAME
-	localUUID = configReader.BLUETOOTH_UUID
+	bluetoothProtocol = JSON_CONFIG["BLUETOOTH"]["PROTOCOL"]
+	localServiceName = JSON_CONFIG["BLUETOOTH"]["SERVICE"]
+	localUUID = JSON_CONFIG["BLUETOOTH"]["UUID"]
 	localSocketRFCOMM = bluetooth.BluetoothSocket
 	localSocketL2CAP = bluetooth.BluetoothSocket
 	localPortRFCOMM = ''

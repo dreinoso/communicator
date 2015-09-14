@@ -6,33 +6,36 @@
 	@organization: UNC - Fcefyn
 	@date: Lunes 16 de Mayo de 2015 """
 
-import configReader
-import contactList #TODO averiguar por que los toma bien
 import logger
+import contactList
 import tcpLanReceptor
 import tcpLanTransmitter
 import udpLanReceptor
 import udpLanTransmitter
 
-import inspect
 import os
+import time
 import Queue
 import socket
+import inspect
 import threading
-import time
+import commentjson
 
+TIMEOUT = 1.5
 PACKET_SIZE = 1024
 CONNECTION_LIMIT = 5
-TIMEOUT = 1.5
+
+JSON_FILE = 'config.json'
+JSON_CONFIG = commentjson.load(open(JSON_FILE))
 
 class Lan(object):
 
-	localHost = configReader.LOCAL_HOST
-	udpReceptionPort = configReader.UDP_PORT
-	tcpReceptionPort = configReader.TCP_PORT
-	lanProtocol = configReader.LAN_PROTOCOL
-	udpConnectionPortList = [configReader.UDP_PORT + 1, configReader.UDP_PORT + 2, configReader.UDP_PORT + 3,
-	configReader.UDP_PORT + 4, configReader.UDP_PORT + 5]
+	localHost = JSON_CONFIG["LAN"]["LOCAL_HOST"]
+	lanProtocol = JSON_CONFIG["LAN"]["PROTOCOL"]
+	udpReceptionPort = JSON_CONFIG["LAN"]["UDP_PORT"]
+	tcpReceptionPort = JSON_CONFIG["LAN"]["TCP_PORT"]
+	udpConnectionPortList = [udpReceptionPort + 1, udpReceptionPort + 2, udpReceptionPort + 3,
+	udpReceptionPort + 4, udpReceptionPort + 5]
 	tcpReceptionSocket = socket.socket
 	udpTransmissionSocket = socket.socket
 	udpReceptionSocket = socket.socket
@@ -44,7 +47,6 @@ class Lan(object):
 		y se asigna el buffer también para la recepción.
 		@param _receptionBuffer: Buffer para la recepción de datos
 		@type: list"""
-		configReader.readConfigFile()
 		self.receptionBuffer = _receptionBuffer
 		
 	def __del__(self):
@@ -61,7 +63,7 @@ class Lan(object):
 		try: # Intenta conexión UDP
 			self.udpTransmissionSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 			self.udpReceptionSocket	   = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-			if(configReader.CLOSE_PORT): # Para cerrar el puerto en caso de estar ocupado
+			if JSON_CONFIG["LAN"]["CLOSE_PORT"]: # Para cerrar el puerto en caso de estar ocupado
 				udpCommand = 'fuser -k -s ' + str(self.udpReceptionPort) + '/udp' # -k = kill;  -s: modo silecioso
     			os.system(udpCommand + '\n' + udpCommand)
 			self.udpReceptionSocket.settimeout(TIMEOUT) #Para no parase en recevie from a causa de saltar excepción en bind
@@ -70,7 +72,7 @@ class Lan(object):
 			self.bindFailed = True
 			logger.write('WARNING', '[LAN] Excepción en "' + str(inspect.stack()[0][3]) + ' para UDP " (' +str(errorMessage) + ')')
 		try: # Intenta conexión TCP
-			if(configReader.CLOSE_PORT): # Para cerrar el puerto en caso de estar ocupado
+			if JSON_CONFIG["LAN"]["CLOSE_PORT"]: # Para cerrar el puerto en caso de estar ocupado
 				tcpCommand = 'fuser -k -s ' + str(self.tcpReceptionPort) + '/tcp'
 				os.system(tcpCommand + '\n' + tcpCommand)
 			self.tcpReceptionSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
