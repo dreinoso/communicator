@@ -10,7 +10,7 @@
 # Configuraciones LAN 
 LAN_PROTOCOL = 'TCP'
 LOCAL_HOST   = 'localhost'
-TCP_PORT 	 = 6000 
+TCP_PORT 	 = 6000
 UDP_PORT     = 6010
 CLOSE_PORT   = True # Para cerrar el puerto en caso de estar ocupado
 
@@ -41,8 +41,8 @@ priorityLevels = {'lan' : 0,
 				  'email'	 : 0,
 				  'sms'		 : 4}
 
-consoleLoggingLevel = 'INFO' # Valores que determinan el nivel de notificaciones en consola y en archivo log
 fileLoggingLevel = 'DEBUG'
+consoleLoggingLevel = 'INFO' # Valores que determinan el nivel de notificaciones en consola y en archivo log
 
 def readConfigFile():
 	"""Se leen las configuraciones de un archivo definido, en caso de que la lectra 

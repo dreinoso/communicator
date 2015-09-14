@@ -6,42 +6,46 @@
 	@organization: UNC - Fcefyn
 	@date: Lunes 16 de Abril de 2015 """
 
+import sys
 import logging
+import commentjson
 import configReader
 
-loggingLevels = {'DEBUG': logging.DEBUG,
-            'INFO': logging.INFO,
-            'WARNING': logging.WARNING,
-            'ERROR': logging.ERROR,
-            'CRITICAL': logging.CRITICAL}
+JSON_FILE = 'config.json'
+JSON_CONFIG = commentjson.load(open(JSON_FILE))
 
-configReader.readConfigFile()
-consoleLoggingLevel = configReader.consoleLoggingLevel.upper() # Se requiere nombres en mayúscula
-fileLoggingLevel =  configReader.fileLoggingLevel.upper()
+CONSOLE_FORMAT = '[%(levelname)s] %(message)s'
+FILE_FORMAT = '[%(asctime)s][%(levelname)s] %(message)s'
+FILE_LOG = 'HistoricalEvents.log'
 
-logger = ''
+LOGGING_LEVELS = {'DEBUG' : logging.DEBUG,
+                  'INFO' : logging.INFO,
+                  'WARNING' : logging.WARNING,
+                  'ERROR' : logging.ERROR,
+                  'CRITICAL' : logging.CRITICAL}
 
-def set(name):
+logger = logging.getLogger(__name__) # Creamos el objeto Logger
+
+def set():
 	"""Se configura el logger, los manejadores (junto con los niveles de mensajes) 
 	y los formatos de los mismos.
 	@param name: Nombre del objeto logger
 	@type name: str
 	"""
 	global logger
-	logger = logging.getLogger(name) # se crea el objeto logger
-	logger.setLevel(loggingLevels[fileLoggingLevel])
+	logger.setLevel(LOGGING_LEVELS['DEBUG'])
 
-	consoleHandler = logging.StreamHandler() # Se crea el manejador de consola
-	consoleHandler.setLevel(consoleLoggingLevel) # Se define el nivel para mostrar mensajes
-	consoleFormatter = logging.Formatter('[%(levelname)s] %(message)s') # Se crea y configura el formato
-	consoleHandler.setFormatter(consoleFormatter)
-	logger.addHandler(consoleHandler) # Se añade el manejador al objeto logger
+	fileFormatter = logging.Formatter(FILE_FORMAT)          # Creamos el 'formatter' para la consola
+	fileHandler = logging.FileHandler(FILE_LOG)             # Creamos el 'handler' para el archivo LOG
+	fileHandler.setLevel(JSON_CONFIG["FILE_LOGGING_LEVEL"]) # Establecemos el nivel para almacenar los mensajes
+	fileHandler.setFormatter(fileFormatter)                 # Establecemos el formato de los mensajes
+	logger.addHandler(fileHandler)                          # Añadimos el 'handler' al objeto Logger
 
-	fileHandler = logging.FileHandler('Historial_de_Eventos.log') # Se crea el manejador para archivo de log (no requiere cierre)
-	fileHandler.setLevel(fileLoggingLevel) # Se define el nivel para almacenar mensajes
-	fileFormatter = logging.Formatter('[%(asctime)s][%(levelname)s] %(message)s') # Se crea y configura el formato
-	fileHandler.setFormatter(fileFormatter)
-	logger.addHandler(fileHandler) # Se añade el manejador al objeto logger
+	consoleFormatter = logging.Formatter(CONSOLE_FORMAT)          # Creamos el 'formatter' para la consola
+	consoleHandler = logging.StreamHandler(sys.stdout)            # Creamos el 'handler para la consola
+	consoleHandler.setLevel(JSON_CONFIG["CONSOLE_LOGGING_LEVEL"]) # Establecemos el nivel para mostrar los mensajes
+	consoleHandler.setFormatter(consoleFormatter)                 # Establecemos el formato de los mensajes
+	logger.addHandler(consoleHandler)                             # Añadimos el 'handler' al objeto Logger
 
 def write(logType, message):
 	"""Se añade un mensaje al logger si es correcto el tipo de mensaje, el mensaje
@@ -51,10 +55,9 @@ def write(logType, message):
 	@type logType: str
 	@param message: Mensaje para logger.
 	@type message: str"""
-	global logger
-	if logType == 'DEBUG': logger.debug(message)
-	elif logType == 'INFO': logger.info(message)
-	elif logType == 'WARNING': logger.warn(message)
-	elif logType == 'ERROR': logger.error(message)
-	elif logType == 'CRITICAL': logger.critical(message)
+	if logType is 'DEBUG': logger.debug(message)
+	elif logType is 'INFO': logger.info(message)
+	elif logType is 'WARNING': logger.warn(message)
+	elif logType is 'ERROR': logger.error(message)
+	elif logType is 'CRITICAL': logger.critical(message)
 	else: logger.error('Intento de escribir en Log erroneo no se designo un tipo de log correcto')

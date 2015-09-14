@@ -11,6 +11,7 @@ import os
 import sys
 import Queue
 import threading
+import commentjson
 
 sys.path.append(os.path.abspath('Lan/'))
 sys.path.append(os.path.abspath('Email/'))
@@ -24,8 +25,10 @@ import bluetoothClass
 
 import logger
 import contactList
-import configReader
 import checkerClass
+
+JSON_FILE = 'config.json'
+JSON_CONFIG = commentjson.load(open(JSON_FILE))
 
 receptionBuffer = Queue.Queue()
 modemSemaphore = threading.Semaphore(value = 1)
@@ -50,14 +53,15 @@ def open():
 	"""Se realiza la apertura, inicialización de los componentes que se tengan disponibles
 	"""
 	global checkerInstance, checkerThread
-	
-	logger.set('communicatorLogger') # Solo se setea una vez, todos los objetos usan esta misma configuración
-	
-	resultOk = configReader.readConfigFile() # Se determina el resultado de la configuración 
+
+	logger.set() # Solo se setea una vez, todos los objetos usan esta misma configuración
+
+	'''
 	if resultOk:
 		logger.write('INFO', '[CONFIG READER] Archivo de configuración cargado correctamente.')
 	else:
 		logger.write('ERROR', '[CONFIG READER] Imposible leer \'properties.conf\'. Se usará la configuración por defecto.')
+	'''
 	# Lanzamos el hilo que comprueba las conexiones
 	checkerInstance.isActive = True
 	checkerThread.start()
@@ -78,16 +82,16 @@ def send(contact, message, isPacket):
 		emailPriority = 0
 		smsPriority = 0
 		if contactList.allowedIpAddress.has_key(contact) and checkerInstance.availableLan:
-			lanPriority = configReader.priorityLevels['lan']
+			lanPriority = JSON_CONFIG["PRIORITY_LEVELS"]["LAN"]
 			contactExists = True
 		if contactList.allowedMacAddress.has_key(contact) and checkerInstance.availableBluetooth:
-			bluetoothPriority = configReader.priorityLevels['bluetooth']
+			bluetoothPriority = JSON_CONFIG["PRIORITY_LEVELS"]["BLUETOOTH"]
 			contactExists = True
 		if contactList.allowedEmails.has_key(contact) and checkerInstance.availableEmail:
-			emailPriority = configReader.priorityLevels['email']
+			emailPriority = JSON_CONFIG["PRIORITY_LEVELS"]["EMAIL"]
 			contactExists = True
 		if contactList.allowedNumbers.has_key(contact) and checkerInstance.availableSms:
-			smsPriority = configReader.priorityLevels['sms']
+			smsPriority = JSON_CONFIG["PRIORITY_LEVELS"]["SMS"]
 			contactExists = True
 		if not contactExists:
 			logger.write('WARNING', '[COMUNICADOR] El contacto \'%s\' no se encuentra registrado.' % contact)
