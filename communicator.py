@@ -43,11 +43,11 @@ bluetoothInstance = bluetoothClass.Bluetooth(receptionBuffer)
 checkerInstance = checkerClass.Checker(modemSemaphore, lanInstance, smsInstance, emailInstance, bluetoothInstance)
 checkerThread = threading.Thread(target = checkerInstance.verifyConnections, name = 'checkerThread')
 
-contactExists = False
 lanPriority = 0
-bluetoothPriority = 0
-emailPriority = 0
 smsPriority = 0
+emailPriority = 0
+bluetoothPriority = 0
+contactExists = False
 
 def open():
 	"""Se realiza la apertura, inicialización de los componentes que se tengan disponibles
@@ -55,13 +55,10 @@ def open():
 	global checkerInstance, checkerThread
 
 	logger.set() # Solo se setea una vez, todos los objetos usan esta misma configuración
-
-	'''
-	if resultOk:
-		logger.write('INFO', '[CONFIG READER] Archivo de configuración cargado correctamente.')
-	else:
-		logger.write('ERROR', '[CONFIG READER] Imposible leer \'properties.conf\'. Se usará la configuración por defecto.')
-	'''
+	checkerInstance.verifyLanConnection()
+	checkerInstance.verifySmsConnection()
+	checkerInstance.verifyEmailConnection()
+	checkerInstance.verifyBluetoothConnection()
 	# Lanzamos el hilo que comprueba las conexiones
 	checkerInstance.isActive = True
 	checkerThread.start()
@@ -119,7 +116,7 @@ def send(contact, message, isPacket):
 		resultOk = bluetoothInstance.send(destinationServiceName, destinationMAC, destinationUUID, message)
 		if resultOk:
 			logger.write('INFO', '[BLUETOOTH] Mensaje enviado a \'%s\'.' % contact)
-			contactExisms = False
+			contactExists = False
 			return True
 		else:
 			logger.write('WARNING', '[BLUETOOTH] Envio fallido. Reintentando con otro periférico.')

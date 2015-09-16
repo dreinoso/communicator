@@ -34,13 +34,15 @@ class Lan(object):
 	lanProtocol = JSON_CONFIG["LAN"]["PROTOCOL"]
 	udpReceptionPort = JSON_CONFIG["LAN"]["UDP_PORT"]
 	tcpReceptionPort = JSON_CONFIG["LAN"]["TCP_PORT"]
+
 	udpConnectionPortList = [udpReceptionPort + 1, udpReceptionPort + 2, udpReceptionPort + 3,
 	udpReceptionPort + 4, udpReceptionPort + 5]
 	tcpReceptionSocket = socket.socket
 	udpTransmissionSocket = socket.socket
 	udpReceptionSocket = socket.socket
-	isActive = False
+
 	receptionBuffer = Queue.Queue()
+	isActive = False
 
 	def __init__(self, _receptionBuffer):
 		"""Se crean los sockets para envío y recepción. Se activa el hilo para la recepción 

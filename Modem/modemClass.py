@@ -97,13 +97,13 @@ class Sms(Modem):
 	smsBody = ''
 	smsMessage = ''
 	telephoneNumber = 1234567890
-	isActive = False
 
 	receptionList = list()
 	smsHeaderList = list()
 	smsBodyList = list()
-	
+
 	receptionBuffer = Queue.Queue()
+	isActive = False
 
 	def __init__(self, _receptionBuffer, _modemSemaphore):
 		""" Constructor de la clase 'Sms'. Configura el modem para operar en modo mensajes

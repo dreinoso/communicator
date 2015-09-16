@@ -29,10 +29,10 @@ from email.header import decode_header
 from email.header import make_header
 
 from email.mime.multipart import MIMEMultipart
+from email.mime.base import MIMEBase
 from email.mime.text import MIMEText
 from email.mime.audio import MIMEAudio
 from email.mime.image import MIMEImage
-from email.mime.base import MIMEBase
 
 TIMEOUT = 5
 ATTACHMENTS = 'attachments'
@@ -44,9 +44,9 @@ class Email(object):
 
 	smtpServer = smtplib.SMTP
 	imapServer = imaplib.IMAP4_SSL
-	isActive = False
 
 	receptionBuffer = Queue.Queue()
+	isActive = False
 
 	def __init__(self, _receptionBuffer):
 		""" Configura el protocolo SMTP y el protocolo IMAP. El primero se encargara
@@ -65,7 +65,6 @@ class Email(object):
 		self.smtpServer.close()  # Cerramos el buzón seleccionado actualmente
 		self.imapServer.logout() # Cerramos la conexión IMAP
 		logger.write('INFO','[EMAIL] Objeto destruido.' )
-		#print 'Objeto ' + self.__class__.__name__ + ' destruido.'
 
 	def connect(self):
 		self.smtpServer = smtplib.SMTP(JSON_CONFIG["EMAIL"]["SMTP_SERVER"], JSON_CONFIG["EMAIL"]["SMTP_PORT"])      # Establecemos servidor y puerto SMTP
@@ -87,7 +86,7 @@ class Email(object):
 		try:
 			# Se construye un mensaje simple
 			mimeText = MIMEText(messageToSend)
-			mimeText['From'] = '%s <%s>' % (JSON_CONFIG["EMAIL"]["NAME_SERVER"], JSON_CONFIG["EMAIL"]["EMAIL_SERVER"])
+			mimeText['From'] = '%s <%s>' % (JSON_CONFIG["EMAIL"]["NAME"], JSON_CONFIG["EMAIL"]["ACCOUNT"])
 			mimeText['To'] = emailDestination
 			mimeText['Subject'] = emailSubject
 			self.smtpServer.sendmail(mimeText['From'], mimeText['To'], mimeText.as_string())
@@ -105,7 +104,7 @@ class Email(object):
 				mainType, subType = cType.split('/', 1)
 				mimeMultipart = MIMEMultipart()
 				mimeMultipart['Subject'] = 'Contenido de %s' % fileDirectory
-				mimeMultipart['From'] = '%s <%s>' % (JSON_CONFIG["EMAIL"]["NAME_SERVER"], JSON_CONFIG["EMAIL"]["EMAIL_SERVER"])
+				mimeMultipart['From'] = '%s <%s>' % (JSON_CONFIG["EMAIL"]["NAME"], JSON_CONFIG["EMAIL"]["ACCOUNT"])
 				mimeMultipart['To'] = emailDestination
 				if mainType == 'text':
 					fileObject = open(absolutePath)

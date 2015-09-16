@@ -26,12 +26,12 @@ class Checker(object):
 	emailThreadName = 'emailReceptor'
 	bluetoothThreadName = 'bluetoothReceptor'
 
-	threadNameList = [lanThreadName, smsThreadName, emailThreadName, bluetoothThreadName]
-
 	availableLan = False       # Indica si el modo LAN está disponible
 	availableSms = False       # Indica si el modo SMS está disponible
 	availableEmail = False     # Indica si el modo EMAIL está disponible
 	availableBluetooth = False # Indica si el modo BLUTOOTH está disponible
+
+	threadNameList = [lanThreadName, smsThreadName, emailThreadName, bluetoothThreadName]
 
 	isActive = False
 
