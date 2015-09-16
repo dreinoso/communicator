@@ -59,7 +59,6 @@ class TcpLanReceptor(threading.Thread):
 		try:
 			self.remoteSocket.send('ACK')
 			packetName = self.remoteSocket.recv(BUFFER_SIZE)
-			print 'Recibiendo.. ' + packetName
 			packet = open(packetName, "wb")
 			self.remoteSocket.send('ACK')
 		except Exception, errorMessage:

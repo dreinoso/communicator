@@ -16,9 +16,9 @@ def main():
 	print '\t\t3 - Leer'
 	print '\t\t4 - Salir\n'
 
-	print 'Configurando el módulo de comunicación...'
 	communicator.open() # Se abre el comunicador para detectar medios
-	print 'El módulo de comunicación está listo para usarse!'
+	#time.sleep(5) # Da tiempo a que se inicien los modulos del comunicador
+	#print 'Los módulos fueron configurados!'
 
 	while not endMain:
 		try:

@@ -3,11 +3,12 @@
 "LAN":
 	{
 	"LOCAL_HOST" : "localhost",
-	"PROTOCOL"   : "TCP",
+	"PROTOCOL"   : "UDP",
 	"TCP_PORT"   : 6000,
 	"UDP_PORT"   : 6010,
-	"CLOSE_PORT" : 1
-	},
+	"CLOSE_PORT" : 1,
+	"AUTOMATIC_IP" : 1
+ 	},
 # ------- CONFIGURACIÓN BLUETOOTH -------
 	# PROTOCOL
 	# 0 ---> L2CAP
@@ -62,6 +63,6 @@
 # Para el archivo log, por defecto se imprimen todas las notificaciones ('DEBUG')
 # Para la consola,  por defecto se descartan los mesajes de depuración mostrando sólo lo más relevante ('INFO')
 "FILE_LOGGING_LEVEL"    : "DEBUG",
-"CONSOLE_LOGGING_LEVEL" : "INFO"
+"CONSOLE_LOGGING_LEVEL" : "DEBUG"
 }
 
