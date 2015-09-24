@@ -22,15 +22,13 @@ class UdpLanReceptor(threading.Thread):
 	isActive = False
 	receptionBuffer = Queue.Queue()
 	udpConfiguration = ''
-	udpConnectionPortList = []
 
-	def __init__(self, _threadName, _receptionBuffer, _isActive, _udpConfiguration, _udpConnectionIp, _udpConnectionPortList):
+	def __init__(self, _threadName, _receptionBuffer, _isActive, _udpConfiguration, _udpConnectionIp):
 		threading.Thread.__init__(self, name = _threadName)
 		self.receptionBuffer = _receptionBuffer
 		self.isActive = _isActive
 		self.udpConfiguration = _udpConfiguration
 		self.udpConnectionIp = _udpConnectionIp
-		self.udpConnectionPortList = _udpConnectionPortList
 
 	def run(self):
 		"""Comienzo de la ejecución, en caso de ser TCP debe determinar si se 
@@ -44,20 +42,18 @@ class UdpLanReceptor(threading.Thread):
 		en la recepción de mensajes de control para sincronizar la comunicación."""
 		end = False
 		try:
-			udpConnectionPort = self.udpConnectionPortList.pop() # Se usa la lista para pasar el valor por referencia y modifcar desde el hilo
-			receptionSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-			command = 'fuser -k -s ' + str(udpConnectionPort) + '/udp' # -k = kill;  -s: modo silecioso
-			os.system(command + '\n' + command)			
+			receptionSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)		
 			receptionSocket.settimeout(TIMEOUT) # En caso de no recibir el paquete salir y no dejar la espera indeterminada.
-			receptionSocket.bind((self.udpConnectionIp, udpConnectionPort))
+			receptionSocket.bind((self.udpConnectionIp, 0))
+			udpConnectionPort = receptionSocket.getsockname()[1]
 			transmissionSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 			dataList = self.udpConfiguration.split(' ') # Se obtienen la dirección del remitente
 			destinationIp = dataList[1]
 			destinationUdpPort = int(dataList[2])
-			logger.write('WARNING', dataList)
+			logger.write('DEBUG', dataList)
 			transmissionSocket.sendto(str(udpConnectionPort), (destinationIp, destinationUdpPort))
 			packetName, addr = receptionSocket.recvfrom(BUFFER_SIZE)
-			logger.write('WARNING', 'Recibiendo.. ' + packetName)
+			logger.write('DEBUG', 'Recibiendo.. ' + packetName)
 			packet = open(packetName, "wb")
 			transmissionSocket.sendto('ACK', (destinationIp, destinationUdpPort))
 			while not end:
@@ -71,9 +67,7 @@ class UdpLanReceptor(threading.Thread):
 			packet.close()
 			transmissionSocket.close()
 			receptionSocket.close()
-			self.udpConnectionPortList.append(udpConnectionPort) # Se restaura el puerto UDP que se liberó
 		except socket.timeout, errorMessage:
 			pass
 		except Exception, errorMessage:
 			print errorMessage
-			self.udpConnectionPortList.append(udpConnectionPort) # Se restaura el puerto UDP que se liberó

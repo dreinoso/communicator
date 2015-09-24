@@ -34,13 +34,9 @@ class Lan(object):
 	lanProtocol = JSON_CONFIG["LAN"]["PROTOCOL"]
 	udpReceptionPort = JSON_CONFIG["LAN"]["UDP_PORT"]
 	tcpReceptionPort = JSON_CONFIG["LAN"]["TCP_PORT"]
-
-	udpConnectionPortList = [udpReceptionPort + 1, udpReceptionPort + 2, udpReceptionPort + 3,
-	udpReceptionPort + 4, udpReceptionPort + 5]
 	tcpReceptionSocket = socket.socket
 	udpTransmissionSocket = socket.socket
 	udpReceptionSocket = socket.socket
-
 	receptionBuffer = Queue.Queue()
 	isActive = False
 
@@ -50,6 +46,11 @@ class Lan(object):
 		@param _receptionBuffer: Buffer para la recepción de datos
 		@type: list"""
 		self.receptionBuffer = _receptionBuffer
+		if JSON_CONFIG["LAN"]["AUTOMATIC_IP"]:
+			s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+			s.connect(("8.8.8.8",80)) # Conectando al servidor de DNS se obtiene la dirección IP
+			self.localHost = s.getsockname()[0]
+			s.close()			
 		
 	def __del__(self):
 		"""Elminación de la instancia de esta clase, cerrando conexiones establecidas, para no dejar
@@ -127,13 +128,10 @@ class Lan(object):
 		@param message: cadena de texto a enviar
 		@type message: str """
 		if (self.lanProtocol == 'UDP'):
-			if len(self.udpConnectionPortList) > 0:
-				threadName = 'UDP_TRANSMITTER_THREAD'
-				transmitterThread = udpLanTransmitter.UdpLanTransmitter(threadName, self.isActive, destinationIp, destinationUdpPort, packetName, self.localHost, self.udpConnectionPortList)
-				transmitterThread.start()
-				return True # Se supone un envio exitoso, de no ocurrir se expresara por una adevertencia. Esto es asi para evitar la espera de envio
-			else:
-				return False
+			threadName = 'UDP_TRANSMITTER_THREAD'
+			transmitterThread = udpLanTransmitter.UdpLanTransmitter(threadName, self.isActive, destinationIp, destinationUdpPort, packetName, self.localHost)
+			transmitterThread.start()
+			return True # Se supone un envio exitoso, de no ocurrir se expresara por una adevertencia. Esto es asi para evitar la espera de envio
 		else:
 			threadName = 'TCP_TRANSMITTER_THREAD'
 			transmitterThread = tcpLanTransmitter.TcpLanTransmitter(threadName, self.isActive, destinationIp, destinationTcpPort, packetName)
@@ -176,12 +174,9 @@ class Lan(object):
 			try:
 				data, addr = self.udpReceptionSocket.recvfrom(PACKET_SIZE) 
 				if data.startswith('START_OF_PACKET'):
-					if len(self.udpConnectionPortList) > 0:
-						threadName = 'UDP_RECEPTOR_THREAD'
-						receptorThread = udpLanReceptor.UdpLanReceptor(threadName, self.receptionBuffer, self.isActive, data, self.localHost, self.udpConnectionPortList)
-						receptorThread.start()
-					else: 
-						logger.write('WARNING', '[LAN] No quedan puertos disponibles para recepción de paquetes UDP')
+					threadName = 'UDP_RECEPTOR_THREAD'
+					receptorThread = udpLanReceptor.UdpLanReceptor(threadName, self.receptionBuffer, self.isActive, data, self.localHost)
+					receptorThread.start()
 				else:
 					self.receptionBuffer.put(data)
 			except socket.timeout, errorMessage:

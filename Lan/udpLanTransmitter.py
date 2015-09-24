@@ -21,16 +21,14 @@ class UdpLanTransmitter(threading.Thread):
 	isActive = False
 	destinationIp = ''
 	destinationPort = 0
-	udpConnectionPortList = []
 	udpConnectionIp = ''
 
-	def __init__(self, _threadName, _isActive, _destinationIp, _destinationPort, _packetName, _udpConnectionIp, _udpConnectionPortList):
+	def __init__(self, _threadName, _isActive, _destinationIp, _destinationPort, _packetName, _udpConnectionIp):
 		threading.Thread.__init__(self, name = _threadName)
 		self.isActive = _isActive
 		self.destinationIp = _destinationIp
 		self.destinationPort = _destinationPort
 		self.packetName = _packetName
-		self.udpConnectionPortList = _udpConnectionPortList # Se abre una nueva conexión para recepción de ACK
 		self.udpConnectionIp = _udpConnectionIp # Es lo mismo que localHost para recibir ACK del receptor
 
 	def run(self):
@@ -40,13 +38,11 @@ class UdpLanTransmitter(threading.Thread):
 	def sendUdpPacket(self):
 		"""Envia un paquete por medio del protocolo UDP, realiza varios envios
  		de mensajes para sincronización."""
- 		udpConnectionPort = self.udpConnectionPortList.pop()
 		try:
-			command = 'fuser -k -s ' + str(udpConnectionPort) + '/udp'
-			os.system(command + '\n' + command)
 			udpReceptionSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 			udpReceptionSocket.settimeout(4) #Para no parase en recevie from a causa de saltar excepción en bind
-			udpReceptionSocket.bind((self.udpConnectionIp, udpConnectionPort))
+			udpReceptionSocket.bind((self.udpConnectionIp, 0))
+			udpConnectionPort = udpReceptionSocket.getsockname()[1]
 			udpTransmissionSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 			#Envio de palabra especial para enviar el paquete junto con la dirección a la que debe responder para realizar la sincronización del envió
 			udpTransmissionSocket.sendto('START_OF_PACKET ' + self.udpConnectionIp + ' ' + str(udpConnectionPort), (self.destinationIp, self.destinationPort))
@@ -65,8 +61,6 @@ class UdpLanTransmitter(threading.Thread):
 			packet.close()
 			udpTransmissionSocket.close()
 			udpReceptionSocket.close()
-			self.udpConnectionPortList.append(udpConnectionPort)			
 			logger.write('DEBUG', '[LAN] Archivo ' + self.packetName +  ' enviado correctamente.')
 		except Exception, errorMessage:
-			self.udpConnectionPortList.append(udpConnectionPort)
 			logger.write('WARNING', '[LAN] Paquete no enviado. Excepción en "' + str(inspect.stack()[0][3]) + '" (' +str(errorMessage) + ')')
