@@ -4,6 +4,8 @@ import os
 import sys
 import time
 import termios
+
+import contactList
 import communicator
 
 def main():
@@ -26,8 +28,23 @@ def main():
 			optionSelected = raw_input()
 			# Opcion 1 - Enviar mensaje
 			if optionSelected is '1':
-				clientToSend = 'client02' #raw_input('Cliente a enviar: ')
-				messageToSend = 'Hola' #raw_input('Mensaje a enviar: ')
+				showClients = raw_input('¿Desea enviar un mensaje a un cliente registrado? [S/n] ')
+				if showClients is 'S' or showClients is 's' or len(showClients) is 0:
+					print contactList.allowedNumbers.keys()
+					clientToSend = raw_input('Nombre del cliente: ')
+					if contactList.allowedNumbers.has_key(clientToSend):
+						messageToSend = raw_input('Mensaje/archivo a enviar: ')
+						#messageToSend = 'Bluetooth/DLXCompilerEclipse_v23NewStable.tar.gz'
+						#messageToSend = 'Bluetooth/ATD.pdf'
+					else:
+						print 'El cliente no existe. Operación abortada.'
+						continue
+				elif showClients is 'N' or showClients is 'n':
+					messageToSend = raw_input('Mensaje de texto: ')
+				else:
+					print 'Abortado.'
+					continue
+				# Los 'continue' anteriores se pusieron para que no llegue acá, en caso de error
 				communicator.send(clientToSend, messageToSend, False)
 			# Opcion 2 - Enviar paquete
 			elif optionSelected is '2':

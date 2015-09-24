@@ -142,7 +142,9 @@ class Checker(object):
 		"""Se determina la disponibilidad de la comunicación por medio de comunicación Bluetooth.
 		@return: Se determina si la comunicación por este medio se puede realizar.
 		@rtype: bool"""
+		# Ejemplo de bluetoothDevices: ['Devices:\n', '\thci0\t00:24:7E:64:7B:4A\n']
 		bluetoothDevices = os.popen('hcitool dev').readlines()
+		# Sacamos el primer elemento por izquierda ('Devices:\n')
 		bluetoothDevices.pop(0)
 		if len(bluetoothDevices) > 0:
 			if not self.bluetoothInstance.isActive:

@@ -61,10 +61,14 @@ class Email(object):
 	def __del__(self):
 		"""Elminación de la instancia de esta clase, cerrando conexiones establecidas, para no dejar
 		conexiones ocupados en el Host"""
-		self.smtpServer.quit()   # Terminamos la sesión SMTP y cerramos la conexión
-		self.smtpServer.close()  # Cerramos el buzón seleccionado actualmente
-		self.imapServer.logout() # Cerramos la conexión IMAP
-		logger.write('INFO','[EMAIL] Objeto destruido.' )
+		try:
+			self.smtpServer.quit()   # Terminamos la sesión SMTP y cerramos la conexión
+			self.smtpServer.close()  # Cerramos el buzón seleccionado actualmente
+			self.imapServer.logout() # Cerramos la conexión IMAP
+		except:
+			pass
+		finally:
+			logger.write('INFO','[EMAIL] Objeto destruido.' )
 
 	def connect(self):
 		self.smtpServer = smtplib.SMTP(JSON_CONFIG["EMAIL"]["SMTP_SERVER"], JSON_CONFIG["EMAIL"]["SMTP_PORT"])      # Establecemos servidor y puerto SMTP

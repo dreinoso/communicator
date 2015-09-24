@@ -48,9 +48,9 @@
 	# 0 --> Inhabilidato
 "PRIORITY_LEVELS":
 	{
-	"LAN"       : 4,
-	"SMS"       : 3,
-	"EMAIL"     : 2,
+	"LAN"       : 0,
+	"SMS"       : 0,
+	"EMAIL"     : 0,
 	"BLUETOOTH" : 1
 	},
 # ------- TIPOS DE NOTIFICACIONES -------
@@ -62,6 +62,6 @@
 # Para el archivo log, por defecto se imprimen todas las notificaciones ('DEBUG')
 # Para la consola,  por defecto se descartan los mesajes de depuración mostrando sólo lo más relevante ('INFO')
 "FILE_LOGGING_LEVEL"    : "DEBUG",
-"CONSOLE_LOGGING_LEVEL" : "INFO"
+"CONSOLE_LOGGING_LEVEL" : "DEBUG"
 }
 
