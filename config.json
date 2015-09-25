@@ -2,7 +2,7 @@
 # --------- CONFIGURACIÓN LAN ---------
 "LAN":
 	{
-	"LOCAL_ADDRESS" : "192.168.1.2",
+	"LOCAL_ADDRESS" : "localhost",
 	"PROTOCOL"      : "UDP",
 	"TCP_PORT"      : 6000,
 	"UDP_PORT"      : 6010,

@@ -1,4 +1,4 @@
- # coding=utf-8
+# coding=utf-8
 """	Modulo cuya finalidad es proporcionar funciones que se encarguen del envio
 	y recepcion de paquetes de datos en la red local.
 	@author: Gonzalez Leonardo Mauricio
@@ -45,8 +45,14 @@ class Lan(object):
 		y se asigna el buffer también para la recepción.
 		@param _receptionBuffer: Buffer para la recepción de datos
 		@type: list"""
-		self.receptionBuffer = _receptionBuffer	
-		
+		self.receptionBuffer = _receptionBuffer
+		# Obtenemos la dirección IP local asignada por DHCP
+		tmpSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+		tmpSocket.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+		tmpSocket.connect(('8.8.8.8', 80))
+		self.localAddress = tmpSocket.getsockname()[0]
+		tmpSocket.close()
+
 	def __del__(self):
 		"""Elminación de la instancia de esta clase, cerrando conexiones establecidas, para no dejar
 		puertos ocupados en el Host"""
