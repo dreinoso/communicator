@@ -109,10 +109,14 @@ class Checker(object):
 		if len(modemsList) > 0:
 			if not self.smsInstance.isActive:
 				self.smsInstance.connect('/dev/' + modemsList[0])
-				self.smsInstance.isActive = True
-				self.smsThread.start()
-				logger.write('INFO','[SMS] Listo para usarse.')
-			return True
+				if not self.smsInstance.atError:
+					self.smsInstance.isActive = True
+					self.smsThread.start()
+					logger.write('INFO','[SMS] Listo para usarse.')
+					return True
+				else:
+					self.smsInstance.closePort()
+					return False
 		else:
 			if self.smsInstance.isActive:
 				self.smsInstance.isActive = False

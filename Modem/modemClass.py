@@ -51,6 +51,9 @@ class Modem(object):
 		self.modemInstance.close()
 		logger.write('INFO', '[SMS] Objeto destruido.')
 
+	def closePort(self):
+		self.modemInstance.close()
+
 	def sendAT(self, atCommand):
 		""" Se encarga de enviarle un comando AT el modem. Espera la respuesta
 			a ese comando, antes de continuar.
@@ -59,8 +62,8 @@ class Modem(object):
 			@return: respuesta del modem, al comando AT ingresado
 			@rtype: list """
 		try:
-			self.modemSemaphore.acquire()
 			self.atError = False
+			self.modemSemaphore.acquire()
 			self.modemInstance.write(atCommand)				  # Envio el comando AT al modem
 			self.modemOutput = self.modemInstance.readlines() # Espero la respuesta
 		except serial.serialutil.SerialException:
@@ -74,17 +77,17 @@ class Modem(object):
 					if outputElement.startswith('+CME ERROR'):
 						self.atError = True
 						errorCode = int(outputElement.replace('+CME ERROR: ', ''))
-						print atCommand + ' - ' + errorList.CME_ERRORS[errorCode] + '.'
+						logger.write('WARNING','[SMS] ' + atCommand + ' - ' + errorList.CME_ERRORS[errorCode] + '.')
 					elif outputElement.startswith('+CMS ERROR'):
 						self.atError = True
 						errorCode = int(outputElement.replace('+CMS ERROR: ', ''))
-						print atCommand + ' - ' + errorList.CMS_ERRORS[errorCode] + '.'
+						logger.write('WARNING','[SMS] ' + atCommand + ' - ' + errorList.CMS_ERRORS[errorCode] + '.')
 					elif outputElement.startswith('NO CARRIER'):
 						self.atError = True
-						print atCommand + ' - ' + errorList.NO_CARRIER + '.'
+						logger.write('WARNING','[SMS] ' + atCommand + ' - ' + errorList.NO_CARRIER + '.')
 					elif outputElement.startswith('ERROR'):
 						self.atError = True
-						print atCommand + ' - ' + errorList.NO_CARRIER + '.'
+						logger.write('WARNING','[SMS] ' + atCommand + ' - ' + errorList.NO_CARRIER + '.')
 			self.modemSemaphore.release()
 			return self.modemOutput
 
