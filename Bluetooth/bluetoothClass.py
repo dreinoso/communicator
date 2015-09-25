@@ -61,6 +61,7 @@ class Bluetooth(object):
 		logger.write('INFO', '[BLUETOOTH] Objeto destruido.')
 
 	def connect(self):
+		'HACER'
 		pass #TODO
 
 	def send(self, destinationServiceName, destinationMAC, destinationUUID, messageToSend):
@@ -79,7 +80,7 @@ class Bluetooth(object):
 				remoteSocket = bluetooth.BluetoothSocket(self.bluetoothProtocol)
 				# Conecta el socket con el dispositivo remoto (host) sobre el puerto (channel) especificado
 				remoteSocket.connect((host, port))
-				logger.write('DEBUG', '[BLUETOOTH] Conectado con la direccion \'%s\'.' % host)
+				logger.write('DEBUG', '[BLUETOOTH] Conectado con la dirección \'%s\'.' % host)
 				# Lanzamos un hilo que se va a encargar de manejar la transmisión del mensaje
 				threadName = 'Thread-%s' % JSON_CONFIG["BLUETOOTH"]["MAC"]
 				transmitterThread = bluetoothTransmitter.BluetoothTransmitter(threadName, remoteSocket, messageToSend)
@@ -109,4 +110,4 @@ class Bluetooth(object):
 			except bluetooth.BluetoothError, msg:
 				# Para que el bloque 'try' (en la funcion 'accept') no se quede esperando indefinidamente
 				pass
-		logger.write('WARNING','[BLUETOOTH] Funcion \'%s\' terminada.' % inspect.stack()[0][3])
+		logger.write('WARNING','[BLUETOOTH] Función \'%s\' terminada.' % inspect.stack()[0][3])

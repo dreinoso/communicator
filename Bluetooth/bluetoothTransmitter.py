@@ -2,7 +2,6 @@
 
 import os
 import time
-import inspect
 import threading
 import bluetooth
 
@@ -39,7 +38,7 @@ class BluetoothTransmitter(threading.Thread):
 					fileObject.seek(fileBeginning, os.SEEK_SET)
 					# Envio del contenido del archivo
 					bytesSent = 0
-					logger.write('INFO', '[BLUETOOTH] Transfiriendo archivo \'%s\' ...' % fileName)
+					logger.write('INFO', '[BLUETOOTH] Transfiriendo archivo \'%s\'...' % fileName)
 					while bytesSent < fileSize:
 						outputData = fileObject.read(BUFFER_SIZE)
 						bytesSent += len(outputData)
@@ -54,7 +53,7 @@ class BluetoothTransmitter(threading.Thread):
 				self.remoteSocket.send(self.messageToSend)
 				logger.write('INFO', '[BLUETOOTH] Mensaje enviado correctamente!')
 		except bluetooth.BluetoothError as errorMessage:
-			logger.write('WARNING', '[BLUETOOTH] Mensaje no enviado. Excepción en "' + str(inspect.stack()[0][3]) + '" (' +str(errorMessage) + ')')
+			logger.write('WARNING', '[BLUETOOTH] Mensaje no enviado: %s' % str(errorMessage))
 		finally:
 			# Cierra la conexion del socket cliente
 			self.remoteSocket.close()

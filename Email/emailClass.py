@@ -71,13 +71,16 @@ class Email(object):
 			logger.write('INFO','[EMAIL] Objeto destruido.' )
 
 	def connect(self):
-		self.smtpServer = smtplib.SMTP(JSON_CONFIG["EMAIL"]["SMTP_SERVER"], JSON_CONFIG["EMAIL"]["SMTP_PORT"])      # Establecemos servidor y puerto SMTP
-		self.imapServer = imaplib.IMAP4_SSL(JSON_CONFIG["EMAIL"]["IMAP_SERVER"], JSON_CONFIG["EMAIL"]["IMAP_PORT"]) # Establecemos servidor y puerto IMAP
-		self.smtpServer.starttls()
-		self.smtpServer.ehlo()
-		self.smtpServer.login(JSON_CONFIG["EMAIL"]["ACCOUNT"], JSON_CONFIG["EMAIL"]["PASSWORD"]) # Nos logueamos en el servidor SMTP
-		self.imapServer.login(JSON_CONFIG["EMAIL"]["ACCOUNT"], JSON_CONFIG["EMAIL"]["PASSWORD"])            # Nos logueamos en el servidor IMAP
-		self.imapServer.select('INBOX')                                                       # Seleccionamos la Bandeja de Entrada
+		try:
+			self.smtpServer = smtplib.SMTP(JSON_CONFIG["EMAIL"]["SMTP_SERVER"], JSON_CONFIG["EMAIL"]["SMTP_PORT"])      # Establecemos servidor y puerto SMTP
+			self.imapServer = imaplib.IMAP4_SSL(JSON_CONFIG["EMAIL"]["IMAP_SERVER"], JSON_CONFIG["EMAIL"]["IMAP_PORT"]) # Establecemos servidor y puerto IMAP
+			self.smtpServer.starttls()
+			self.smtpServer.ehlo()
+			self.smtpServer.login(JSON_CONFIG["EMAIL"]["ACCOUNT"], JSON_CONFIG["EMAIL"]["PASSWORD"]) # Nos logueamos en el servidor SMTP
+			self.imapServer.login(JSON_CONFIG["EMAIL"]["ACCOUNT"], JSON_CONFIG["EMAIL"]["PASSWORD"])            # Nos logueamos en el servidor IMAP
+			self.imapServer.select('INBOX') # Seleccionamos la Bandeja de Entrada
+		except socket.error as emailError:
+			logger.write('ERROR','[EMAIL] %s.' % emailError)
 
 	def send(self, emailDestination, emailSubject, messageToSend):
 		""" Envia un mensaje de correo electronico.

@@ -2,12 +2,11 @@
 # --------- CONFIGURACIÓN LAN ---------
 "LAN":
 	{
-	"LOCAL_HOST" : "localhost",
-	"PROTOCOL"   : "UDP",
-	"TCP_PORT"   : 6000,
-	"UDP_PORT"   : 6010,
-	"CLOSE_PORT" : 1,
-	"AUTOMATIC_IP" : 1
+	"LOCAL_ADDRESS" : "192.168.1.2",
+	"PROTOCOL"      : "UDP",
+	"TCP_PORT"      : 6000,
+	"UDP_PORT"      : 6010,
+	"CLOSE_PORT"    : 1
  	},
 # ------- CONFIGURACIÓN BLUETOOTH -------
 	# PROTOCOL
@@ -49,10 +48,10 @@
 	# 0 --> Inhabilidato
 "PRIORITY_LEVELS":
 	{
-	"LAN"       : 0,
+	"LAN"       : 1,
 	"SMS"       : 0,
 	"EMAIL"     : 0,
-	"BLUETOOTH" : 1
+	"BLUETOOTH" : 0
 	},
 # ------- TIPOS DE NOTIFICACIONES -------
 	# DEBUG    --> Depuración

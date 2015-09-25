@@ -36,7 +36,7 @@ class BluetoothReceptor(threading.Thread):
 				# Verificamos si el archivo a descargar no existe en la carpeta 'DOWNLOADS'
 				if not os.path.isfile(relativeFilePath):
 					fileObject = open(relativeFilePath, 'w+')
-					logger.write('INFO', '[BLUETOOTH] Descargando archivo \'%s\' ...' % fileName)
+					logger.write('INFO', '[BLUETOOTH] Descargando archivo \'%s\'...' % fileName)
 					self.remoteSocket.send('READY')
 					while True:
 						inputData = self.remoteSocket.recv(BUFFER_SIZE)
@@ -45,13 +45,15 @@ class BluetoothReceptor(threading.Thread):
 						else: 
 							fileObject.close()
 							logger.write('INFO', '[BLUETOOTH] Archivo \'%s\' descargado correctamente!' % fileName)
+							break
 				else:
 					self.remoteSocket.send('FILE_EXISTS') # Comunicamos al transmisor que el archivo ya existe
 					logger.write('WARNING', '[BLUETOOTH] El archivo \'%s\' ya existe! Imposible descargar.' % fileName)
 			else:
+				logger.write('INFO', '[BLUETOOTH] Ha llegado un nuevo mensaje!')
 				self.receptionBuffer.put(dataReceived)
 		except bluetooth.BluetoothError:
-			pass
+			logger.write('WARNING', '[BLUETOOTH] Error al intentar descargar el archivo \'%s\'.' % fileName)
 		finally:
 			# Cierra la conexion del socket cliente
 			self.remoteSocket.close()

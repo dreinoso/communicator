@@ -13,10 +13,9 @@ def main():
 	os.system('clear')
 
 	print '----------- MODULO DE COMUNICACION -----------\n'
-	print '\t\t1 - Enviar mensaje'
-	print '\t\t2 - Enviar paquete'
-	print '\t\t3 - Leer'
-	print '\t\t4 - Salir\n'
+	print '\t\t1 - Enviar mensaje/archivo'
+	print '\t\t2 - Leer'
+	print '\t\t3 - Salir\n'
 
 	print 'Configurando el módulo de comunicación...'
 	communicator.open() # Se abre el comunicador para detectar medios
@@ -34,30 +33,23 @@ def main():
 					clientToSend = raw_input('Nombre del cliente: ')
 					if contactList.allowedNumbers.has_key(clientToSend):
 						messageToSend = raw_input('Mensaje/archivo a enviar: ')
-						#messageToSend = 'Bluetooth/DLXCompilerEclipse_v23NewStable.tar.gz'
-						#messageToSend = 'Bluetooth/ATD.pdf'
 					else:
 						print 'El cliente no existe. Operación abortada.'
 						continue
 				elif showClients is 'N' or showClients is 'n':
-					messageToSend = raw_input('Mensaje de texto: ')
+					messageToSend = raw_input('Mensaje/archivo a enviar: ')
 				else:
 					print 'Abortado.'
 					continue
 				# Los 'continue' anteriores se pusieron para que no llegue acá, en caso de error
-				communicator.send(clientToSend, messageToSend, False)
-			# Opcion 2 - Enviar paquete
+				communicator.send(clientToSend, messageToSend)
+			# Opcion 2 - Leer
 			elif optionSelected is '2':
-				clientToSend = 'client02'#raw_input('Cliente a enviar: ')
-				packetName = 'video.mp4'#raw_input('Nombre del Paquete: ')
-				communicator.send(clientToSend, packetName, True)
-			# Opcion 3 - Leer
-			elif optionSelected is '3':
 				messageRecived = communicator.recieve()
 				if messageRecived != None:
 					print 'El mensaje recibido es: ' + messageRecived
-			# Opcion 4 - Salir
-			elif optionSelected is '4':
+			# Opcion 3 - Salir
+			elif optionSelected is '3':
 				endMain = True
 			# Opcion inválida
 			else:

@@ -63,13 +63,13 @@ def open():
 	checkerInstance.isActive = True
 	checkerThread.start()
 
-def send(contact, message, isPacket):
+def send(clientToSend, messageToSend):
 	"""Se envia de modo inteligente un paquete de datos a un contacto previamente registrado
 	el mensaje se envia por el medio mas óptimo encontrado.
-	@param contact: Nombre de contacto previamente registrado
-	@type contact: str
-	@param message: Mensaje a ser enviado
-	@type contact: str"""
+	@param clientToSend: Nombre de contacto previamente registrado
+	@type clientToSend: str
+	@param messageToSend: Mensaje a ser enviado
+	@type clientToSend: str"""
 	global contactExists, lanPriority, bluetoothPriority, emailPriority, smsPriority
 
 	# Determinamos si el contacto existe. Si no existe, no se intenta enviar por ningún medio.
@@ -78,77 +78,76 @@ def send(contact, message, isPacket):
 		bluetoothPriority = 0
 		emailPriority = 0
 		smsPriority = 0
-		if contactList.allowedIpAddress.has_key(contact) and checkerInstance.availableLan:
+		if contactList.allowedIpAddress.has_key(clientToSend) and checkerInstance.availableLan:
 			lanPriority = JSON_CONFIG["PRIORITY_LEVELS"]["LAN"]
 			contactExists = True
-		if contactList.allowedMacAddress.has_key(contact) and checkerInstance.availableBluetooth:
+		if contactList.allowedMacAddress.has_key(clientToSend) and checkerInstance.availableBluetooth:
 			bluetoothPriority = JSON_CONFIG["PRIORITY_LEVELS"]["BLUETOOTH"]
 			contactExists = True
-		if contactList.allowedEmails.has_key(contact) and checkerInstance.availableEmail:
+		if contactList.allowedEmails.has_key(clientToSend) and checkerInstance.availableEmail:
 			emailPriority = JSON_CONFIG["PRIORITY_LEVELS"]["EMAIL"]
 			contactExists = True
-		if contactList.allowedNumbers.has_key(contact) and checkerInstance.availableSms:
+		if contactList.allowedNumbers.has_key(clientToSend) and checkerInstance.availableSms:
 			smsPriority = JSON_CONFIG["PRIORITY_LEVELS"]["SMS"]
 			contactExists = True
 		if not contactExists:
-			logger.write('WARNING', '[COMUNICADOR] El contacto \'%s\' no se encuentra registrado.' % contact)
+			logger.write('WARNING', '[COMUNICADOR] El contacto \'%s\' no se encuentra registrado.' % clientToSend)
 			return False
 	# Intentamos transmitir por LAN
 	if lanPriority != 0 and lanPriority >= bluetoothPriority and lanPriority >= emailPriority and lanPriority >= smsPriority:
-		destinationIp = contactList.allowedIpAddress[contact][0]
-		destinationTcpPort = contactList.allowedIpAddress[contact][1]
-		destinationUdpPort = contactList.allowedIpAddress[contact][2]
-		if isPacket: resultOk = lanInstance.sendPacket(destinationIp, destinationTcpPort, destinationUdpPort, message) # message corresponde al nombre del paquete
-		else: resultOk = lanInstance.send(destinationIp, destinationTcpPort, destinationUdpPort, message)
+		destinationIp = contactList.allowedIpAddress[clientToSend][0]
+		destinationTcpPort = contactList.allowedIpAddress[clientToSend][1]
+		destinationUdpPort = contactList.allowedIpAddress[clientToSend][2]
+		resultOk = lanInstance.send(destinationIp, destinationTcpPort, destinationUdpPort, messageToSend)
 		if resultOk:
-			logger.write('INFO', '[LAN] Mensaje enviado a \'%s\'.' % contact)
+			logger.write('INFO', '[LAN] Mensaje enviado a \'%s\'.' % clientToSend)
 			contactExists = False
 			return True
 		else:
 			logger.write('WARNING', '[LAN] Envio fallido. Reintentando con otro periférico.')
 			lanPriority = 0   # Entonces se descarta para la proxima selección
-			send(contact, message, isPacket) # Se reintenta con otros perifericos
+			send(clientToSend, messageToSend) # Se reintenta con otros perifericos
 	# Intentamos transmitir por BLUETOOTH
 	elif bluetoothPriority != 0 and bluetoothPriority >= emailPriority and bluetoothPriority >= smsPriority:
-		destinationServiceName = contactList.allowedMacAddress[contact][0]
-		destinationMAC = contactList.allowedMacAddress[contact][1]
-		destinationUUID = contactList.allowedMacAddress[contact][2]
-		resultOk = bluetoothInstance.send(destinationServiceName, destinationMAC, destinationUUID, message)
+		destinationServiceName = contactList.allowedMacAddress[clientToSend][0]
+		destinationMAC = contactList.allowedMacAddress[clientToSend][1]
+		destinationUUID = contactList.allowedMacAddress[clientToSend][2]
+		resultOk = bluetoothInstance.send(destinationServiceName, destinationMAC, destinationUUID, messageToSend)
 		if resultOk:
-			logger.write('INFO', '[BLUETOOTH] Mensaje enviado a \'%s\'.' % contact)
+			logger.write('INFO', '[BLUETOOTH] Mensaje enviado a \'%s\'.' % clientToSend)
 			contactExists = False
 			return True
 		else:
 			logger.write('WARNING', '[BLUETOOTH] Envio fallido. Reintentando con otro periférico.')
 			bluetoothPriority = 0  # Entonces se descarta para la proxima selección
-			send(contact, message, isPacket) # Se reintenta con otros perifericos
+			send(clientToSend, messageToSend) # Se reintenta con otros perifericos
 	# Intentamos transmitir por EMAIL
 	elif emailPriority != 0 and emailPriority >= smsPriority:
-		destinationEmail = contactList.allowedEmails[contact]
-		resultOk  = emailInstance.send(destinationEmail, 'Proyecto Datalogger - Comunicador', message)
+		destinationEmail = contactList.allowedEmails[clientToSend]
+		resultOk  = emailInstance.send(destinationEmail, 'Proyecto Datalogger - Comunicador', messageToSend)
 		if resultOk:
-			logger.write('INFO', '[EMAIL] Mensaje enviado a \'%s\'.' % contact)
+			logger.write('INFO', '[EMAIL] Mensaje enviado a \'%s\'.' % clientToSend)
 			contactExists = False
 			return True
 		else:
 			logger.write('WARNING', '[EMAIL] Envio fallido. Reintentando con otro periférico.')
 			emailPriority = 0      # Entonces se descarta para la proxima selección
-			send(contact, message, isPacket) # Se reintenta con otros perifericos
+			send(clientToSend, messageToSend) # Se reintenta con otros perifericos
 	# Intentamos transmitir por SMS
 	elif smsPriority != 0:
-		destinationNumbsmsPriorityer = contactList.allowedNumbers[contact]
-		resultOk = smsInstance.send(destinationNumber, message)
+		destinationNumbsmsPriorityer = contactList.allowedNumbers[clientToSend]
+		resultOk = smsInstance.send(destinationNumber, messageToSend)
 		if resultOk:
-			logger.write('INFO', '[SMS] Mensaje enviado a \'%s\'.' % contact)
+			logger.write('INFO', '[SMS] Mensaje enviado a \'%s\'.' % clientToSend)
 			contactExists = False
 			return True
 		else:
 			logger.write('WARNING', '[SMS] Envio fallido. Reintentando con otro periférico.')
 			smsPriority = 0 # Entonces se descarta para la proxima selección
-			send(contact, message, isPacket)
+			send(clientToSend, messageToSend)
 	# No fue posible transmitir por ningún medio
 	else:
-		logger.write('WARNING', '[COMUNICADOR] No hay módulos para el envío de mensajes a \'%s\'.' % contact)
+		logger.write('WARNING', '[COMUNICADOR] No hay módulos para el envío de mensajes a \'%s\'.' % clientToSend)
 		contactExists = False
 		return False
 
