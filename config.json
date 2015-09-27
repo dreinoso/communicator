@@ -5,8 +5,7 @@
 	"LOCAL_ADDRESS" : "localhost",
 	"PROTOCOL"      : "UDP",
 	"TCP_PORT"      : 6000,
-	"UDP_PORT"      : 6010,
-	"CLOSE_PORT"    : 1
+	"UDP_PORT"      : 6010
  	},
 # ------- CONFIGURACIÓN BLUETOOTH -------
 	# PROTOCOL

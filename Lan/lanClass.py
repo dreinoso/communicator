@@ -32,6 +32,8 @@ class Lan(object):
 
 	localAddress = JSON_CONFIG["LAN"]["LOCAL_ADDRESS"]
 	lanProtocol = JSON_CONFIG["LAN"]["PROTOCOL"]
+	localInterface = None
+
 	tcpReceptionSocket = socket.socket
 	tcpReceptionPort = JSON_CONFIG["LAN"]["TCP_PORT"]
 	udpReceptionSocket = socket.socket
@@ -46,45 +48,44 @@ class Lan(object):
 		@param _receptionBuffer: Buffer para la recepción de datos
 		@type: list"""
 		self.receptionBuffer = _receptionBuffer
-		# Obtenemos la dirección IP local asignada por DHCP
-		tmpSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-		tmpSocket.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-		tmpSocket.connect(('8.8.8.8', 80))
-		self.localAddress = tmpSocket.getsockname()[0]
-		tmpSocket.close()
 
 	def __del__(self):
 		"""Elminación de la instancia de esta clase, cerrando conexiones establecidas, para no dejar
 		puertos ocupados en el Host"""
-		self.udpReceptionSocket.close()
-		self.tcpReceptionSocket.close()
-		logger.write('INFO', '[LAN] Objeto destruido.')
+		try:
+			# Eliminamos del archivo la interfaz usada en esta misma instancia
+			activeInterfacesFile = open('/tmp/activeInterfaces').read()
+			deletedActiveInterface = activeInterfacesFile.replace(self.localInterface + '\n', '')
+			activeInterfacesFile = open('/tmp/activeInterfaces', 'w')
+			activeInterfacesFile.write(deletedActiveInterface)
+			activeInterfacesFile.close()
+			self.udpReceptionSocket.close()
+			self.tcpReceptionSocket.close()
+		except Exception as errorMessage:
+			pass
+		finally:
+			logger.write('INFO', '[LAN] Objeto destruido.')
 
-	def connect(self):
+	def connect(self, _activeInterface):
 		'''Se realizan las conexiones de los protocolos UDP y TCP para la comunicación
 		por medio de LAN.'''
+		self.localInterface = _activeInterface
+		commandToExecute = 'ip addr show ' + self.localInterface + ' | grep inet'
+		# Obtenemos la dirección IP local asignada por DHCP
+		self.localAddress = os.popen(commandToExecute).readline().split()[1].split('/')[0]
 		try: # Intenta conexión UDP
-			self.udpReceptionSocket	   = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-			if JSON_CONFIG["LAN"]["CLOSE_PORT"]: # Para cerrar el puerto en caso de estar ocupado
-				udpCommand = 'fuser -k -s ' + str(self.udpReceptionPort) + '/udp' # -k = kill;  -s: modo silecioso
-    			os.system(udpCommand + '\n' + udpCommand)
-			self.udpReceptionSocket.settimeout(TIMEOUT) #Para no parase en recevie from a causa de saltar excepción en bind
+			self.udpReceptionSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 			self.udpReceptionSocket.bind((self.localAddress, self.udpReceptionPort))
-		except socket.error , errorMessage:
-			self.bindFailed = True
+			self.udpReceptionSocket.settimeout(TIMEOUT)
+		except socket.error as errorMessage:
 			logger.write('WARNING', '[LAN] Excepción en "' + str(inspect.stack()[0][3]) + ' para UDP " (' +str(errorMessage) + ')')
 		try: # Intenta conexión TCP
-			if JSON_CONFIG["LAN"]["CLOSE_PORT"]: # Para cerrar el puerto en caso de estar ocupado
-				tcpCommand = 'fuser -k -s ' + str(self.tcpReceptionPort) + '/tcp'
-				os.system(tcpCommand + '\n' + tcpCommand)
 			self.tcpReceptionSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-			#self.tcpReceptionSocket.setblocking(0) No se usa porque tira un error.. osea como que sigue de largo.. para el informe..
 			self.tcpReceptionSocket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 			self.tcpReceptionSocket.bind((self.localAddress, self.tcpReceptionPort))
 			self.tcpReceptionSocket.listen(CONNECTION_LIMIT)
 			self.tcpReceptionSocket.settimeout(TIMEOUT)
-		except socket.error , errorMessage:
-			self.bindFailed = True 
+		except socket.error as errorMessage:
 			logger.write('WARNING', '[LAN] Excepción en "' + str(inspect.stack()[0][3]) + ' para TCP " (' +str(errorMessage) + ')')
 
 	def send(self, destinationIp, destinationTcpPort, destinationUdpPort, messageToSend):
@@ -142,6 +143,7 @@ class Lan(object):
 			except socket.timeout as errorMessage:
 				# Para que no se quede esperando indefinidamente en el'accept'
 				pass
+		self.tcpReceptionSocket.close()
 		logger.write('WARNING','[LAN] Función \'%s\' terminada.' % inspect.stack()[0][3])
 
 	def receiveUdp(self):
@@ -162,4 +164,5 @@ class Lan(object):
 					self.receptionBuffer.put(data)
 			except socket.timeout, errorMessage:
 				pass # Esta excepción es parte de la ejecución, no implica un error
+		self.udpReceptionSocket.close()
 		logger.write('WARNING', '[LAN] Funcion \'%s\' terminada.' % inspect.stack()[0][3])

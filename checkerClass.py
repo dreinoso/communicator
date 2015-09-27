@@ -41,11 +41,6 @@ class Checker(object):
 		self.smsInstance = _smsInstance
 		self.emailInstance = _emailInstance
 		self.bluetoothInstance = _bluetoothInstance
-		# Establecemos las funciones que van a manejar las distintas instancias de recepción
-		self.lanThread = threading.Thread(target = self.lanInstance.receive, name = self.lanThreadName)
-		self.smsThread = threading.Thread(target = self.smsInstance.receive, name = self.smsThreadName)
-		self.emailThread = threading.Thread(target = self.emailInstance.receive, name = self.emailThreadName)
-		self.bluetoothThread = threading.Thread(target = self.bluetoothInstance.receive, name = self.bluetoothThreadName)
 
 	def __del__(self):
 		self.lanInstance.isActive = False
@@ -71,29 +66,39 @@ class Checker(object):
 		"""Se determina la disponibilidad de la comunicación por medio de comunicación Lan.
 		@return: Se determina si la comunicación por este medio se puede realizar.
 		@rtype: bool"""
-		ethernetDevices = os.popen('ip link show').readlines()
-		wlanActiveInterfaces = False
-		ethActiveInterfaces = False
-		wlanPattern = re.compile('wlan[0-9]+') #Se buscan interfaces de 0 a 100
-		ethPattern = re.compile('eth[0-9]+')
-		statePattern = re.compile('state UP')
-		for interface in ethernetDevices:
-			if wlanPattern.search(interface) and statePattern.search(interface):
-				wlanActiveInterfaces = True
-				break
-			elif ethPattern.search(interface) and statePattern.search(interface):
-				ethActiveInterfaces = True
-				break
-		if ethActiveInterfaces or wlanActiveInterfaces:
-			if not self.lanInstance.isActive:
-				self.lanInstance.connect()
-				self.lanInstance.isActive = True
-				self.lanThread.start()
-				logger.write('INFO','[LAN] Listo para usarse.')
-			return True
-		else:
-			if self.lanInstance.isActive:
-				self.lanInstance.isActive = False
+		interfacesPattern = re.compile('wlan[0-9]+' '|' 'eth[0-9]+') # Se buscan interfaces de 0 a 100
+		networkInterfaces = os.popen('ip link show').readlines()
+		patternMatched = None
+		stateUP = False
+		for interface in networkInterfaces:
+			# Buscamos a lo largo de la cadena si hay alguna coincidencia de una RE
+			patternMatched = interfacesPattern.search(interface)
+			if patternMatched is not None and interface.find("state UP") > 0:
+				activeInterfacesFile = open('/tmp/activeInterfaces', 'a+')
+				stateUP = True
+				# 'patternMatched.group()' devuelve la cadena (interfaz) que coincide con la RE
+				if (patternMatched.group() + '\n') not in activeInterfacesFile.read():
+					# Como la interfaz encontrada no está siendo usada, la ponemos a escuchar si no está activa
+					if not self.lanInstance.isActive:
+						# Escribimos en nuestro archivo la interfaz a usar, para indicar que está ocupada
+						activeInterfacesFile.write(patternMatched.group() + '\n')
+						self.lanInstance.connect(patternMatched.group())
+						self.lanInstance.isActive = True
+						activeInterfacesFile.close()
+						lanThread = threading.Thread(target = self.lanInstance.receive, name = self.lanThreadName)
+						lanThread.start()
+						lanInfo = self.lanInstance.localInterface + ' - ' + self.lanInstance.localAddress
+						logger.write('INFO','[LAN] Listo para usarse (' + lanInfo + ').')
+						return True
+		# Si ya no se encontró ninguna interfaz UP y ya estabamos escuchando, dejamos de hacerlo
+		if stateUP is False and self.lanInstance.isActive:
+			self.lanInstance.isActive = False
+			# Eliminamos del archivo la interfaz usada en esta misma instancia
+			activeInterfacesFile = open('/tmp/activeInterfaces').read()
+			deletedActiveInterface = activeInterfacesFile.replace(self.lanInstance.localInterface + '\n', '')
+			activeInterfacesFile = open('/tmp/activeInterfaces', 'w')
+			activeInterfacesFile.write(deletedActiveInterface)
+			activeInterfacesFile.close()
 			return False
 
 	def verifySmsConnection(self):
@@ -111,7 +116,8 @@ class Checker(object):
 				self.smsInstance.connect('/dev/' + modemsList[0])
 				if not self.smsInstance.atError:
 					self.smsInstance.isActive = True
-					self.smsThread.start()
+					smsThread = threading.Thread(target = self.smsInstance.receive, name = self.smsThreadName)
+					smsThread.start()
 					logger.write('INFO','[SMS] Listo para usarse.')
 					return True
 				else:
@@ -132,9 +138,11 @@ class Checker(object):
 			remoteHost = socket.gethostbyname(TEST_REMOTE_SERVER)
 			testSocket = socket.create_connection((remoteHost, 80), 2) # Se determina si es alcanzable
 			if not self.emailInstance.isActive:
+				time.sleep(3.0)
 				self.emailInstance.connect()
 				self.emailInstance.isActive = True
-				self.emailThread.start()
+				emailThread = threading.Thread(target = self.emailInstance.receive, name = self.emailThreadName)
+				emailThread.start()
 				logger.write('INFO', '[EMAIL] Listo para usarse.')
 			return True
 		except:
@@ -154,7 +162,8 @@ class Checker(object):
 			if not self.bluetoothInstance.isActive:
 				self.bluetoothInstance.connect()
 				self.bluetoothInstance.isActive = True
-				self.bluetoothThread.start()
+				bluetoothThread = threading.Thread(target = self.bluetoothInstance.receive, name = self.bluetoothThreadName)
+				bluetoothThread.start()
 				logger.write('INFO','[BLUETOOTH] Listo para usarse.')
 			return True
 		else:
