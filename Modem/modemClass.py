@@ -99,7 +99,7 @@ class Sms(Modem):
 	smsHeader = ''
 	smsBody = ''
 	smsMessage = ''
-	telephoneNumber = 1234567890
+	telephoneNumber = JSON_CONFIG["SMS"]["CLARO_TELEPHONE_NUMBER"]
 
 	receptionList = list()
 	smsHeaderList = list()
@@ -290,3 +290,58 @@ class Sms(Modem):
 		finally:
 			#self.send(telephoneNumber, smsMessage)
 			pass
+
+class Gprs(Modem):
+
+	wvdialProcess = None
+	local_IP_Address = None
+	remote_IP_Address = None
+	primary_DNS_Address = None
+	secondary_DNS_Address = None
+
+	isActive = False
+
+	def __init__(self, _serialPort, _modemSemaphore):
+		Modem.__init__(self, _serialPort, _modemSemaphore)
+		self.sendAT('AT+CGDCONT=1,"IP","gprs.claro.com.ar"\r') # Contexto, protocolo y APN
+
+	def connectGprs(self):
+		self.wvdialProcess = subprocess.Popen(['wvdial'], preexec_fn = os.setsid, stderr = subprocess.PIPE)
+		# Leemos el proceso a medida que se va ejecutando (mientras sigua vivo)
+		while self.wvdialProcess.poll() is None:
+			self.wvdialOutput = self.wvdialProcess.stderr.readline() # Leemos una línea de la salida del proceso wvdial
+			self.wvdialOutput = self.wvdialOutput[:self.wvdialOutput.rfind('\n')] # Quitamos el salto de línea del final
+			if self.wvdialOutput.startswith('--> local  IP address'):
+				# Se asignó una direccion IP...
+				self.local_IP_Address = self.wvdialOutput.replace('--> local  IP address ', '')
+				print 'Dirección IP: %s' % self.local_IP_Address
+				continue
+			elif self.wvdialOutput.startswith('--> remote IP address'):
+				# Se asignó una puerta de enlace...
+				self.remote_IP_Address = self.wvdialOutput.replace('--> remote IP address ', '')
+				print 'Puerta de enlace: %s' % self.remote_IP_Address
+				continue
+			elif self.wvdialOutput.startswith('--> primary   DNS address'):
+				# Se asignó un servidor DNS primario...
+				self.primary_DNS_Address = self.wvdialOutput.replace('--> primary   DNS address ', '')
+				print 'DNS Primario: %s' % self.primary_DNS_Address
+				continue
+			elif self.wvdialOutput.startswith('--> secondary DNS address'):
+				# Se asignó un servidor DNS secundario (último parámetro)...
+				self.secondary_DNS_Address = self.wvdialOutput.replace('--> secondary DNS address ', '')
+				print 'DNS Secundario: %s' % self.secondary_DNS_Address
+				break
+
+	def disconnectGprs(self):
+		self.isActive = self.checkGprs()
+		if self.isActive:
+			os.killpg(os.getpgid(self.wvdialProcess.pid), signal.SIGTERM)
+
+	def checkGprs(self):
+		# Si el proceso sigue vivo, es porque se estableció la conexíon...
+		if self.wvdialProcess.poll() is None:
+			self.isActive = True
+		# ... sino, se produjo un error al intentar conectar con la red
+		else:
+			self.isActive = False
+		return self.isActive

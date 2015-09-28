@@ -105,28 +105,33 @@ class Checker(object):
 		"""Se determina la disponibilidad de la comunicación por medio comunicación SMS.
 		@return: Se determina si la comunicación por este medio se puede realizar.
 		@rtype: bool"""
-		self.modemSemaphore.acquire() # Para evitar que 'modemClass' use al mismo tiempo el dispositivo
 		ttyUSBPattern = re.compile('ttyUSB[0-9]+')
-		wvdialProcess = subprocess.Popen('wvdialconf', stdout = subprocess.PIPE, stderr = subprocess.PIPE)
-		wvdialOutput, wvdialError = wvdialProcess.communicate()
-		modemsList = ttyUSBPattern.findall(wvdialOutput)
-		self.modemSemaphore.release() # Libera el modem
-		if len(modemsList) > 0:
-			if not self.smsInstance.isActive:
-				self.smsInstance.connect('/dev/' + modemsList[0])
-				if not self.smsInstance.atError:
-					self.smsInstance.isActive = True
-					smsThread = threading.Thread(target = self.smsInstance.receive, name = self.smsThreadName)
-					smsThread.start()
-					logger.write('INFO','[SMS] Listo para usarse.')
-					return True
-				else:
-					self.smsInstance.closePort()
-					return False
-		else:
-			if self.smsInstance.isActive:
-				self.smsInstance.isActive = False
-			return False
+		lsDevProcess = subprocess.Popen(['ls', '/dev/'], stdout = subprocess.PIPE, stderr = subprocess.PIPE)
+		lsDevOutput, lsDevError = lsDevProcess.communicate()
+		ttyUSBDevices = ttyUSBPattern.findall(lsDevOutput)
+		if len(ttyUSBDevices) > 0:
+			self.modemSemaphore.acquire() # Para evitar que 'modemClass' use al mismo tiempo el dispositivo
+			wvdialProcess = subprocess.Popen('wvdialconf', stdout = subprocess.PIPE, stderr = subprocess.PIPE)
+			wvdialOutput, wvdialError = wvdialProcess.communicate()
+			modemsList = ttyUSBPattern.findall(wvdialOutput)
+			self.modemSemaphore.release() # Libera el modem
+			if len(modemsList) > 0:
+				if not self.smsInstance.isActive:
+					self.smsInstance.connect('/dev/' + modemsList[0])
+					# Si no se produjo ningún error durante la configuración, ponemos al módem a recibir SMS
+					if not self.smsInstance.atError:
+						self.smsInstance.isActive = True
+						smsThread = threading.Thread(target = self.smsInstance.receive, name = self.smsThreadName)
+						smsThread.start()
+						logger.write('INFO','[SMS] Listo para usarse (' + str(self.smsInstance.telephoneNumber) + ').')
+						return True
+					else:
+						self.smsInstance.closePort()
+						return False
+			else:
+				if self.smsInstance.isActive:
+					self.smsInstance.isActive = False
+				return False
 
 	def verifyEmailConnection(self):
 		"""Se determina la disponibilidad de la comunicación por medio de comunicación 
