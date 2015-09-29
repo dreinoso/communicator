@@ -24,6 +24,7 @@ class Checker(object):
 	lanThreadName = 'lanReceptor'
 	smsThreadName = 'smsReceptor'
 	emailThreadName = 'emailReceptor'
+	gprsThreadName = 'gprsVerifyConnection'
 	bluetoothThreadName = 'bluetoothReceptor'
 
 	availableLan = False       # Indica si el modo LAN está disponible
@@ -31,20 +32,22 @@ class Checker(object):
 	availableEmail = False     # Indica si el modo EMAIL está disponible
 	availableBluetooth = False # Indica si el modo BLUTOOTH está disponible
 
-	threadNameList = [lanThreadName, smsThreadName, emailThreadName, bluetoothThreadName]
+	threadNameList = [lanThreadName, smsThreadName, emailThreadName, gprsThreadName, bluetoothThreadName]
 
 	isActive = False
 
-	def __init__(self, _modemSemaphore, _lanInstance, _smsInstance, _bluetoothInstance, _emailInstance):
+	def __init__(self, _modemSemaphore, _lanInstance, _gprsInstance, _emailInstance, _smsInstance, _bluetoothInstance):
 		self.modemSemaphore = _modemSemaphore
 		self.lanInstance = _lanInstance
 		self.smsInstance = _smsInstance
+		self.gprsInstance = _gprsInstance
 		self.emailInstance = _emailInstance
 		self.bluetoothInstance = _bluetoothInstance
 
 	def __del__(self):
 		self.lanInstance.isActive = False
 		self.smsInstance.isActive = False
+		self.gprsInstance.isActive = False
 		self.emailInstance.isActive = False
 		self.bluetoothInstance.isActive = False
 		# Esperamos que terminen los hilos receptores lanzados
@@ -90,6 +93,8 @@ class Checker(object):
 						lanInfo = patternMatched.group() + ' - ' + self.lanInstance.localAddress
 						logger.write('INFO','[LAN] Listo para usarse (' + lanInfo + ').')
 						return True
+				else:
+					return True
 		# Si ya no se encontró ninguna interfaz UP y ya estabamos escuchando, dejamos de hacerlo
 		if stateUP is False and self.lanInstance.isActive:
 			self.lanInstance.isActive = False
@@ -111,7 +116,7 @@ class Checker(object):
 		ttyUSBDevices = ttyUSBPattern.findall(lsDevOutput)
 		# Se detectaron dispositivos USB conectados
 		if len(ttyUSBDevices) > 0:
-			if self.smsInstance.serialPort not in ttyUSBDevices and not self.smsInstance.isActive:
+			if self.smsInstance.serialPort not in ttyUSBDevices:
 				wvdialProcess = subprocess.Popen('wvdialconf', stdout = subprocess.PIPE, stderr = subprocess.PIPE)
 				wvdialOutput, wvdialError = wvdialProcess.communicate()
 				ttyUSBPattern = re.compile('ttyUSB[0-9]+<Info>')

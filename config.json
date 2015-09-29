@@ -3,9 +3,9 @@
 "LAN":
 	{
 	"LOCAL_ADDRESS" : "localhost",
-	"PROTOCOL"      : "UDP",
-	"TCP_PORT"      : 6000,
-	"UDP_PORT"      : 6010
+	"PROTOCOL"      : "TCP",
+	"TCP_PORT"      : 5000,
+	"UDP_PORT"      : 5010
  	},
 # ------- CONFIGURACIÓN BLUETOOTH -------
 	# PROTOCOL

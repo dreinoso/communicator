@@ -317,7 +317,7 @@ class Gprs(Modem):
 		self.modemInstance.close()
 		logger.write('INFO', '[GRPS] Objeto destruido.')
 
-	def connectGprs(self, _gprsSerialPort):
+	def connect(self, _gprsSerialPort):
 		try:
 			self.serialPort = _gprsSerialPort
 			self.modemInstance.port = '/dev/' + _gprsSerialPort
@@ -331,36 +331,46 @@ class Gprs(Modem):
 				if self.wvdialOutput.startswith('--> local  IP address'):
 					# Se asignó una direccion IP...
 					self.local_IP_Address = self.wvdialOutput.replace('--> local  IP address ', '')
-					print 'Dirección IP: %s' % self.local_IP_Address
+					logger.write('DEBUG', '[GRPS] Dirección IP: %s' % self.local_IP_Address)
 					continue
 				elif self.wvdialOutput.startswith('--> remote IP address'):
 					# Se asignó una puerta de enlace...
 					self.remote_IP_Address = self.wvdialOutput.replace('--> remote IP address ', '')
-					print 'Puerta de enlace: %s' % self.remote_IP_Address
+					logger.write('DEBUG', '[GRPS] Puerta de enlace: %s' % self.remote_IP_Address)
 					continue
 				elif self.wvdialOutput.startswith('--> primary   DNS address'):
 					# Se asignó un servidor DNS primario...
 					self.primary_DNS_Address = self.wvdialOutput.replace('--> primary   DNS address ', '')
-					print 'DNS Primario: %s' % self.primary_DNS_Address
+					logger.write('DEBUG', '[GRPS] DNS Primario: %s' % self.primary_DNS_Address)
 					continue
 				elif self.wvdialOutput.startswith('--> secondary DNS address'):
 					# Se asignó un servidor DNS secundario (último parámetro)...
 					self.secondary_DNS_Address = self.wvdialOutput.replace('--> secondary DNS address ', '')
-					print 'DNS Secundario: %s' % self.secondary_DNS_Address
+					logger.write('DEBUG', '[GRPS] DNS Secundario: %s' % self.secondary_DNS_Address)
 					return True
 		except:
 			return False
 
-	def disconnectGprs(self):
-		self.isActive = self.checkGprs()
+	def disconnect(self):
 		if self.isActive:
+			self.isActive = False
 			os.killpg(os.getpgid(self.wvdialProcess.pid), signal.SIGTERM)
+			logger.write('WARNING', '[GRPS] Desconectado de la red GPRS correctamente.')
+			return True
+		else:
+			logger.write('WARNING', '[GRPS] No se pudo terminar el modo GPRS porque no estaba activo.')
+			return False
 
-	def checkGprs(self):
-		# Si el proceso sigue vivo, es porque se estableció la conexíon...
+	def verifyConnection(self):
+		# Mientras el proceso siga vivo, es porque la conexíón GPRS sigue activa...
+		while self.wvdialProcess.poll() is None and self.isActive:
+			time.sleep(1.5)
+		self.closePort()
 		if self.wvdialProcess.poll() is None:
 			self.isActive = True
-		# ... sino, se produjo un error al intentar conectar con la red
-		else:
-			self.isActive = False
+			self.disconnect()
+		self.serialPort = None
+		logger.write('WARNING', '[GPRS] Funcion \'%s\' terminada.' % inspect.stack()[0][3])
+
+	def getStatus(self):
 		return self.isActive

@@ -15,7 +15,9 @@ def main():
 	print '----------- MODULO DE COMUNICACION -----------\n'
 	print '\t\t1 - Enviar mensaje/archivo'
 	print '\t\t2 - Leer'
-	print '\t\t3 - Salir\n'
+	print '\t\t3 - Conectar GPRS'
+	print '\t\t4 - Desconectar GPRS'
+	print '\t\t5 - Salir\n'
 
 	print 'Configurando el módulo de comunicación...'
 	communicator.open() # Se abre el comunicador para detectar medios
@@ -48,8 +50,14 @@ def main():
 				messageRecived = communicator.recieve()
 				if messageRecived != None:
 					print 'El mensaje recibido es: ' + messageRecived
-			# Opcion 3 - Salir
+			# Opcion 3 - Conectar GPRS
 			elif optionSelected is '3':
+				communicator.connectGprs()
+			# Opcion 4 - Desconectar GPRS
+			elif optionSelected is '4':
+				communicator.disconnectGprs()
+			# Opcion 5 - Salir
+			elif optionSelected is '5':
 				endMain = True
 			# Opcion inválida
 			else:

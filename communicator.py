@@ -7,10 +7,12 @@
 	@organization: UNC - Fcefyn
 	@date: Lunes 16 de Mayo de 2015 """
 
+import re
 import os
 import sys
 import Queue
 import threading
+import subprocess
 import commentjson
 
 sys.path.append(os.path.abspath('Lan/'))
@@ -41,7 +43,7 @@ smsInstance = modemClass.Sms(receptionBuffer, modemSemaphore)
 bluetoothInstance = bluetoothClass.Bluetooth(receptionBuffer)
 
 # Creamos la instancia del checker y el hilo que va a verificar las conexiones
-checkerInstance = checkerClass.Checker(modemSemaphore, lanInstance, smsInstance, emailInstance, bluetoothInstance)
+checkerInstance = checkerClass.Checker(modemSemaphore, lanInstance, gprsInstance, emailInstance, smsInstance, bluetoothInstance)
 checkerThread = threading.Thread(target = checkerInstance.verifyConnections, name = 'checkerThread')
 
 lanPriority = 0
@@ -79,6 +81,9 @@ def send(clientToSend, messageToSend):
 		bluetoothPriority = 0
 		emailPriority = 0
 		smsPriority = 0
+
+		print checkerInstance.availableLan
+
 		if contactList.allowedIpAddress.has_key(clientToSend) and checkerInstance.availableLan:
 			lanPriority = JSON_CONFIG["PRIORITY_LEVELS"]["LAN"]
 			contactExists = True
@@ -163,7 +168,7 @@ def recieve():
 		logger.write('INFO', '[COMUNICADOR] El buffer de mensajes esta vacio.')
 		return None
 
-def len():
+def lenght():
 	"""Devuelve el tamaño del buffer de recepción.
 	@return: Cantidad de elementos en el buffer
 	@rtype: int"""
@@ -171,14 +176,41 @@ def len():
 	else: return receptionBuffer.qsize()
 
 def connectGprs():
-	wvdialProcess = subprocess.Popen('wvdialconf', stdout = subprocess.PIPE, stderr = subprocess.PIPE)
-	wvdialOutput, wvdialError = wvdialProcess.communicate()
-	ttyUSBPattern = re.compile('ttyUSB[0-9]+<Info>')
-	modemsList = ttyUSBPattern.findall(wvdialError)
-	if len(modemsList) > 0:
-		gprsSerialPort = '/dev/' + modemsList[1].replace('<Info>','')
-		if gprsInstance.connect(gsmSerialPort):
-			pass
+	ttyUSBPattern = re.compile('ttyUSB[0-9]+')
+	lsDevProcess = subprocess.Popen(['ls', '/dev/'], stdout = subprocess.PIPE, stderr = subprocess.PIPE)
+	lsDevOutput, lsDevError = lsDevProcess.communicate()
+	ttyUSBDevices = ttyUSBPattern.findall(lsDevOutput)
+	# Se detectaron dispositivos USB conectados
+	if len(ttyUSBDevices) > 0:
+		if gprsInstance.serialPort not in ttyUSBDevices:
+			wvdialProcess = subprocess.Popen('wvdialconf', stdout = subprocess.PIPE, stderr = subprocess.PIPE)
+			wvdialOutput, wvdialError = wvdialProcess.communicate()
+			ttyUSBPattern = re.compile('ttyUSB[0-9]+<Info>')
+			modemsList = ttyUSBPattern.findall(wvdialError)
+			if len(modemsList) > 0:
+				gprsSerialPort = modemsList[0].replace('<Info>','')
+				if gprsInstance.connect(gprsSerialPort):
+					gprsInstance.isActive = True
+					gprsInfo = gprsSerialPort + ' - ' + gprsInstance.local_IP_Address
+					gprsThread = threading.Thread(target = gprsInstance.verifyConnection, name = 'gprsVerifyConnection')
+					gprsThread.start()
+					logger.write('INFO','[GPRS] Listo para usarse (' + gprsInfo + ').')
+					return True
+				else:
+					logger.write('WARNING','[GPRS] Error al intentar conectar con la red GPRS.')
+					gprsInstance.serialPort = None
+					gprsInstance.closePort()
+					return False
+		# Si llegamos acá es porque el módem ya esta funcionando en modo GPRS
+		elif gprsInstance.getStatus():
+			logger.write('WARNING', '[GPRS] El módem ya está funcionando en modo GPRS!')
+			return True
+	else:
+		logger.write('WARNING', '[GPRS] No se encontró ningún módem para trabajar en modo GPRS.')
+		return False
+
+def disconnectGprs():
+	return gprsInstance.disconnect()
 
 def close():
 	"""Se cierran los componentes del sistema, unicamente los abiertos previamente"""
