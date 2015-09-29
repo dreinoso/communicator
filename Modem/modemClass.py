@@ -31,6 +31,7 @@ JSON_CONFIG = commentjson.load(open(JSON_FILE))
 class Modem(object):
 	""" Clase 'Modem'. Permite la creacion de una instancia del dispositivo. """
 	atError = False
+	serialPort = None
 	modemOutput = None
 
 	def __init__(self, _modemSemaphore):
@@ -44,15 +45,6 @@ class Modem(object):
 		self.modemInstance = serial.Serial()
 		self.modemInstance.baudrate = 115200
 		self.modemInstance.timeout = 5
-
-	def __del__(self):
-		""" Destructor de la clase 'Modem'. Cierra la conexion establecida
-			con el modem. """
-		self.modemInstance.close()
-		logger.write('INFO', '[SMS] Objeto destruido.')
-
-	def closePort(self):
-		self.modemInstance.close()
 
 	def sendAT(self, atCommand):
 		""" Se encarga de enviarle un comando AT el modem. Espera la respuesta
@@ -68,28 +60,31 @@ class Modem(object):
 			self.modemOutput = self.modemInstance.readlines() # Espero la respuesta
 		except serial.serialutil.SerialException:
 			self.atError = True
-			logger.write('ERROR', '[SMS] Error al intentar escribir %s sobre el dispositivo módem.' % atCommand)
+			#logger.write('ERROR', '[SMS] Error al intentar escribir %s sobre el dispositivo módem.' % atCommand)
 		finally:
 			# Verificamos si se produjo algún tipo de error relacionado con el comando AT
 			atCommand = atCommand.replace('\r','')
 			if self.modemOutput is not None:
 				for i, outputElement in enumerate(self.modemOutput):
 					if outputElement.startswith('+CME ERROR'):
-						self.atError = True
 						errorCode = int(outputElement.replace('+CME ERROR: ', ''))
 						logger.write('WARNING','[SMS] ' + atCommand + ' - ' + errorList.CME_ERRORS[errorCode] + '.')
+						raise
 					elif outputElement.startswith('+CMS ERROR'):
-						self.atError = True
 						errorCode = int(outputElement.replace('+CMS ERROR: ', ''))
 						logger.write('WARNING','[SMS] ' + atCommand + ' - ' + errorList.CMS_ERRORS[errorCode] + '.')
+						raise
 					elif outputElement.startswith('NO CARRIER'):
-						self.atError = True
 						logger.write('WARNING','[SMS] ' + atCommand + ' - ' + errorList.NO_CARRIER + '.')
+						raise
 					elif outputElement.startswith('ERROR'):
-						self.atError = True
 						logger.write('WARNING','[SMS] ' + atCommand + ' - ' + errorList.NO_CARRIER + '.')
+						raise
 			self.modemSemaphore.release()
 			return self.modemOutput
+
+	def closePort(self):
+		self.modemInstance.close()
 
 class Sms(Modem):
 	""" Subclase de 'Modem' correspondiente al modo de operacion con el que se va
@@ -117,17 +112,26 @@ class Sms(Modem):
 		Modem.__init__(self, _modemSemaphore)
 		self.receptionBuffer = _receptionBuffer
 
-	def connect(self, _serialPort):
-		self.modemInstance.port = _serialPort
-		self.modemInstance.open()
-		self.modemInstance.flushInput()
-		self.modemInstance.flushOutput()
-		time.sleep(1.5)
-		self.sendAT('ATE1\r')					# Habilitamos el echo
-		self.sendAT('AT+CMGF=1\r')				# Modo para Sms
-		self.sendAT('AT+CPMS="ME","ME","ME"\r') # Lugar de almacenamiento de los mensajes (memoria del dispositivo)
-		self.sendAT('AT+CNMI=1,1,0,0,0\r')		# Habilito notificacion de mensaje entrante
-		self.sendAT('AT+CSCA="+' + str(JSON_CONFIG["SMS"]["CLARO_MESSAGES_CENTER"]) + '"\r') # Centro de mensajes CLARO
+	def __del__(self):
+		""" Destructor de la clase 'Modem'. Cierra la conexion establecida
+			con el modem. """
+		self.modemInstance.close()
+		logger.write('INFO', '[SMS] Objeto destruido.')
+
+	def connect(self, _gsmSerialPort):
+		try:
+			self.serialPort = _gsmSerialPort
+			self.modemInstance.port = '/dev/' + _gsmSerialPort
+			self.modemInstance.open()
+			time.sleep(1.5)
+			self.sendAT('ATE1\r')					# Habilitamos el echo
+			self.sendAT('AT+CMGF=1\r')				# Modo para Sms
+			self.sendAT('AT+CPMS="ME","ME","ME"\r') # Lugar de almacenamiento de los mensajes (memoria del dispositivo)
+			self.sendAT('AT+CNMI=1,1,0,0,0\r')		# Habilito notificacion de mensaje entrante
+			self.sendAT('AT+CSCA="+' + str(JSON_CONFIG["SMS"]["CLARO_MESSAGES_CENTER"]) + '"\r') # Centro de mensajes CLARO
+			return True
+		except:
+			return False
 
 	def receive(self):
 		""" Funcion que se encarga consultar al modem por algun mensaje SMS entrante. Envia al
@@ -143,8 +147,11 @@ class Sms(Modem):
 			# Mientras no se haya recibido ningun mensaje de texto y el temporizador no haya expirado...
 			while self.smsAmount == 0 and self.isActive:
 				# ... sigo esperando hasta que llegue algun mensaje de texto o vensa el timer.
-				time.sleep(3)
-				self.receptionList = self.sendAT('AT+CMGL="REC UNREAD"\r')
+				try:
+					self.receptionList = self.sendAT('AT+CMGL="REC UNREAD"\r')
+					time.sleep(3)
+				except:
+					pass
 				# Ejemplo de receptionList[0]: AT+CMGL="REC UNREAD"\r\r\n
 				# Ejemplo de receptionList[1]: +CMGL: 0,"REC UNREAD","+5493512560536",,"14/10/26,17:12:04-12"\r\n
 				# Ejemplo de receptionList[2]: primero\r\n
@@ -301,36 +308,48 @@ class Gprs(Modem):
 
 	isActive = False
 
-	def __init__(self, _serialPort, _modemSemaphore):
-		Modem.__init__(self, _serialPort, _modemSemaphore)
-		self.sendAT('AT+CGDCONT=1,"IP","gprs.claro.com.ar"\r') # Contexto, protocolo y APN
+	def __init__(self, _modemSemaphore): 
+		Modem.__init__(self, _modemSemaphore)
 
-	def connectGprs(self):
-		self.wvdialProcess = subprocess.Popen(['wvdial'], preexec_fn = os.setsid, stderr = subprocess.PIPE)
-		# Leemos el proceso a medida que se va ejecutando (mientras sigua vivo)
-		while self.wvdialProcess.poll() is None:
-			self.wvdialOutput = self.wvdialProcess.stderr.readline() # Leemos una línea de la salida del proceso wvdial
-			self.wvdialOutput = self.wvdialOutput[:self.wvdialOutput.rfind('\n')] # Quitamos el salto de línea del final
-			if self.wvdialOutput.startswith('--> local  IP address'):
-				# Se asignó una direccion IP...
-				self.local_IP_Address = self.wvdialOutput.replace('--> local  IP address ', '')
-				print 'Dirección IP: %s' % self.local_IP_Address
-				continue
-			elif self.wvdialOutput.startswith('--> remote IP address'):
-				# Se asignó una puerta de enlace...
-				self.remote_IP_Address = self.wvdialOutput.replace('--> remote IP address ', '')
-				print 'Puerta de enlace: %s' % self.remote_IP_Address
-				continue
-			elif self.wvdialOutput.startswith('--> primary   DNS address'):
-				# Se asignó un servidor DNS primario...
-				self.primary_DNS_Address = self.wvdialOutput.replace('--> primary   DNS address ', '')
-				print 'DNS Primario: %s' % self.primary_DNS_Address
-				continue
-			elif self.wvdialOutput.startswith('--> secondary DNS address'):
-				# Se asignó un servidor DNS secundario (último parámetro)...
-				self.secondary_DNS_Address = self.wvdialOutput.replace('--> secondary DNS address ', '')
-				print 'DNS Secundario: %s' % self.secondary_DNS_Address
-				break
+	def __del__(self):
+		""" Destructor de la clase 'Modem'. Cierra la conexion establecida
+			con el modem. """
+		self.modemInstance.close()
+		logger.write('INFO', '[GRPS] Objeto destruido.')
+
+	def connectGprs(self, _gprsSerialPort):
+		try:
+			self.serialPort = _gprsSerialPort
+			self.modemInstance.port = '/dev/' + _gprsSerialPort
+			self.modemInstance.open()
+			self.sendAT('AT+CGDCONT=1,"IP","gprs.claro.com.ar"\r') # Contexto, protocolo y APN
+			self.wvdialProcess = subprocess.Popen(['wvdial'], preexec_fn = os.setsid, stderr = subprocess.PIPE)
+			# Leemos el proceso a medida que se va ejecutando (mientras sigua vivo)
+			while self.wvdialProcess.poll() is None:
+				self.wvdialOutput = self.wvdialProcess.stderr.readline() # Leemos una línea de la salida del proceso wvdial
+				self.wvdialOutput = self.wvdialOutput[:self.wvdialOutput.rfind('\n')] # Quitamos el salto de línea del final
+				if self.wvdialOutput.startswith('--> local  IP address'):
+					# Se asignó una direccion IP...
+					self.local_IP_Address = self.wvdialOutput.replace('--> local  IP address ', '')
+					print 'Dirección IP: %s' % self.local_IP_Address
+					continue
+				elif self.wvdialOutput.startswith('--> remote IP address'):
+					# Se asignó una puerta de enlace...
+					self.remote_IP_Address = self.wvdialOutput.replace('--> remote IP address ', '')
+					print 'Puerta de enlace: %s' % self.remote_IP_Address
+					continue
+				elif self.wvdialOutput.startswith('--> primary   DNS address'):
+					# Se asignó un servidor DNS primario...
+					self.primary_DNS_Address = self.wvdialOutput.replace('--> primary   DNS address ', '')
+					print 'DNS Primario: %s' % self.primary_DNS_Address
+					continue
+				elif self.wvdialOutput.startswith('--> secondary DNS address'):
+					# Se asignó un servidor DNS secundario (último parámetro)...
+					self.secondary_DNS_Address = self.wvdialOutput.replace('--> secondary DNS address ', '')
+					print 'DNS Secundario: %s' % self.secondary_DNS_Address
+					return True
+		except:
+			return False
 
 	def disconnectGprs(self):
 		self.isActive = self.checkGprs()

@@ -35,6 +35,7 @@ modemSemaphore = threading.Semaphore(value = 1)
 
 # Creamos las instancias de los periféricos
 lanInstance = lanClass.Lan(receptionBuffer)
+gprsInstance = modemClass.Gprs(modemSemaphore)
 emailInstance = emailClass.Email(receptionBuffer)
 smsInstance = modemClass.Sms(receptionBuffer, modemSemaphore)
 bluetoothInstance = bluetoothClass.Bluetooth(receptionBuffer)
@@ -169,14 +170,26 @@ def len():
 	if receptionBuffer.qsize() == None: return 0
 	else: return receptionBuffer.qsize()
 
+def connectGprs():
+	wvdialProcess = subprocess.Popen('wvdialconf', stdout = subprocess.PIPE, stderr = subprocess.PIPE)
+	wvdialOutput, wvdialError = wvdialProcess.communicate()
+	ttyUSBPattern = re.compile('ttyUSB[0-9]+<Info>')
+	modemsList = ttyUSBPattern.findall(wvdialError)
+	if len(modemsList) > 0:
+		gprsSerialPort = '/dev/' + modemsList[1].replace('<Info>','')
+		if gprsInstance.connect(gsmSerialPort):
+			pass
+
 def close():
 	"""Se cierran los componentes del sistema, unicamente los abiertos previamente"""
-	global checkerThread, receptionBuffer, checkerInstance, smsInstance, lanInstance, bluetoothInstance, emailInstance
+	global checkerThread, receptionBuffer, checkerInstance
+	global smsInstance, lanInstance, gprsInstance, bluetoothInstance, emailInstance
 	receptionBuffer.queue.clear()
 	checkerInstance.isActive = False
 	checkerThread.join()
 	del checkerInstance
 	del smsInstance
 	del lanInstance
+	del gprsInstance
 	del emailInstance
 	del bluetoothInstance

@@ -87,7 +87,7 @@ class Checker(object):
 						activeInterfacesFile.close()
 						lanThread = threading.Thread(target = self.lanInstance.receive, name = self.lanThreadName)
 						lanThread.start()
-						lanInfo = self.lanInstance.localInterface + ' - ' + self.lanInstance.localAddress
+						lanInfo = patternMatched.group() + ' - ' + self.lanInstance.localAddress
 						logger.write('INFO','[LAN] Listo para usarse (' + lanInfo + ').')
 						return True
 		# Si ya no se encontró ninguna interfaz UP y ya estabamos escuchando, dejamos de hacerlo
@@ -109,29 +109,33 @@ class Checker(object):
 		lsDevProcess = subprocess.Popen(['ls', '/dev/'], stdout = subprocess.PIPE, stderr = subprocess.PIPE)
 		lsDevOutput, lsDevError = lsDevProcess.communicate()
 		ttyUSBDevices = ttyUSBPattern.findall(lsDevOutput)
+		# Se detectaron dispositivos USB conectados
 		if len(ttyUSBDevices) > 0:
-			self.modemSemaphore.acquire() # Para evitar que 'modemClass' use al mismo tiempo el dispositivo
-			wvdialProcess = subprocess.Popen('wvdialconf', stdout = subprocess.PIPE, stderr = subprocess.PIPE)
-			wvdialOutput, wvdialError = wvdialProcess.communicate()
-			modemsList = ttyUSBPattern.findall(wvdialOutput)
-			self.modemSemaphore.release() # Libera el modem
-			if len(modemsList) > 0:
-				if not self.smsInstance.isActive:
-					self.smsInstance.connect('/dev/' + modemsList[0])
+			if self.smsInstance.serialPort not in ttyUSBDevices and not self.smsInstance.isActive:
+				wvdialProcess = subprocess.Popen('wvdialconf', stdout = subprocess.PIPE, stderr = subprocess.PIPE)
+				wvdialOutput, wvdialError = wvdialProcess.communicate()
+				ttyUSBPattern = re.compile('ttyUSB[0-9]+<Info>')
+				modemsList = ttyUSBPattern.findall(wvdialError)
+				# Se detectaron dispositivos USB que responden como módems
+				if len(modemsList) > 0:
+					gsmSerialPort = modemsList[1].replace('<Info>','')
 					# Si no se produjo ningún error durante la configuración, ponemos al módem a recibir SMS
-					if not self.smsInstance.atError:
+					if self.smsInstance.connect(gsmSerialPort):
 						self.smsInstance.isActive = True
 						smsThread = threading.Thread(target = self.smsInstance.receive, name = self.smsThreadName)
 						smsThread.start()
-						logger.write('INFO','[SMS] Listo para usarse (' + str(self.smsInstance.telephoneNumber) + ').')
+						smsInfo = gsmSerialPort + ' - ' + str(self.smsInstance.telephoneNumber)
+						logger.write('INFO','[SMS] Listo para usarse (' + smsInfo + ').')
 						return True
 					else:
 						self.smsInstance.closePort()
 						return False
-			else:
-				if self.smsInstance.isActive:
-					self.smsInstance.isActive = False
-				return False
+		else:
+			if self.smsInstance.isActive:
+				self.smsInstance.closePort()
+				self.smsInstance.isActive = False
+				self.smsInstance.serialPort = None
+			return False
 
 	def verifyEmailConnection(self):
 		"""Se determina la disponibilidad de la comunicación por medio de comunicación 

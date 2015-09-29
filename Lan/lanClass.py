@@ -124,10 +124,12 @@ class Lan(object):
 		"""Comienza la recepción de datos por medio de los protocolos TCP y UDP
 		para esto requiere la inciación de hilos que esperen los datos en paralelo
 		a la ejecución del programa."""
-		udpLanThread = threading.Thread(target = self.receiveUdp, name = 'udpReceptor')
-		tcpLanThread = threading.Thread(target = self.receiveTcp, name = 'tcpReceptor')
-		udpLanThread.start()
-		tcpLanThread.start()
+		receiveTcpThread = threading.Thread(target = self.receiveTcp, name = 'tcpReceptor')
+		receiveUdpThread = threading.Thread(target = self.receiveUdp, name = 'udpReceptor')
+		receiveTcpThread.start()
+		receiveUdpThread.start()
+		receiveTcpThread.join()
+		receiveUdpThread.join()
 
 	def receiveTcp(self):
 		""" Esta función es ejecutada en un hilo, se queda esperando los paquetes
