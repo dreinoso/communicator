@@ -82,7 +82,7 @@ def send(clientToSend, messageToSend):
 		emailPriority = 0
 		smsPriority = 0
 
-		print checkerInstance.availableLan
+		print availableSms
 
 		if contactList.allowedIpAddress.has_key(clientToSend) and checkerInstance.availableLan:
 			lanPriority = JSON_CONFIG["PRIORITY_LEVELS"]["LAN"]
