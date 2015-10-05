@@ -90,6 +90,7 @@ def send(messageToSend, receiver = '', device = ''):
 		bluetoothPriority = 0
 		emailPriority = 0
 		smsPriority = 0
+
 		if contactList.allowedIpAddress.has_key(receiver) and checkerInstance.availableLan:
 			lanPriority = JSON_CONFIG["PRIORITY_LEVELS"]["LAN"]
 			contactExists = True

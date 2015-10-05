@@ -93,7 +93,8 @@ class Checker(object):
 						lanInfo = patternMatched.group() + ' - ' + self.lanInstance.localAddress
 						logger.write('INFO','[LAN] Listo para usarse (' + lanInfo + ').')
 						return True
-				else:
+				# Si la interfaz ya está en modo activo (funcionando), devolvemos True
+				else if self.lanInstance.isActive:
 					return True
 		# Si ya no se encontró ninguna interfaz UP y ya estabamos escuchando, dejamos de hacerlo
 		if stateUP is False and self.lanInstance.isActive:
@@ -135,6 +136,9 @@ class Checker(object):
 					else:
 						self.smsInstance.closePort()
 						return False
+			# Si el módem ya está en modo activo (funcionando), devolvemos 'True'
+			else if self.smsInstance.isActive:
+				return True
 		else:
 			if self.smsInstance.isActive:
 				self.smsInstance.closePort()
