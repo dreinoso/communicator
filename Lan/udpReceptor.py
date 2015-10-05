@@ -8,7 +8,6 @@
 
 import logger
 import messageClass
-import fileMessageClass
 
 import os
 import Queue
