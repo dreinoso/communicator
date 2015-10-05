@@ -8,6 +8,9 @@ import termios
 import contactList
 import communicator
 
+import messageClass
+import exampleClass
+
 def main():
 	endMain = False
 	os.system('clear')
@@ -17,7 +20,11 @@ def main():
 	print '\t\t2 - Leer'
 	print '\t\t3 - Conectar GPRS'
 	print '\t\t4 - Desconectar GPRS'
-	print '\t\t5 - Salir\n'
+	print '\t\t5 - Debug: envio de mensaje simple'
+	print '\t\t6 - Debug: envio de instancia mensaje'
+	print '\t\t7 - Debug: envio de archivo simple'
+	print '\t\t8 - Debug: envio de instancia archivo'
+	print '\t\t9 - Salir\n'
 
 	print 'Configurando el módulo de comunicación...'
 	communicator.open() # Se abre el comunicador para detectar medios
@@ -32,8 +39,8 @@ def main():
 				showClients = raw_input('¿Desea enviar un mensaje a un cliente registrado? [S/n] ')
 				if showClients is 'S' or showClients is 's' or len(showClients) is 0:
 					print contactList.allowedNumbers.keys()
-					clientToSend = raw_input('Nombre del cliente: ')
-					if contactList.allowedNumbers.has_key(clientToSend):
+					receiver = raw_input('Nombre del cliente: ')
+					if contactList.allowedNumbers.has_key(receiver):
 						messageToSend = raw_input('Mensaje/archivo a enviar: ')
 					else:
 						print 'El cliente no existe. Operación abortada.'
@@ -43,21 +50,53 @@ def main():
 				else:
 					print 'Abortado.'
 					continue
-				# Los 'continue' anteriores se pusieron para que no llegue acá, en caso de error
-				communicator.send(clientToSend, messageToSend)
+				# Los 'continue' anteriores se pusieron para que no realice el envio, en caso de error
+				communicator.send(messageToSend,receiver) # Envío de mensaje simple
 			# Opcion 2 - Leer
 			elif optionSelected is '2':
-				messageRecived = communicator.recieve()
+				messageRecived = communicator.receive()
 				if messageRecived != None:
-					print 'El mensaje recibido es: ' + messageRecived
+					if isinstance(messageRecived, messageClass.FileMessage):
+						print 'Instancia de Archivo recibida: ' + str(messageRecived)
+						print '\tEmisor del archivo: ' + messageRecived.sender
+						print '\tPrioridad del archivo: ' + str(messageRecived.priority)
+						print '\tNombre del archivo: ' + messageRecived.fileName
+					elif isinstance(messageRecived, messageClass.Message):
+						print 'Instancia de Mensaje recibida: ' + str(messageRecived)
+						print '\tEmisor del mensaje: ' + messageRecived.sender
+						print '\tPrioridad del mensaje: ' + str(messageRecived.priority)
+						print '\tAtributo 1: ' + str(messageRecived.atribute1)
+						print '\tAtributo 2: ' + messageRecived.atribute2
+						messageRecived.setAtribute2('Se ha cambiado el atributo 2') # Prueba de un método
+						print '\tAtributo 2: ' + messageRecived.atribute2
+					elif messageRecived.startswith('ARCHIVO_RECIBIDO'):
+						print 'El archivo recibido es: ' + messageRecived.split()[1]
+					else:
+						print 'El mensaje recibido es: ' + messageRecived
 			# Opcion 3 - Conectar GPRS
 			elif optionSelected is '3':
 				communicator.connectGprs()
 			# Opcion 4 - Desconectar GPRS
 			elif optionSelected is '4':
 				communicator.disconnectGprs()
-			# Opcion 5 - Salir
-			elif optionSelected is '5':
+			# Opcion 5 - Mensaje de Prueba
+			elif optionSelected is'5':
+				communicator.send('Este es un mensaje de prueba.','client02')
+			# Opcion 6 - Instancia de mensaje de prueba
+			elif optionSelected is '6':
+				messageInstance = exampleClass.ExampleMessage('client02', 'Comunicardor Emisor Alfa', 5, 100, '')
+				messageInstance.setAtribute1(55555)
+				messageInstance.setAtribute2('Este es el atributo 2 de una instancia mensaje')
+				communicator.send(messageInstance)
+			# Opción 7 - Envio de Archivo de prueba
+			elif optionSelected is '7':
+				communicator.send('imagen.jpg', 'client02')
+			# Opción 8 - Instancia de archivo de prueba
+			elif optionSelected is '8':
+				fileInstance = messageClass.FileMessage('client02', 'Comunicardor Emisor Alfa', 10, 100, '', 'imagen.jpg')
+				communicator.send(fileInstance)
+			# Opcion 9 - Salir
+			elif optionSelected is '9':
 				endMain = True
 			# Opcion inválida
 			else:

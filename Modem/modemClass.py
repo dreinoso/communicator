@@ -17,7 +17,7 @@ import serial
 import signal
 import inspect
 import subprocess
-import commentjson
+import json
 
 import logger
 import errorList
@@ -26,7 +26,7 @@ import contactList
 from curses import ascii # Para enviar el Ctrl-Z
 
 JSON_FILE = 'config.json'
-JSON_CONFIG = commentjson.load(open(JSON_FILE))
+JSON_CONFIG = json.load(open(JSON_FILE))
 
 class Modem(object):
 	""" Clase 'Modem'. Permite la creacion de una instancia del dispositivo. """

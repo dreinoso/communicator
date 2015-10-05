@@ -9,13 +9,13 @@ import Queue
 import inspect
 import threading
 import bluetooth
-import commentjson
+import json
 
 CONNECTIONS = 3
 TIMEOUT = 1.5
 
 JSON_FILE = 'config.json'
-JSON_CONFIG = commentjson.load(open(JSON_FILE))
+JSON_CONFIG = json.load(open(JSON_FILE))
 
 class Bluetooth(object):
 

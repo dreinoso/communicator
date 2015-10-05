@@ -22,7 +22,7 @@ import imaplib
 import threading
 import mimetypes
 import subprocess
-import commentjson
+import json
 
 from email import encoders
 from email.header import decode_header
@@ -38,7 +38,7 @@ TIMEOUT = 5
 ATTACHMENTS = 'attachments'
 
 JSON_FILE = 'config.json'
-JSON_CONFIG = commentjson.load(open(JSON_FILE))
+JSON_CONFIG = json.load(open(JSON_FILE))
 
 class Email(object):
 

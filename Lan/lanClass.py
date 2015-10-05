@@ -19,19 +19,20 @@ import Queue
 import socket
 import inspect
 import threading
-import commentjson
+import json
 
 TIMEOUT = 1.5
 BUFFER_SIZE = 1024
 CONNECTION_LIMIT = 5
 
 JSON_FILE = 'config.json'
-JSON_CONFIG = commentjson.load(open(JSON_FILE))
+JSON_CONFIG = json.load(open(JSON_FILE))
 
 class Lan(object):
 
 	localAddress = JSON_CONFIG["LAN"]["LOCAL_ADDRESS"]
 	lanProtocol = JSON_CONFIG["LAN"]["PROTOCOL"]
+	setIp = JSON_CONFIG["LAN"]["SET_IP"]
 	localInterface = None
 
 	tcpReceptionSocket = socket.socket
@@ -72,9 +73,13 @@ class Lan(object):
 		self.localInterface = _activeInterface
 		commandToExecute = 'ip addr show ' + self.localInterface + ' | grep inet'
 		# Obtenemos la dirección IP local asignada por DHCP
-		self.localAddress = os.popen(commandToExecute).readline().split()[1].split('/')[0]
+		if self.setIp: 
+			self.localAddress = os.popen(commandToExecute).readline().split()[1].split('/')[0]
 		try: # Intenta conexión UDP
 			self.udpReceptionSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+			if JSON_CONFIG["LAN"]["CLOSE_PORT"]: # Para cerrar el puerto en caso de estar ocupado 
+				udpCommand = 'fuser -k -s ' + str(self.udpReceptionPort) + '/udp' # -k = kill; -s: modo silecioso 
+				os.system(udpCommand + '\n' + udpCommand)
 			self.udpReceptionSocket.bind((self.localAddress, self.udpReceptionPort))
 			self.udpReceptionSocket.settimeout(TIMEOUT)
 		except socket.error as errorMessage:
@@ -82,12 +87,16 @@ class Lan(object):
 		try: # Intenta conexión TCP
 			self.tcpReceptionSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 			self.tcpReceptionSocket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+			if JSON_CONFIG["LAN"]["CLOSE_PORT"]: # Para cerrar el puerto en caso de estar ocupado 
+				tcpCommand = 'fuser -k -s ' + str(self.udpReceptionPort) + '/tcp' # -k = kill; -s: modo silecioso 
+				os.system(tcpCommand + '\n' + tcpCommand)
 			self.tcpReceptionSocket.bind((self.localAddress, self.tcpReceptionPort))
 			self.tcpReceptionSocket.listen(CONNECTION_LIMIT)
 			self.tcpReceptionSocket.settimeout(TIMEOUT)
 		except socket.error as errorMessage:
 			logger.write('WARNING', '[LAN] Excepción en "' + str(inspect.stack()[0][3]) + ' para TCP " (' +str(errorMessage) + ')')
 
+	
 	def send(self, destinationIp, destinationTcpPort, destinationUdpPort, messageToSend):
 		""" Envia una cadena de texto.
 		@param detinationIP: dirección IP del destinatario
@@ -119,7 +128,7 @@ class Lan(object):
 		except socket.error as errorMessage:
 			logger.write('WARNING','[LAN] %s.' % errorMessage)
 			return False
-			
+	
 	def receive(self):
 		"""Comienza la recepción de datos por medio de los protocolos TCP y UDP
 		para esto requiere la inciación de hilos que esperen los datos en paralelo
@@ -154,12 +163,19 @@ class Lan(object):
 		while self.isActive:
 			try:
 				data, addr = self.udpReceptionSocket.recvfrom(BUFFER_SIZE)
-				if data.startswith('START_OF_PACKET'):
+				if data.startswith('START_OF_MESSAGE_INSTANCE'):
 					# Recibimos el puerto al que se debe responder
 					remoteAddress = data.split()[1]
 					remotePort = int(data.split()[2])
-					threadName = 'Thread-UDPReceptor'
-					receptorThread = udpReceptor.UdpReceptor(threadName, self.localAddress, remoteAddress, remotePort)
+					threadName = 'Thread-UDPReceptor-Instance'
+					receptorThread = udpReceptor.UdpReceptor(threadName,self.receptionBuffer, self.localAddress, remoteAddress, remotePort)
+					receptorThread.start()
+				elif data.startswith('START_OF_FILE'):
+					# Recibimos el puerto al que se debe responder
+					remoteAddress = data.split()[1]
+					remotePort = int(data.split()[2])
+					threadName = 'Thread-UDPReceptor-File'
+					receptorThread = udpReceptor.UdpReceptor(threadName, self.receptionBuffer, self.localAddress, remoteAddress, remotePort)
 					receptorThread.start()
 				else:
 					logger.write('INFO', '[LAN] Ha llegado un nuevo mensaje!')

@@ -8,10 +8,10 @@
 
 import sys
 import logging
-import commentjson
+import json
 
 JSON_FILE = 'config.json'
-JSON_CONFIG = commentjson.load(open(JSON_FILE))
+JSON_CONFIG = json.load(open(JSON_FILE))
 
 CONSOLE_FORMAT = '[%(levelname)s] %(message)s'
 FILE_FORMAT = '[%(asctime)s][%(levelname)s] %(message)s'

@@ -10,10 +10,10 @@
 import re
 import os
 import sys
+import json
 import Queue
 import threading
 import subprocess
-import commentjson
 
 sys.path.append(os.path.abspath('Lan/'))
 sys.path.append(os.path.abspath('Email/'))
@@ -25,12 +25,15 @@ import modemClass
 import emailClass
 import bluetoothClass
 
+import messageClass
+#import fileMessageClass
+
 import logger
 import contactList
 import checkerClass
 
 JSON_FILE = 'config.json'
-JSON_CONFIG = commentjson.load(open(JSON_FILE))
+JSON_CONFIG = json.load(open(JSON_FILE))
 
 receptionBuffer = Queue.Queue()
 modemSemaphore = threading.Semaphore(value = 1)
@@ -41,6 +44,8 @@ gprsInstance = modemClass.Gprs(modemSemaphore)
 emailInstance = emailClass.Email(receptionBuffer)
 smsInstance = modemClass.Sms(receptionBuffer, modemSemaphore)
 bluetoothInstance = bluetoothClass.Bluetooth(receptionBuffer)
+
+#TODO el módulo se pueda importar desde otra carpeta y aún asi poder hacer los imports relativos al módulo
 
 # Creamos la instancia del checker y el hilo que va a verificar las conexiones
 checkerInstance = checkerClass.Checker(modemSemaphore, lanInstance, gprsInstance, emailInstance, smsInstance, bluetoothInstance)
@@ -66,14 +71,18 @@ def open():
 	checkerInstance.isActive = True
 	checkerThread.start()
 
-def send(clientToSend, messageToSend):
+
+def send(messageToSend, receiver = '', device = ''):
 	"""Se envia de modo inteligente un paquete de datos a un contacto previamente registrado
 	el mensaje se envia por el medio mas óptimo encontrado.
-	@param clientToSend: Nombre de contacto previamente registrado
-	@type clientToSend: str
+	@param receiver: Nombre de contacto previamente registrado
+	@type receiver: str
 	@param messageToSend: Mensaje a ser enviado
-	@type clientToSend: str"""
+	@type receiver: str"""
 	global contactExists, lanPriority, bluetoothPriority, emailPriority, smsPriority
+
+	# Se establece el contacto del envio en caso de que se trate de una instancia.
+	if isinstance(messageToSend, messageClass.Message): receiver = messageToSend.receiver
 
 	# Determinamos si el contacto existe. Si no existe, no se intenta enviar por ningún medio.
 	if not contactExists:
@@ -81,83 +90,80 @@ def send(clientToSend, messageToSend):
 		bluetoothPriority = 0
 		emailPriority = 0
 		smsPriority = 0
-
-		print checkerInstance.availableLan
-
-		if contactList.allowedIpAddress.has_key(clientToSend) and checkerInstance.availableLan:
+		if contactList.allowedIpAddress.has_key(receiver) and checkerInstance.availableLan:
 			lanPriority = JSON_CONFIG["PRIORITY_LEVELS"]["LAN"]
 			contactExists = True
-		if contactList.allowedMacAddress.has_key(clientToSend) and checkerInstance.availableBluetooth:
+		if contactList.allowedMacAddress.has_key(receiver) and checkerInstance.availableBluetooth:
 			bluetoothPriority = JSON_CONFIG["PRIORITY_LEVELS"]["BLUETOOTH"]
 			contactExists = True
-		if contactList.allowedEmails.has_key(clientToSend) and checkerInstance.availableEmail:
+		if contactList.allowedEmails.has_key(receiver) and checkerInstance.availableEmail:
 			emailPriority = JSON_CONFIG["PRIORITY_LEVELS"]["EMAIL"]
 			contactExists = True
-		if contactList.allowedNumbers.has_key(clientToSend) and checkerInstance.availableSms:
+		if contactList.allowedNumbers.has_key(receiver) and checkerInstance.availableSms:
 			smsPriority = JSON_CONFIG["PRIORITY_LEVELS"]["SMS"]
 			contactExists = True
 		if not contactExists:
-			logger.write('WARNING', '[COMUNICADOR] El contacto \'%s\' no se encuentra registrado.' % clientToSend)
+			logger.write('WARNING', '[COMUNICADOR] El contacto \'%s\' no se encuentra registrado.' % receiver)
 			return False
 	# Intentamos transmitir por LAN
 	if lanPriority != 0 and lanPriority >= bluetoothPriority and lanPriority >= emailPriority and lanPriority >= smsPriority:
-		destinationIp = contactList.allowedIpAddress[clientToSend][0]
-		destinationTcpPort = contactList.allowedIpAddress[clientToSend][1]
-		destinationUdpPort = contactList.allowedIpAddress[clientToSend][2]
+		destinationIp = contactList.allowedIpAddress[receiver][0]
+		destinationTcpPort = contactList.allowedIpAddress[receiver][1]
+		destinationUdpPort = contactList.allowedIpAddress[receiver][2]
 		resultOk = lanInstance.send(destinationIp, destinationTcpPort, destinationUdpPort, messageToSend)
 		if resultOk:
-			logger.write('INFO', '[LAN] Mensaje enviado a \'%s\'.' % clientToSend)
+			logger.write('INFO', '[LAN] Mensaje enviado a \'%s\'.' % receiver)
 			contactExists = False
 			return True
 		else:
 			logger.write('WARNING', '[LAN] Envio fallido. Reintentando con otro periférico.')
 			lanPriority = 0   # Entonces se descarta para la proxima selección
-			send(clientToSend, messageToSend) # Se reintenta con otros perifericos
+			send(receiver, messageToSend) # Se reintenta con otros perifericos
 	# Intentamos transmitir por BLUETOOTH
 	elif bluetoothPriority != 0 and bluetoothPriority >= emailPriority and bluetoothPriority >= smsPriority:
-		destinationServiceName = contactList.allowedMacAddress[clientToSend][0]
-		destinationMAC = contactList.allowedMacAddress[clientToSend][1]
-		destinationUUID = contactList.allowedMacAddress[clientToSend][2]
+		destinationServiceName = contactList.allowedMacAddress[receiver][0]
+		destinationMAC = contactList.allowedMacAddress[receiver][1]
+		destinationUUID = contactList.allowedMacAddress[receiver][2]
 		resultOk = bluetoothInstance.send(destinationServiceName, destinationMAC, destinationUUID, messageToSend)
 		if resultOk:
-			logger.write('INFO', '[BLUETOOTH] Mensaje enviado a \'%s\'.' % clientToSend)
+			logger.write('INFO', '[BLUETOOTH] Mensaje enviado a \'%s\'.' % receiver)
 			contactExists = False
 			return True
 		else:
 			logger.write('WARNING', '[BLUETOOTH] Envio fallido. Reintentando con otro periférico.')
 			bluetoothPriority = 0  # Entonces se descarta para la proxima selección
-			send(clientToSend, messageToSend) # Se reintenta con otros perifericos
+			send(receiver, messageToSend) # Se reintenta con otros perifericos
 	# Intentamos transmitir por EMAIL
 	elif emailPriority != 0 and emailPriority >= smsPriority:
-		destinationEmail = contactList.allowedEmails[clientToSend]
+		destinationEmail = contactList.allowedEmails[receiver]
 		resultOk  = emailInstance.send(destinationEmail, 'Proyecto Datalogger - Comunicador', messageToSend)
 		if resultOk:
-			logger.write('INFO', '[EMAIL] Mensaje enviado a \'%s\'.' % clientToSend)
+			logger.write('INFO', '[EMAIL] Mensaje enviado a \'%s\'.' % receiver)
 			contactExists = False
 			return True
 		else:
 			logger.write('WARNING', '[EMAIL] Envio fallido. Reintentando con otro periférico.')
 			emailPriority = 0      # Entonces se descarta para la proxima selección
-			send(clientToSend, messageToSend) # Se reintenta con otros perifericos
+			send(receiver, messageToSend) # Se reintenta con otros perifericos
 	# Intentamos transmitir por SMS
 	elif smsPriority != 0:
-		destinationNumbsmsPriorityer = contactList.allowedNumbers[clientToSend]
+		destinationNumbsmsPriorityer = contactList.allowedNumbers[receiver]
 		resultOk = smsInstance.send(destinationNumber, messageToSend)
 		if resultOk:
-			logger.write('INFO', '[SMS] Mensaje enviado a \'%s\'.' % clientToSend)
+			logger.write('INFO', '[SMS] Mensaje enviado a \'%s\'.' % receiver)
 			contactExists = False
 			return True
 		else:
 			logger.write('WARNING', '[SMS] Envio fallido. Reintentando con otro periférico.')
 			smsPriority = 0 # Entonces se descarta para la proxima selección
-			send(clientToSend, messageToSend)
+			send(receiver, messageToSend)
 	# No fue posible transmitir por ningún medio
 	else:
-		logger.write('WARNING', '[COMUNICADOR] No hay módulos para el envío de mensajes a \'%s\'.' % clientToSend)
+		logger.write('WARNING', '[COMUNICADOR] No hay módulos para el envío de mensajes a \'%s\'.' % receiver)
 		contactExists = False
 		return False
 
-def recieve():
+def receive():
 	"""Se obtiene de un buffer circular el mensaje recibido mas antiguo.
 	@return: Mensaje recibido
 	@rtype: str"""

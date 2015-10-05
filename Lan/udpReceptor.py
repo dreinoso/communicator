@@ -7,21 +7,25 @@
 	@date: Lunes 16 de Mayo de 2015 """
 
 import logger
+import messageClass
+import fileMessageClass
 
 import os
 import Queue
 import socket
+import pickle
 import threading
 
 # Tamano del buffer en bytes (cantidad de caracteres)
 BUFFER_SIZE = 1024
-DOWNLOADS = 'downloads'
+DOWNLOADS = 'Downloads'
 TIMEOUT = 2
 
 class UdpReceptor(threading.Thread):
 
-	def __init__(self, _threadName, _localAddress, _remoteAddress, _remotePort):
+	def __init__(self, _threadName, _receptionBuffer, _localAddress, _remoteAddress, _remotePort):
 		threading.Thread.__init__(self, name = _threadName)
+		self.receptionBuffer = _receptionBuffer
 		self.localAddress = _localAddress
 		self.remoteAddress = _remoteAddress
 		self.remotePort = _remotePort
@@ -34,6 +38,32 @@ class UdpReceptor(threading.Thread):
 		self.receptionPort = self.receptionSocket.getsockname()[1]
 
 	def run(self):
+		if str(self.name) == 'Thread-UDPReceptor-Instance':
+			self.receiveInstance()
+		else:
+			self.receiveFile()
+
+	def receiveInstance(self):
+		try:
+			# Indicamos al otro extremo nuestro puerto al cual debe enviar el paquete
+			self.transmitterSocket.sendto(str(self.receptionPort), (self.remoteAddress, self.remotePort))
+			inputData, addr = self.receptionSocket.recvfrom(BUFFER_SIZE)
+			while inputData != 'END_OF_MESSAGE_INSTANCE':
+				serializedMessage = ''
+				serializedMessage = serializedMessage + inputData
+				self.transmitterSocket.sendto('ACK', (self.remoteAddress, self.remotePort))
+				inputData, addr = self.receptionSocket.recvfrom(BUFFER_SIZE)
+			message = pickle.loads(serializedMessage) # Deserialización de la instancia
+			self.receptionBuffer.put(message)
+		except socket.error as errorMessage:
+			logger.write('WARNING', '[LAN] Error al intentar recibir instancia de mensaje.')
+		finally:
+			# Cerramos los sockets que permitieron la conexión con el cliente
+			self.transmitterSocket.close()
+			self.receptionSocket.close()
+			logger.write('DEBUG', '[LAN] \'%s\' terminado y cliente desconectado.' % self.getName())
+
+	def receiveFile(self):
 		try:
 			# Indicamos al otro extremo nuestro puerto al cual debe enviar el paquete
 			self.transmitterSocket.sendto(str(self.receptionPort), (self.remoteAddress, self.remotePort))
@@ -54,12 +84,13 @@ class UdpReceptor(threading.Thread):
 				# Comenzamos a descargar el archivo
 				while True:
 					inputData, addr = self.receptionSocket.recvfrom(BUFFER_SIZE)
-					if inputData != 'END_OF_PACKET':
+					if inputData != 'END_OF_FILE':
 						fileObject.write(inputData)
 						self.transmitterSocket.sendto('ACK', (self.remoteAddress, self.remotePort))
 					else: 
 						fileObject.close()
 						logger.write('INFO', '[LAN] Archivo \'%s\' descargado correctamente!' % fileName)
+						self.receptionBuffer.put('ARCHIVO_RECIBIDO: ' + fileName)
 						break
 			else:
 				# Comunicamos al transmisor que el archivo ya existe
