@@ -1,21 +1,19 @@
-Módulo de Comunicación Inteligente
-==================================
+#Módulo de Comunicación Inteligente
 Corresponde a un módulo de comunicación inteligente para comunicación punto a punto. Las comunicaciones que se pretenden son SMS, Email, Ethernet, Wifi y Bluetooth.
 
-Requisitos del módulo
----------------------
-  +Python 2.7
-  +Pip para la instalación de los módulos (sudo apt-get install pip)
-	En caso de problemas de dependencias con pip (sudo apt-get install python python-dev libatlas-base-dev gcc gfortran g++)
-  +PyBluez para la ejecución con Bluettoth (sudo pip install pybluez)
-	En caso de problemas de dependencias con pip (sudo apt-get install libbluetooth-dev)
-  +WVdial para obtener el puerto del módem (sudo apt-get install wvdial)
-  +Wvdial PySerial para la comunicación con el módem (sudo pip install pyserial)
+##Requisitos del módulo
+	-Python 2.7
+	-Pip para la instalación de los módulos (sudo apt-get install pip)
+		En caso de problemas de dependencias con pip (sudo apt-get install python python-dev libatlas-base-dev gcc gfortran g++)
+	-PyBluez para la ejecución con Bluettoth (sudo pip install pybluez)
+		En caso de problemas de dependencias con pip (sudo apt-get install libbluetooth-dev)
+	-WVdial para obtener el puerto del módem (sudo apt-get install wvdial)
+	-Wvdial PySerial para la comunicación con el módem (sudo pip install pyserial)
 
-Requisitos de Configuración
----------------------------
-  +Establecer en la lista de contactos (contactList.py) los contactos con los que se planea la comunicación, en los dispositivos que se tengan disponibles.
-  +Determinar las configuraciones que deseen para el funcionamiento del módulo en el archivo de configuración (config.sjon). Los campos de las mismas se explican a continuación. Se debe tener en cuenta que para las opciones con Habilitación/Deshabilitación se determinan con 0 deshabilitar, 1 para habilitar.
+##Requisitos de Configuración
+	-Establecer en la lista de contactos (contactList.py) los contactos con los que se planea la comunicación, en los dispositivos que se tengan disponibles.
+	-Determinar las configuraciones que deseen para el funcionamiento del módulo en el archivo de configuración (config.sjon). Los campos de las mismas se explican a continuación. Se debe tener en cuenta que para las opciones con Habilitación/Deshabilitación se determinan con 0 deshabilitar, 1 para habilitar.
+	
 	{
 	# --------- CONFIGURACIÓN LAN ---------
 	"LAN":
@@ -82,44 +80,37 @@ Requisitos de Configuración
 	"CONSOLE_LOGGING_LEVEL" : "DEBUG"		# Para la consola,  por defecto se descartan los mesajes de depuración mostrando sólo lo más relevante ('INFO')
 }
 
-Ejecución del Módulo
---------------------
+##Ejecución del Módulo
 En su aplicación se debe tener importado el modulo "import communicator.py" (su programa debe estar en la misma carpeta del comunicador). En caso de usar el módem se requiere correr la aplicación como root. El uso del comunicador se basa en el llamado de las siguientes funciones:
-
-+communicator.open()
+###communicator.open()
 	Se realiza la apertura, inicialización de los componentes que se tengan disponibles	.
-
-+communicator.send(contact, message)
-	Se envia de modo "inteligente" un paquete de datos a un contacto previamente registrado el mensaje se envia por el medio mas óptimo encontrado. Se tienen 4 formas de envio
-	Envio de mensaje simple: communicator.send(mensajeComoCadena, contactoRegistrado, dispositivoPreferenteDeEnvio)
+###communicator.send()
+	Se envia de modo inteligente un paquete de datos a un contacto previamente registrado el mensaje se envia por el medio mas óptimo encontrado. Se tienen 4 formas de envio
+	Envio de mensaje simple: **communicator.send(mensajeComoCadena, contactoRegistrado, dispositivoPreferenteDeEnvio)**
 		Este ultimo campo puede obviarse, es decir communicator.send(mensajeComoCadena, contactoRegistrado)
-	Envio de instancia mensaje: communicator.send(instanciaDeMensaje)
+	Envio de instancia mensaje: **communicator.send(instanciaDeMensaje)**
 		Puede ser una instancia de la clase definida Message (en messageClass.py) o una subclase de esta, requiere valores inciados.
-	Envio de archivo simple: communicator.send(nombreDeArchivo, contactoRegistrado, dispositivoPreferenteDeEnvio)
+	Envio de archivo simple: **communicator.send(nombreDeArchivo, contactoRegistrado, dispositivoPreferenteDeEnvio)**
 		Este ultimo campo puede obviarse, es decir communicator.send(nombreDeArchivo, contactoRegistrado)
 		Si el archivo no esta en la carpeta, se debe establecer tmb la ruta: nombreDeArchivo = ruta/nombreDeArchivo
-	Envio de instancia archivo: communicator.send(instanciaDeArchivo)
-		Puede ser una instancia de la clase definida FileMessage (en messageClass.py) o una subclase de esta, requiere valores inciados. Con esta calse se cuenta con campos adicionales. FileName para el nombre del archivo y received que indica si la recepción fue exitosa. El Comunicador se encarga de modificarlo, el usuario solo debe verificarlo.
+	Envio de instancia archivo: **communicator.send(instanciaDeArchivo)**
+		Puede ser una instancia de la clase definida FileMessage (en messageClass.py) o una subclase de esta, requiere valores inciados. 
+		Con esta calse se cuenta con campos adicionales. FileName para el nombre del archivo y received que indica si la recepción fue exitosa. 
+		El Comunicador se encarga de modificarlo, el usuario solo debe verificarlo.
 
 	NT: La comunicación por isntancia de clases solo esta habilitada para LAN con TCP y UDP. Pero se añadirá para Email y Bluetooth.
-
-+communicator.recieve()
+###communicator.recieve()
 	Se obtiene de un buffer circular el mensaje recibido mas antiguo, sea este instancia o texto (se debe hacer una comprobación puede ver el ejemplo en example.py)
-
-+communicator.close()
+###communicator.close()
 	Se cierran los componentes del sistema, unicamente los abiertos previamente.
-
-+communicator.lenght()
+###communicator.lenght()
 	Devuelve la cantidad de elementos recibidos que todavía no se han sacado del buffer.
-
-+communicator.connectGPRS()
+###communicator.connectGPRS()
 	Se realiza una conexión GPRS con el módem, pero se pierde la posibilidad del envio de mensajes, mientras este conectado GPRS.
-
-+communicator.disconnectGPRS()
+###communicator.disconnectGPRS()
 	Se termina la conexión GPRS.
 
 Para mayor entenimiento del módulo se recomienda analizar el archivo de ejemplo "example.py".
 
-ISSUES
-------
-+En caso de excpeción y el programa no finalize correctamente se debe eliminar un archivo temporal de manera manual: sudo rm /tmp/activeInterfaces 
+##ISSUES
+	-En caso de excpeción y el programa no finalize correctamente se debe eliminar un archivo temporal de manera manual: sudo rm /tmp/activeInterfaces 
