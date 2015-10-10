@@ -119,7 +119,7 @@ def send(messageToSend, receiver = '', device = ''):
 		else:
 			logger.write('WARNING', '[LAN] Envio fallido. Reintentando con otro periférico.')
 			lanPriority = 0   # Entonces se descarta para la proxima selección
-			send(receiver, messageToSend) # Se reintenta con otros perifericos
+			send(messageToSend, receiver) # Se reintenta con otros perifericos
 	# Intentamos transmitir por BLUETOOTH
 	elif bluetoothPriority != 0 and bluetoothPriority >= emailPriority and bluetoothPriority >= smsPriority:
 		destinationServiceName = contactList.allowedMacAddress[receiver][0]
@@ -133,7 +133,7 @@ def send(messageToSend, receiver = '', device = ''):
 		else:
 			logger.write('WARNING', '[BLUETOOTH] Envio fallido. Reintentando con otro periférico.')
 			bluetoothPriority = 0  # Entonces se descarta para la proxima selección
-			send(receiver, messageToSend) # Se reintenta con otros perifericos
+			send(messageToSend, receiver) # Se reintenta con otros perifericos
 	# Intentamos transmitir por EMAIL
 	elif emailPriority != 0 and emailPriority >= smsPriority:
 		destinationEmail = contactList.allowedEmails[receiver]
@@ -145,7 +145,7 @@ def send(messageToSend, receiver = '', device = ''):
 		else:
 			logger.write('WARNING', '[EMAIL] Envio fallido. Reintentando con otro periférico.')
 			emailPriority = 0      # Entonces se descarta para la proxima selección
-			send(receiver, messageToSend) # Se reintenta con otros perifericos
+			send(messageToSend, receiver) # Se reintenta con otros perifericos
 	# Intentamos transmitir por SMS
 	elif smsPriority != 0:
 		destinationNumbsmsPriorityer = contactList.allowedNumbers[receiver]
@@ -157,7 +157,7 @@ def send(messageToSend, receiver = '', device = ''):
 		else:
 			logger.write('WARNING', '[SMS] Envio fallido. Reintentando con otro periférico.')
 			smsPriority = 0 # Entonces se descarta para la proxima selección
-			send(receiver, messageToSend)
+			send(messageToSend, receiver)
 	# No fue posible transmitir por ningún medio
 	else:
 		logger.write('WARNING', '[COMUNICADOR] No hay módulos para el envío de mensajes a \'%s\'.' % receiver)

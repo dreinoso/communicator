@@ -99,7 +99,9 @@ En su aplicación se debe tener importado el modulo "import communicator.py" (su
 		Este ultimo campo puede obviarse, es decir communicator.send(nombreDeArchivo, contactoRegistrado)
 		Si el archivo no esta en la carpeta, se debe establecer tmb la ruta: nombreDeArchivo = ruta/nombreDeArchivo
 	Envio de instancia archivo: communicator.send(instanciaDeArchivo)
-		Puede ser una instancia de la clase definida FileMessage (en messageClass.py) o una subclase de esta, requiere valores inciados.
+		Puede ser una instancia de la clase definida FileMessage (en messageClass.py) o una subclase de esta, requiere valores inciados. Con esta calse se cuenta con campos adicionales. FileName para el nombre del archivo y received que indica si la recepción fue exitosa. El Comunicador se encarga de modificarlo, el usuario solo debe verificarlo.
+
+	NT: La comunicación por isntancia de clases solo esta habilitada para LAN con TCP y UDP. Pero se añadirá para Email y Bluetooth.
 
 +communicator.recieve()
 	Se obtiene de un buffer circular el mensaje recibido mas antiguo, sea este instancia o texto (se debe hacer una comprobación puede ver el ejemplo en example.py)

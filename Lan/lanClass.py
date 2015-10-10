@@ -163,14 +163,21 @@ class Lan(object):
 		while self.isActive:
 			try:
 				data, addr = self.udpReceptionSocket.recvfrom(BUFFER_SIZE)
-				if data.startswith('START_OF_MESSAGE_INSTANCE'):
+				if data.startswith('START_OF_FILE_INSTANCE '):
 					# Recibimos el puerto al que se debe responder
 					remoteAddress = data.split()[1]
 					remotePort = int(data.split()[2])
-					threadName = 'Thread-UDPReceptor-Instance'
+					threadName = 'Thread-UDPReceptor-FileInstance'
 					receptorThread = udpReceptor.UdpReceptor(threadName,self.receptionBuffer, self.localAddress, remoteAddress, remotePort)
 					receptorThread.start()
-				elif data.startswith('START_OF_FILE'):
+				elif data.startswith('START_OF_MESSAGE_INSTANCE '):
+					# Recibimos el puerto al que se debe responder
+					remoteAddress = data.split()[1]
+					remotePort = int(data.split()[2])
+					threadName = 'Thread-UDPReceptor-MessageInstance'
+					receptorThread = udpReceptor.UdpReceptor(threadName,self.receptionBuffer, self.localAddress, remoteAddress, remotePort)
+					receptorThread.start()
+				elif data.startswith('START_OF_FILE '):
 					# Recibimos el puerto al que se debe responder
 					remoteAddress = data.split()[1]
 					remotePort = int(data.split()[2])

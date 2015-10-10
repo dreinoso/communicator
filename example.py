@@ -20,10 +20,10 @@ def main():
 	print '\t\t2 - Leer'
 	print '\t\t3 - Conectar GPRS'
 	print '\t\t4 - Desconectar GPRS'
-	print '\t\t5 - Debug: envio de mensaje simple'
-	print '\t\t6 - Debug: envio de instancia mensaje'
-	print '\t\t7 - Debug: envio de archivo simple'
-	print '\t\t8 - Debug: envio de instancia archivo'
+	print '\t\t5 - Enviar mensaje simple preestablecido' # Pruebas más directas del módulo..
+	print '\t\t6 - Enviar instancia mensaje preestablecido'
+	print '\t\t7 - Enviar archivo simple preestablecido'
+	print '\t\t8 - Enviar instancia archivo preestablecido'
 	print '\t\t9 - Salir\n'
 
 	print 'Configurando el módulo de comunicación...'
@@ -61,6 +61,10 @@ def main():
 						print '\tEmisor del archivo: ' + messageRecived.sender
 						print '\tPrioridad del archivo: ' + str(messageRecived.priority)
 						print '\tNombre del archivo: ' + messageRecived.fileName
+						if messageRecived.received:	# Comprobación de la recepción
+							print '\tEste archivo se recibio correctamente' 
+						else:
+							print '\tEste archivo no se recibio' 
 					elif isinstance(messageRecived, messageClass.Message):
 						print 'Instancia de Mensaje recibida: ' + str(messageRecived)
 						print '\tEmisor del mensaje: ' + messageRecived.sender
