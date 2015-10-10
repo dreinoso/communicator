@@ -5,10 +5,10 @@ Corresponde a un módulo de comunicación inteligente para comunicación punto a
 	-Python 2.7
 	-Pip para la instalación de los módulos (sudo apt-get install pip)
 		En caso de problemas de dependencias con pip (sudo apt-get install python python-dev libatlas-base-dev gcc gfortran g++)
-	-PyBluez para la ejecución con Bluettoth (sudo pip install pybluez)
+	-PyBluez para la ejecución con Bluetooth (sudo pip install pybluez)
 		En caso de problemas de dependencias con pip (sudo apt-get install libbluetooth-dev)
 	-WVdial para obtener el puerto del módem (sudo apt-get install wvdial)
-	-Wvdial PySerial para la comunicación con el módem (sudo pip install pyserial)
+	-PySerial para la comunicación con el módem (sudo pip install pyserial)
 
 ##Requisitos de Configuración
 	-Establecer en la lista de contactos (contactList.py) los contactos con los que se planea la comunicación, en los dispositivos que se tengan disponibles.
