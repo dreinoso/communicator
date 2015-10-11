@@ -15,8 +15,8 @@ Corresponde a un módulo de comunicación inteligente para comunicación punto a
 	-Determinar las configuraciones que deseen para el funcionamiento del módulo en el archivo de configuración (config.sjon). Los campos de las mismas se explican a continuación. Se debe tener en cuenta que para las opciones con Habilitación/Deshabilitación se determinan con 0 deshabilitar, 1 para habilitar.
 	
 	{
-	# --------- CONFIGURACIÓN LAN ---------
-	"LAN":
+	# --------- CONFIGURACIÓN NETWORK ---------
+	"NETWORK":
 		{
 		"LOCAL_ADDRESS" : "localhost", 		# (192.168.0.15) Dirección de Ip del Comunicador
 		"SET_IP" 	: 1,			# (0/1) Habilitado: Configura la dirección IP de manera automática, en base a la interfaz que se tenga disponible
@@ -65,7 +65,7 @@ Corresponde a un módulo de comunicación inteligente para comunicación punto a
 		# 0 --> Inhabilidato
 	"PRIORITY_LEVELS":
 		{
-		"LAN"       : 1,
+		"NETWORK"   : 1,
 		"SMS"       : 0,
 		"EMAIL"     : 0,
 		"BLUETOOTH" : 0
@@ -98,7 +98,7 @@ En su aplicación se debe tener importado el modulo "import communicator.py" (su
 		Con esta calse se cuenta con campos adicionales. FileName para el nombre del archivo y received que indica si la recepción fue exitosa. 
 		El Comunicador se encarga de modificarlo, el usuario solo debe verificarlo.
 
-	NT: La comunicación por isntancia de clases solo esta habilitada para LAN con TCP y UDP. Pero se añadirá para Email y Bluetooth.
+	NT: La comunicación por isntancia de clases solo esta habilitada para NETWORK con TCP y UDP. Pero se añadirá para Email y Bluetooth.
 ###communicator.recieve()
 	Se obtiene de un buffer circular el mensaje recibido mas antiguo, sea este instancia o texto (se debe hacer una comprobación puede ver el ejemplo en example.py)
 ###communicator.close()

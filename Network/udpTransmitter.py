@@ -19,7 +19,7 @@ import messageClass	# TODO: Si el communicador es iniciado desde otra carpeta,
 
 # Tamano del buffer en bytes (cantidad de caracteres)
 BUFFER_SIZE = 1024
-TIMEOUT = 20
+TIMEOUT = 2
 
 class UdpTransmitter(threading.Thread):
 
@@ -83,7 +83,7 @@ class UdpTransmitter(threading.Thread):
 				self.messageToSend.fileName = fileName # Se guarda el nombre del archivo antes de serializar.
 				self.messageToSend = pickle.dumps(self.messageToSend)
 				# Emviamos la instancia, de ser menor a 1024 bytes el envio es de un solo paquete
-				logger.write('DEBUG', '[LAN] Transfiriendo instancia de Mensaje.')
+				logger.write('DEBUG', '[NETWORK] Transfiriendo instancia de Mensaje.')
 				bytesSent = 0
 				while bytesSent < len(self.messageToSend):
 					outputData = self.messageToSend[bytesSent:bytesSent + BUFFER_SIZE]
@@ -105,7 +105,7 @@ class UdpTransmitter(threading.Thread):
 					fileObject.seek(fileBeginning, os.SEEK_SET)
 					# Envio del contenido del archivo
 					bytesSent = 0
-					logger.write('INFO', '[LAN] Transfiriendo archivo \'%s\'...' % fileName)
+					logger.write('DEBUG', '[NETWORK] Transfiriendo archivo \'%s\'...' % fileName)
 					while bytesSent < fileSize:
 						outputData = fileObject.read(BUFFER_SIZE)
 						bytesSent += len(outputData)
@@ -113,13 +113,13 @@ class UdpTransmitter(threading.Thread):
 						receivedData, addr = self.receptionSocket.recvfrom(BUFFER_SIZE) # ACK
 					fileObject.close()
 					self.transmissionSocket.sendto('END_OF_FILE', (self.destinationIp, self.destinationPort))
-					logger.write('INFO', '[LAN] Instancia de Archivo \'%s\' enviada correctamente!' % fileName)
+					logger.write('DEBUG', '[NETWORK] Instancia de Archivo \'%s\' enviada correctamente!' % fileName)
 				else:
-					logger.write('WARNING', '[LAN] El archivo \'%s\' ya existe, fue rechazado!' % fileName)
+					logger.write('WARNING', '[NETWORK] El archivo \'%s\' ya existe, fue rechazado!' % fileName)
 			else:
-				logger.write('WARNING', '[LAN] Envio cancelado, el archivo (' + self.messageToSend.fileName + ') para la instancia de archivo que se pretende enviar no existe.')
+				logger.write('WARNING', '[NETWORK] Envio cancelado, no se encuentra el archivo (' + self.messageToSend.fileName + ') para el envio.')
 		except Exception as errorMessage:
-			logger.write('WARNING', '[LAN] Instancia de Mensaje no enviado: %s' % str(errorMessage))
+			logger.write('WARNING', '[NETWORK] Instancia de Mensaje no enviado: %s' % str(errorMessage))
 		finally:
 			# Cerramos los sockets que permitieron la conexión con el cliente
 			self.transmissionSocket.close()
@@ -135,7 +135,7 @@ class UdpTransmitter(threading.Thread):
 			self.destinationPort, addr = self.receptionSocket.recvfrom(BUFFER_SIZE)
 			self.destinationPort = int(self.destinationPort)
 			self.messageToSend = pickle.dumps(self.messageToSend) # Serialización de la clase
-			logger.write('DEBUG', '[LAN] Transfiriendo instancia de Mensaje.')
+			logger.write('DEBUG', '[NETWORK] Transfiriendo instancia de Mensaje.')
 			bytesSent = 0
 			while bytesSent < len(self.messageToSend):
 				outputData = self.messageToSend[bytesSent:bytesSent + BUFFER_SIZE] # Se envia la cadena de a partes, el receptor las une.
@@ -143,9 +143,9 @@ class UdpTransmitter(threading.Thread):
 				self.transmissionSocket.sendto(outputData, (self.destinationIp, self.destinationPort))
 				receivedData, addr = self.receptionSocket.recvfrom(BUFFER_SIZE) # ACK
 			self.transmissionSocket.sendto('END_OF_MESSAGE_INSTANCE', (self.destinationIp, self.destinationPort))
-			logger.write('DEBUG', '[LAN] Instancia de Mensaje enviado correctamente!')				
+			logger.write('DEBUG', '[NETWORK] Instancia de Mensaje enviado correctamente!')				
 		except Exception as errorMessage:
-			logger.write('WARNING', '[LAN] Instancia de Mensaje no enviado: %s' % str(errorMessage))
+			logger.write('WARNING', '[NETWORK] Instancia de Mensaje no enviado: %s' % str(errorMessage))
 		finally:
 			# Cerramos los sockets que permitieron la conexión con el cliente
 			self.transmissionSocket.close()
@@ -184,7 +184,7 @@ class UdpTransmitter(threading.Thread):
 				fileObject.seek(fileBeginning, os.SEEK_SET)
 				# Envio del contenido del archivo
 				bytesSent = 0
-				logger.write('INFO', '[LAN] Transfiriendo archivo \'%s\'...' % fileName)
+				logger.write('DEBUG', '[NETWORK] Transfiriendo archivo \'%s\'...' % fileName)
 				while bytesSent < fileSize:
 					outputData = fileObject.read(BUFFER_SIZE)
 					bytesSent += len(outputData)
@@ -192,11 +192,11 @@ class UdpTransmitter(threading.Thread):
 					receivedData, addr = self.receptionSocket.recvfrom(BUFFER_SIZE) # ACK
 				fileObject.close()
 				self.transmissionSocket.sendto('END_OF_FILE', (self.destinationIp, self.destinationPort))
-				logger.write('INFO', '[LAN] Archivo \'%s\' enviado correctamente!' % fileName)
+				logger.write('DEBUG', '[NETWORK] Archivo \'%s\' enviado correctamente!' % fileName)
 			else:
-				logger.write('WARNING', '[LAN] El archivo \'%s\' fue rechazado!' % fileName)
+				logger.write('WARNING', '[NETWORK] El archivo \'%s\' fue rechazado!' % fileName)
 		except Exception as errorMessage:
-			logger.write('WARNING', '[LAN] Mensaje no enviado: %s' % str(errorMessage))
+			logger.write('WARNING', '[NETWORK] Mensaje no enviado: %s' % str(errorMessage))
 		finally:
 			# Cerramos los sockets que permitieron la conexión con el cliente
 			self.transmissionSocket.close()
@@ -206,9 +206,9 @@ class UdpTransmitter(threading.Thread):
 		'''Envío de mensaje simple'''
 		try:
 			self.transmissionSocket.sendto(self.messageToSend, (self.destinationIp, self.destinationPort))
-			logger.write('INFO', '[LAN] Mensaje enviado correctamente a ' + self.destinationIp + '  ' + str(self.destinationPort))
+			logger.write('DEBUG', '[NETWORK] Mensaje enviado correctamente a ' + self.destinationIp + '  ' + str(self.destinationPort))
 		except Exception as errorMessage:
-			logger.write('WARNING', '[LAN] Mensaje no enviado: %s' % str(errorMessage))
+			logger.write('WARNING', '[NETWORK] Mensaje no enviado: %s' % str(errorMessage))
 		finally:
 			# Cerramos los sockets que permitieron la conexión con el cliente
 			self.transmissionSocket.close()

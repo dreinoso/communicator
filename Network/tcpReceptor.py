@@ -50,10 +50,10 @@ class TcpReceptor(threading.Thread):
 			else: # Se trata de un mensaje simple, solo se guarda 
 				self.receptionBuffer.put(dataReceived)
 		except socket.error as errorMessage:
-			logger.write('WARNING', '[LAN] Error al intentar descargar el archivo \'%s\'.' % fileName)
+			logger.write('WARNING', '[NETWORK] Error al intentar descargar el archivo \'%s\'.' % fileName)
 		finally:
 			# Cierra la conexion del socket cliente
-			logger.write('DEBUG', '[LAN] \'%s\' terminado y cliente desconectado.' % self.getName())
+			logger.write('DEBUG', '[NETWORK] \'%s\' terminado y cliente desconectado.' % self.getName())
 
 	def receiveFileInstance(self):
 		'''Primero se recive la instancia FileMessage propiamente dicha, para luego preprarse
@@ -81,7 +81,7 @@ class TcpReceptor(threading.Thread):
 			# Verificamos si el archivo a descargar no existe en la carpeta 'DOWNLOADS'
 			if not os.path.isfile(relativeFilePath):
 				fileObject = open(relativeFilePath, 'w+')
-				logger.write('INFO', '[LAN] Descargando archivo \'%s\'...' % fileName)
+				logger.write('DEBUG', '[NETWORK] Descargando archivo \'%s\'...' % fileName)
 				self.remoteSocket.send('READY')
 				while True:
 					inputData = self.remoteSocket.recv(BUFFER_SIZE)
@@ -91,13 +91,13 @@ class TcpReceptor(threading.Thread):
 					else: 
 						fileObject.close()
 						message.received = True
-						logger.write('INFO', '[LAN] Archivo \'%s\' descargado correctamente!' % fileName)
+						logger.write('DEBUG', '[NETWORK] Archivo \'%s\' descargado correctamente!' % fileName)
 						break
 			else:
 				self.remoteSocket.send('FILE_EXISTS') # Comunicamos al transmisor que el archivo ya existe
-				logger.write('WARNING', '[LAN] El archivo \'%s\' ya existe! Imposible descargar.' % fileName)
+				logger.write('WARNING', '[NETWORK] El archivo \'%s\' ya existe! Imposible descargar.' % fileName)
 		except socket.error as errorMessage:
-			logger.write('WARNING', '[LAN] Error al intentar recibir una instancia de mensaje.')
+			logger.write('WARNING', '[NETWORK] Error al intentar recibir una instancia de mensaje.')
 		finally:
 			self.receptionBuffer.put(message)
 			self.remoteSocket.close()
@@ -118,7 +118,7 @@ class TcpReceptor(threading.Thread):
 			message = pickle.loads(serializedMessage) # Deserialización de la instancia
 			self.receptionBuffer.put(message)
 		except socket.error as errorMessage:
-			logger.write('WARNING', '[LAN] Error al intentar recibir una instancia de mensaje.')
+			logger.write('WARNING', '[NETWORK] Error al intentar recibir una instancia de mensaje.')
 		finally:
 			# En caso de que se trate de un archivo, se debe esperar a que se reciba por el mismo puerto, 
 			# por eso no se cierra el puerta 
@@ -142,7 +142,7 @@ class TcpReceptor(threading.Thread):
 			# Verificamos si el archivo a descargar no existe en la carpeta 'DOWNLOADS'
 			if not os.path.isfile(relativeFilePath):
 				fileObject = open(relativeFilePath, 'w+')
-				logger.write('INFO', '[LAN] Descargando archivo \'%s\'...' % fileName)
+				logger.write('DEBUG', '[NETWORK] Descargando archivo \'%s\'...' % fileName)
 				self.remoteSocket.send('READY')
 				while True:
 					inputData = self.remoteSocket.recv(BUFFER_SIZE)
@@ -152,13 +152,13 @@ class TcpReceptor(threading.Thread):
 					else: 
 						fileObject.close()
 						self.receptionBuffer.put('ARCHIVO_RECIBIDO: ' + fileName)
-						logger.write('INFO', '[LAN] Archivo \'%s\' descargado correctamente!' % fileName)
+						logger.write('DEBUG', '[NETWORK] Archivo \'%s\' descargado correctamente!' % fileName)
 						break
 			else:
 				self.remoteSocket.send('FILE_EXISTS') # Comunicamos al transmisor que el archivo ya existe
-				logger.write('WARNING', '[LAN] El archivo \'%s\' ya existe! Imposible descargar.' % fileName)
+				logger.write('WARNING', '[NETWORK] El archivo \'%s\' ya existe! Imposible descargar.' % fileName)
 		except socket.error as errorMessage:
-			logger.write('WARNING', '[LAN] Error al intentar descargar el archivo \'%s\'.' % fileName)
+			logger.write('WARNING', '[NETWORK] Error al intentar descargar el archivo \'%s\'.' % fileName)
 		finally:
 			# Cierra la conexion del socket cliente
 			self.remoteSocket.close()

@@ -66,7 +66,7 @@ class TcpTransmitter(threading.Thread):
 				fileDirectory, fileName = os.path.split(absoluteFilePath) # Se obtiene el filename sin la ruta.
 				fileName = self.messageToSend.fileName # Se guarda el nombre del archivo antes de serializar
 				self.messageToSend = pickle.dumps(self.messageToSend) # Serialización de la instancia
-				logger.write('DEBUG', '[LAN] Transfiriendo instancia de Mensaje.')
+				logger.write('DEBUG', '[NETWORK] Transfiriendo instancia de Mensaje.')
 				bytesSent = 0 
 				while bytesSent < len(self.messageToSend): # Comienza el envio de la instancia
 					outputData = self.messageToSend[bytesSent:bytesSent + BUFFER_SIZE]
@@ -86,7 +86,7 @@ class TcpTransmitter(threading.Thread):
 					fileObject.seek(fileBeginning, os.SEEK_SET)
 					# Envio del contenido del archivo
 					bytesSent = 0
-					logger.write('INFO', '[LAN] Transfiriendo archivo \'%s\'...' % fileName)
+					logger.write('DEBUG', '[NETWORK] Transfiriendo archivo \'%s\'...' % fileName)
 					while bytesSent < fileSize:
 						outputData = fileObject.read(BUFFER_SIZE)
 						bytesSent += len(outputData)
@@ -94,11 +94,11 @@ class TcpTransmitter(threading.Thread):
 						self.remoteSocket.recv(BUFFER_SIZE) # ACK
 					fileObject.close()
 					self.remoteSocket.send('END_OF_FILE')
-					logger.write('INFO', '[LAN] Instancia de Archivo \'%s\' enviado correctamente!' % fileName)
+					logger.write('DEBUG', '[NETWORK] Instancia de Archivo \'%s\' enviado correctamente!' % fileName)
 			else:
-				logger.write('WARNING', '[LAN] Envio cancelado, el archivo (' + self.messageToSend.fileName + ') para la instancia de archivo que se pretende enviar no existe.')
+				logger.write('WARNING', '[NETWORK] Envio cancelado, no se encuentra el archivo (' + self.messageToSend.fileName + ') para el envío.')
 		except Exception as errorMessage:
-			logger.write('WARNING', '[LAN] Instancia de Archivo (' + fileName +') no enviado: ' +  str(errorMessage))
+			logger.write('WARNING', '[NETWORK] Instancia de Archivo (' + fileName +') no enviado: ' +  str(errorMessage))
 		finally:
 			self.remoteSocket.close() # Cierra la conexion del socket cliente
 
@@ -109,7 +109,7 @@ class TcpTransmitter(threading.Thread):
 			self.remoteSocket.send('START_OF_MESSAGE_INSTANCE') # Indicamos al otro extremo que vamos a transmitir una instancia de mensaje
 			self.remoteSocket.recv(BUFFER_SIZE) # Espera de confirmación ACK
 			self.messageToSend = pickle.dumps(self.messageToSend) # Serialización de la instancia
-			logger.write('DEBUG', '[LAN] Transfiriendo instancia de Mensaje.')
+			logger.write('DEBUG', '[NETWORK] Transfiriendo instancia de Mensaje.')
 			bytesSent = 0 
 			while bytesSent < len(self.messageToSend): # Comienza el envio de la instancia
 				outputData = self.messageToSend[bytesSent:bytesSent + BUFFER_SIZE]
@@ -117,9 +117,9 @@ class TcpTransmitter(threading.Thread):
 				self.remoteSocket.send(outputData)
 				self.remoteSocket.recv(BUFFER_SIZE) # ACK
 			self.remoteSocket.send('END_OF_MESSAGE_INSTANCE')
-			logger.write('INFO', '[LAN] Instancia de archivo enviado correctamente!')				
+			logger.write('DEBUG', '[NETWORK] Instancia de archivo enviado correctamente!')				
 		except Exception as errorMessage:
-			logger.write('WARNING', '[LAN] Instancia de Mensaje no enviado: %s' % str(errorMessage))
+			logger.write('WARNING', '[NETWORK] Instancia de Mensaje no enviado: %s' % str(errorMessage))
 		finally:
 			self.remoteSocket.close() # Cerramos los sockets que permitieron la conexión con el cliente
 			
@@ -150,7 +150,7 @@ class TcpTransmitter(threading.Thread):
 				fileObject.seek(fileBeginning, os.SEEK_SET)
 				# Envio del contenido del archivo
 				bytesSent = 0
-				logger.write('INFO', '[LAN] Transfiriendo archivo \'%s\'...' % fileName)
+				logger.write('DEBUG', '[NETWORK] Transfiriendo archivo \'%s\'...' % fileName)
 				while bytesSent < fileSize:
 					outputData = fileObject.read(BUFFER_SIZE)
 					bytesSent += len(outputData)
@@ -158,9 +158,9 @@ class TcpTransmitter(threading.Thread):
 					self.remoteSocket.recv(BUFFER_SIZE) # ACK
 				fileObject.close()
 				self.remoteSocket.send('END_OF_FILE')
-				logger.write('INFO', '[LAN] Archivo \'%s\' enviado correctamente!' % fileName)
+				logger.write('DEBUG', '[NETWORK] Archivo \'%s\' enviado correctamente!' % fileName)
 		except Exception as errorMessage:
-			logger.write('WARNING', '[LAN] Archivo (' + self.messageToSend +') no enviado: ' +  str(errorMessage))
+			logger.write('WARNING', '[NETWORK] Archivo (' + self.messageToSend +') no enviado: ' +  str(errorMessage))
 		finally:
 			self.remoteSocket.close() # Cierra la conexion del socket cliente
 
@@ -168,8 +168,8 @@ class TcpTransmitter(threading.Thread):
 		'''Envío de mensaje simple'''
 		try:
 			self.remoteSocket.send(self.messageToSend)
-			logger.write('INFO', '[LAN] Mensaje enviado correctamente!')
+			logger.write('DEBUG', '[NETWORK] Mensaje enviado correctamente!')
 		except Exception as errorMessage:
-			logger.write('WARNING', '[LAN] Mensaje no enviado: %s' % str(errorMessage))
+			logger.write('WARNING', '[NETWORK] Mensaje no enviado: %s' % str(errorMessage))
 		finally:
 			self.remoteSocket.close() # Cierra la conexion del socket cliente

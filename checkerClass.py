@@ -21,36 +21,36 @@ TIME_REFRESH = 5
 
 class Checker(object):
 
-	lanThreadName = 'lanReceptor'
+	networkThreadName = 'networkReceptor'
 	smsThreadName = 'smsReceptor'
 	emailThreadName = 'emailReceptor'
 	gprsThreadName = 'gprsVerifyConnection'
 	bluetoothThreadName = 'bluetoothReceptor'
 
-	availableLan = False       # Indica si el modo LAN está disponible
+	availableNetwork = False       # Indica si el modo NETWORK está disponible
 	availableSms = False       # Indica si el modo SMS está disponible
 	availableEmail = False     # Indica si el modo EMAIL está disponible
 	availableBluetooth = False # Indica si el modo BLUTOOTH está disponible
 
-	threadNameList = [lanThreadName, smsThreadName, emailThreadName, gprsThreadName, bluetoothThreadName]
+	threadNameList = [networkThreadName, smsThreadName, emailThreadName, gprsThreadName, bluetoothThreadName]
 
 	isActive = False
 
-	def __init__(self, _modemSemaphore, _lanInstance, _gprsInstance, _emailInstance, _smsInstance, _bluetoothInstance):
+	def __init__(self, _modemSemaphore, _networkInstance, _gprsInstance, _emailInstance, _smsInstance, _bluetoothInstance):
 		self.modemSemaphore = _modemSemaphore
-		self.lanInstance = _lanInstance
+		self.networkInstance = _networkInstance
 		self.smsInstance = _smsInstance
 		self.gprsInstance = _gprsInstance
 		self.emailInstance = _emailInstance
 		self.bluetoothInstance = _bluetoothInstance
 
 	def __del__(self):
-		self.lanInstance.isActive = False
+		self.networkInstance.isActive = False
 		self.smsInstance.isActive = False
 		self.gprsInstance.isActive = False
 		self.emailInstance.isActive = False
 		self.bluetoothInstance.isActive = False
-		# Esperamos que terminen los hilos receptores lanzados
+		# Esperamos que terminen los hilos receptores networkzados
 		for receptorThread in threading.enumerate():
 			if receptorThread.getName() in self.threadNameList and receptorThread.isAlive():
 				receptorThread.join()
@@ -58,14 +58,14 @@ class Checker(object):
 
 	def verifyConnections(self):
 		while self.isActive:
-			self.availableLan = self.verifyLanConnection()
+			self.availableNetwork = self.verifyNetworkConnection()
 			self.availableSms = self.verifySmsConnection()
 			self.availableEmail = self.verifyEmailConnection()
 			self.availableBluetooth = self.verifyBluetoothConnection()
 			time.sleep(TIME_REFRESH)
 		logger.write('WARNING', '[CHECKER] Funcion \'%s\' terminada.' % inspect.stack()[0][3])
 
-	def verifyLanConnection(self):
+	def verifyNetworkConnection(self):
 		"""Se determina la disponibilidad de la comunicación por medio de comunicación Lan.
 		@return: Se determina si la comunicación por este medio se puede realizar.
 		@rtype: bool"""
@@ -82,26 +82,26 @@ class Checker(object):
 				# 'patternMatched.group()' devuelve la cadena (interfaz) que coincide con la RE
 				if (patternMatched.group() + '\n') not in activeInterfacesFile.read():
 					# Como la interfaz encontrada no está siendo usada, la ponemos a escuchar si no está activa
-					if not self.lanInstance.isActive:
+					if not self.networkInstance.isActive:
 						# Escribimos en nuestro archivo la interfaz a usar, para indicar que está ocupada
 						activeInterfacesFile.write(patternMatched.group() + '\n')
-						self.lanInstance.connect(patternMatched.group())
-						self.lanInstance.isActive = True
+						self.networkInstance.connect(patternMatched.group())
+						self.networkInstance.isActive = True
 						activeInterfacesFile.close()
-						lanThread = threading.Thread(target = self.lanInstance.receive, name = self.lanThreadName)
-						lanThread.start()
-						lanInfo = patternMatched.group() + ' - ' + self.lanInstance.localAddress
-						logger.write('INFO','[LAN] Listo para usarse (' + lanInfo + ').')
+						networkThread = threading.Thread(target = self.networkInstance.receive, name = self.networkThreadName)
+						networkThread.start()
+						networkInfo = patternMatched.group() + ' - ' + self.networkInstance.localAddress
+						logger.write('INFO','[NETWORK] Listo para usarse (' + networkInfo + ').')
 						return True
 				# Si la interfaz ya está en modo activo (funcionando), devolvemos True
-				elif self.lanInstance.isActive:
+				elif self.networkInstance.isActive:
 					return True
 		# Si ya no se encontró ninguna interfaz UP y ya estabamos escuchando, dejamos de hacerlo
-		if stateUP is False and self.lanInstance.isActive:
-			self.lanInstance.isActive = False
+		if stateUP is False and self.networkInstance.isActive:
+			self.networkInstance.isActive = False
 			# Eliminamos del archivo la interfaz usada en esta misma instancia
 			activeInterfacesFile = open('/tmp/activeInterfaces').read()
-			deletedActiveInterface = activeInterfacesFile.replace(self.lanInstance.localInterface + '\n', '')
+			deletedActiveInterface = activeInterfacesFile.replace(self.networkInstance.localInterface + '\n', '')
 			activeInterfacesFile = open('/tmp/activeInterfaces', 'w')
 			activeInterfacesFile.write(deletedActiveInterface)
 			activeInterfacesFile.close()

@@ -85,19 +85,19 @@ def main():
 				communicator.disconnectGprs()
 			# Opcion 5 - Mensaje de Prueba
 			elif optionSelected is'5':
-				communicator.send('Este es un mensaje de prueba.','client02')
+				communicator.send('Este es un mensaje de prueba.','client02','Bluetooth') # Prioridad por Bluetooth
 			# Opcion 6 - Instancia de mensaje de prueba
 			elif optionSelected is '6':
-				messageInstance = exampleClass.ExampleMessage('client02', 'Comunicardor Emisor Alfa', 5, 100, '')
+				messageInstance = exampleClass.ExampleMessage('client02', 'Comunicardor Emisor Alfa', 5, 100, 'SMS') # Prioridad por SMS
 				messageInstance.setAtribute1(55555)
 				messageInstance.setAtribute2('Este es el atributo 2 de una instancia mensaje')
 				communicator.send(messageInstance)
 			# Opción 7 - Envio de Archivo de prueba
 			elif optionSelected is '7':
-				communicator.send('imagen.jpg', 'client02')
+				communicator.send('imagen.jpg', 'client02') # Prioridad definida por configuración
 			# Opción 8 - Instancia de archivo de prueba
 			elif optionSelected is '8':
-				fileInstance = messageClass.FileMessage('client02', 'Comunicardor Emisor Alfa', 10, 100, '', 'imagen.jpg')
+				fileInstance = messageClass.FileMessage('client02', 'Comunicardor Emisor Alfa', 10, 100, 'Email', 'imagen.jpg') # Prioridad email
 				communicator.send(fileInstance)
 			# Opcion 9 - Salir
 			elif optionSelected is '9':

@@ -88,7 +88,7 @@ class UdpReceptor(threading.Thread):
 			# Verificamos si el archivo a descargar no existe en la carpeta 'DOWNLOADS'
 			if not os.path.isfile(relativeFilePath):
 				fileObject = open(relativeFilePath, 'w+')
-				logger.write('INFO', '[LAN] Descargando archivo \'%s\'...' % message.fileName)
+				logger.write('DEBUG', '[NETWORK] Descargando archivo \'%s\'...' % message.fileName)
 				self.transmissionSocket.sendto('READY', (self.remoteAddress, self.remotePort))
 				# Comenzamos a descargar el archivo
 				while True:
@@ -98,22 +98,22 @@ class UdpReceptor(threading.Thread):
 						self.transmissionSocket.sendto('ACK', (self.remoteAddress, self.remotePort))
 					else: 
 						fileObject.close()
-						logger.write('INFO', '[LAN] Archivo \'%s\' descargado correctamente!' % message.fileName)
+						logger.write('DEBUG', '[NETWORK] Archivo \'%s\' descargado correctamente!' % message.fileName)
 						message.received = True 
 						break
 			else:
 				# Comunicamos al transmisor que el archivo ya existe
 				self.transmissionSocket.sendto('FILE_EXISTS', (self.remoteAddress, self.remotePort))
-				logger.write('WARNING', '[LAN] El archivo \'%s\' ya existe! Imposible descargar.' % message.fileName)
+				logger.write('WARNING', '[NETWORK] El archivo \'%s\' ya existe! Imposible descargar.' % message.fileName)
 		except socket.error as errorMessage:
-			logger.write('WARNING', '[LAN] Error al intentar descargar el archivo')
+			logger.write('WARNING', '[NETWORK] Error al intentar descargar el archivo')
 		finally:
 			# Cerramos los sockets que permitieron la conexión con el cliente
 			self.transmissionSocket.close()
 			self.receptionSocket.close()
 			if message != None:
 				self.receptionBuffer.put(message)
-			logger.write('DEBUG', '[LAN] \'%s\' terminado y cliente desconectado.' % self.getName())
+			logger.write('DEBUG', '[NETWORK] \'%s\' terminado y cliente desconectado.' % self.getName())
 
 	def receiveMessageInstance(self):
 		'''Por medio de una sincronización de mensajes se recibe la cadena de a partes
@@ -132,12 +132,12 @@ class UdpReceptor(threading.Thread):
 			message = pickle.loads(serializedMessage) # Deserialización de la instancia
 			self.receptionBuffer.put(message)
 		except socket.error as errorMessage:
-			logger.write('WARNING', '[LAN] Error al intentar recibir instancia de mensaje.')
+			logger.write('WARNING', '[NETWORK] Error al intentar recibir instancia de mensaje.')
 		finally:
 			# Cerramos los sockets que permitieron la conexión con el cliente
 			self.transmissionSocket.close()
 			self.receptionSocket.close()
-			logger.write('DEBUG', '[LAN] \'%s\' terminado y cliente desconectado.' % self.getName())
+			logger.write('DEBUG', '[NETWORK] \'%s\' terminado y cliente desconectado.' % self.getName())
 
 	def receiveFile(self):
 		'''Para la recepción del archivo, primero se verifica que le archivo no 
@@ -160,7 +160,7 @@ class UdpReceptor(threading.Thread):
 			# Verificamos si el archivo a descargar no existe en la carpeta 'DOWNLOADS'
 			if not os.path.isfile(relativeFilePath):
 				fileObject = open(relativeFilePath, 'w+')
-				logger.write('INFO', '[LAN] Descargando archivo \'%s\'...' % fileName)
+				logger.write('DEBUG', '[NETWORK] Descargando archivo \'%s\'...' % fileName)
 				self.transmissionSocket.sendto('READY', (self.remoteAddress, self.remotePort))
 				# Comenzamos a descargar el archivo
 				while True:
@@ -170,17 +170,17 @@ class UdpReceptor(threading.Thread):
 						self.transmissionSocket.sendto('ACK', (self.remoteAddress, self.remotePort))
 					else: 
 						fileObject.close()
-						logger.write('INFO', '[LAN] Archivo \'%s\' descargado correctamente!' % fileName)
+						logger.write('DEBUG', '[NETWORK] Archivo \'%s\' descargado correctamente!' % fileName)
 						self.receptionBuffer.put('ARCHIVO_RECIBIDO: ' + fileName)
 						break
 			else:
 				# Comunicamos al transmisor que el archivo ya existe
 				self.transmissionSocket.sendto('FILE_EXISTS', (self.remoteAddress, self.remotePort))
-				logger.write('WARNING', '[LAN] El archivo \'%s\' ya existe! Imposible descargar.' % fileName)
+				logger.write('WARNING', '[NETWORK] El archivo \'%s\' ya existe! Imposible descargar.' % fileName)
 		except socket.error as errorMessage:
-			logger.write('WARNING', '[LAN] Error al intentar descargar el archivo \'%s\'.' % fileName)
+			logger.write('WARNING', '[NETWORK] Error al intentar descargar el archivo \'%s\'.' % fileName)
 		finally:
 			# Cerramos los sockets que permitieron la conexión con el cliente
 			self.transmissionSocket.close()
 			self.receptionSocket.close()
-			logger.write('DEBUG', '[LAN] \'%s\' terminado y cliente desconectado.' % self.getName())
+			logger.write('DEBUG', '[NETWORK] \'%s\' terminado y cliente desconectado.' % self.getName())
