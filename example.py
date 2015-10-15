@@ -74,7 +74,7 @@ def main():
 						messageRecived.setAtribute2('Se ha cambiado el atributo 2') # Prueba de un método
 						print '\tAtributo 2: ' + messageRecived.atribute2
 					elif messageRecived.startswith('ARCHIVO_RECIBIDO'):
-						print 'El archivo recibido es: ' + messageRecived.split()[1]
+						print 'El Archivo recibido es: ' + messageRecived.split()[1]
 					else:
 						print 'El mensaje recibido es: ' + messageRecived
 			# Opcion 3 - Conectar GPRS
@@ -85,10 +85,10 @@ def main():
 				communicator.disconnectGprs()
 			# Opcion 5 - Mensaje de Prueba
 			elif optionSelected is'5':
-				communicator.send('Este es un mensaje de prueba.','client02','Bluetooth') # Prioridad por Bluetooth
+				communicator.send('Este es un mensaje de prueba.','client02','') # Prioridad por Bluetooth
 			# Opcion 6 - Instancia de mensaje de prueba
 			elif optionSelected is '6':
-				messageInstance = exampleClass.ExampleMessage('client02', 'Comunicardor Emisor Alfa', 5, 100, 'SMS') # Prioridad por SMS
+				messageInstance = exampleClass.ExampleMessage('client02', 'Comunicardor Emisor Alfa', 5, 35, 'SMS') # Prioridad por SMS
 				messageInstance.setAtribute1(55555)
 				messageInstance.setAtribute2('Este es el atributo 2 de una instancia mensaje')
 				communicator.send(messageInstance)

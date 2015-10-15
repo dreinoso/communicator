@@ -40,6 +40,9 @@ class Network(object):
 	udpReceptionSocket = socket.socket
 	udpReceptionPort = JSON_CONFIG["NETWORK"]["UDP_PORT"]
 
+	udpTransmitterInstance = udpTransmitter.UdpTransmitter(localAddress)
+	tcpTransmitterInstance = tcpTransmitter.TcpTransmitter()
+
 	receptionBuffer = Queue.Queue()
 	isActive = False
 
@@ -49,6 +52,7 @@ class Network(object):
 		@param _receptionBuffer: Buffer para la recepción de datos
 		@type: list"""
 		self.receptionBuffer = _receptionBuffer
+		# TODO: Crear aca las instancias para la tranasmisión
 
 	def __del__(self):
 		"""Elminación de la instancia de esta clase, cerrando conexiones establecidas, para no dejar
@@ -62,6 +66,7 @@ class Network(object):
 			activeInterfacesFile.close()
 			self.udpReceptionSocket.close()
 			self.tcpReceptionSocket.close()
+			del udpTransmitterInstance
 		except Exception as errorMessage:
 			pass
 		finally:
@@ -97,7 +102,7 @@ class Network(object):
 			logger.write('WARNING', '[NETWORK] Excepción en "' + str(inspect.stack()[0][3]) + ' para TCP " (' +str(errorMessage) + ')')
 
 	
-	def send(self, destinationIp, destinationTcpPort, destinationUdpPort, messageToSend):
+	def send(self, message, destinationIp, destinationTcpPort, destinationUdpPort):
 		""" Envia una cadena de texto.
 		@param detinationIP: dirección IP del destinatario
 		@type emailDestination: str
@@ -109,22 +114,14 @@ class Network(object):
 		@type message: str """
 		try:
 			if(self.lanProtocol == 'UDP'):
-				# Lanzamos un hilo que se va a encargar de manejar la transmisión del mensaje
-				threadName = 'Thread-%s' % self.localAddress
-				transmitterThread = udpTransmitter.UdpTransmitter(threadName, messageToSend, self.localAddress, destinationIp, destinationUdpPort)
-				transmitterThread.start()
-				return True
+				return self.udpTransmitterInstance.send(message, destinationIp, destinationUdpPort)
 			else:
 				# Crea un nuevo socket que usa el protocolo de transporte especificado
 				remoteSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 				# Conecta el socket con el dispositivo remoto sobre el puerto especificado
 				remoteSocket.connect((destinationIp, destinationTcpPort))
 				logger.write('DEBUG', '[NETWORK] Conectado con la dirección \'%s\'.' % destinationIp)
-				# Lanzamos un hilo que se va a encargar de manejar la transmisión del mensaje
-				threadName = 'Thread-%s' % self.localAddress
-				transmitterThread = tcpTransmitter.TcpTransmitter(threadName, remoteSocket, messageToSend)
-				transmitterThread.start()
-				return True
+				return self.tcpTransmitterInstance.send(message, remoteSocket)
 		except socket.error as errorMessage:
 			logger.write('WARNING','[NETWORK] %s.' % errorMessage)
 			return False

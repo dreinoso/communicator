@@ -11,7 +11,7 @@
 
 # Direcciones IP y puertos permitidos
 allowedIpAddress = dict()
-allowedIpAddress = {'client02': ('192.168.0.42', 6000, 6010)}
+allowedIpAddress = {'client02': ('192.168.0.6', 6000, 6010)}
 
 # Direcciones MAC permitidas
 allowedMacAddress = dict()

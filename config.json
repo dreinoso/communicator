@@ -1,9 +1,19 @@
 {
+"COMMUNICATOR":
+	{
+	"NAME"					: "Datalogger_1",
+	"TRANSMISSION_BUFFER" 	: 10,
+	"RECEPTION_BUFFER" 		: 10,
+	"FILE_PRIORITY"			: 20,
+	"FILE_TIME_OUT"			: 300,
+	"MESSAGE_PRIORITY"		: 30,
+	"MESSAGE_TIME_OUT"		: 400
+	},
 "NETWORK":
 	{
 	"LOCAL_ADDRESS" : "localhost",
 	"SET_IP" 		: 1,
-	"PROTOCOL"      : "UDP",
+	"PROTOCOL"      : "TCP",
 	"TCP_PORT"      : 5000,
 	"UDP_PORT"      : 5010,
 	"CLOSE_PORT"	: 1
@@ -37,7 +47,7 @@
 	"NETWORK"   : 5,
 	"SMS"       : 4,
 	"EMAIL"     : 3,
-	"BLUETOOTH" : 2
+	"BLUETOOTH" : 0
 	},
 "FILE_LOGGING_LEVEL"    : "DEBUG",
 "CONSOLE_LOGGING_LEVEL" : "DEBUG"

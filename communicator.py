@@ -10,6 +10,7 @@
 import re
 import os
 import sys
+import time
 import json
 import Queue
 import pickle
@@ -20,6 +21,7 @@ sys.path.append(os.path.abspath('Network/'))
 sys.path.append(os.path.abspath('Email/'))
 sys.path.append(os.path.abspath('Modem/'))
 sys.path.append(os.path.abspath('Bluetooth/'))
+#TODO el módulo se pueda importar desde otra carpeta y aún asi poder hacer los imports relativos al módulo
 
 import networkClass
 import modemClass
@@ -27,8 +29,7 @@ import emailClass
 import bluetoothClass
 
 import messageClass
-#import fileMessageClass
-
+import transmitterClass
 import logger
 import contactList
 import checkerClass
@@ -36,7 +37,8 @@ import checkerClass
 JSON_FILE = 'config.json'
 JSON_CONFIG = json.load(open(JSON_FILE))
 
-receptionBuffer = Queue.Queue()
+receptionBuffer = Queue.Queue(JSON_CONFIG["COMMUNICATOR"]["RECEPTION_BUFFER"])
+transmissionBuffer = Queue.PriorityQueue(JSON_CONFIG["COMMUNICATOR"]["TRANSMISSION_BUFFER"])
 modemSemaphore = threading.Semaphore(value = 1)
 
 # Creamos las instancias de los periféricos
@@ -46,17 +48,12 @@ emailInstance = emailClass.Email(receptionBuffer)
 smsInstance = modemClass.Sms(receptionBuffer, modemSemaphore)
 bluetoothInstance = bluetoothClass.Bluetooth(receptionBuffer)
 
-#TODO el módulo se pueda importar desde otra carpeta y aún asi poder hacer los imports relativos al módulo
-
 # Creamos la instancia del checker y el hilo que va a verificar las conexiones
 checkerInstance = checkerClass.Checker(modemSemaphore, networkInstance, gprsInstance, emailInstance, smsInstance, bluetoothInstance)
 checkerThread = threading.Thread(target = checkerInstance.verifyConnections, name = 'checkerThread')
 
-networkPriority = 0
-smsPriority = 0
-emailPriority = 0
-bluetoothPriority = 0
-contactExists = False
+# Se crea la instancia para la transmisión de paquetes
+transmitterInstance = transmitterClass.Transmitter(transmissionBuffer,networkInstance, bluetoothInstance, emailInstance, smsInstance, checkerInstance)
 
 def open():
 	"""Se realiza la apertura, inicialización de los componentes que se tengan disponibles
@@ -71,111 +68,63 @@ def open():
 	# Lanzamos el hilo que comprueba las conexiones
 	checkerInstance.isActive = True
 	checkerThread.start()
+	transmitterInstance.isActive = True
+	transmitterInstance.start()
 
-
-def send(messageToSend, receiver = '', device = ''):
-	"""Se envia de modo inteligente un paquete de datos a un contacto previamente registrado
-	el mensaje se envia por el medio mas óptimo encontrado.
-	@param receiver: Nombre de contacto previamente registrado
-	@type receiver: str
-	@param messageToSend: Mensaje a ser enviado
-	@type receiver: str"""
-	global contactExists, networkPriority, bluetoothPriority, emailPriority, smsPriority
-	# Se establecen los parametros en caso de tratarse de una instancia
-	if isinstance(messageToSend, messageClass.Message): 
-		receiver = messageToSend.receiver
-		device = messageToSend.device
-		# Se debe almacenar el tamño para determinar si es demasiado grande para SMS
-		messageLength = len(pickle.dumps(messageToSend))
+def send(message, receiver = '', device = ''):
+	"""Se almacena en el buffer de transmisión el paquete a ser enviado, se guardara
+	en caso de que se hayan establecido parametros correctos. En caso de tratarse 
+	de un mensaje simple o archivo simple, se los convierte en Instancias para simplificar
+	el manejo del mensaje por el transmisor. Pero se envia unicamente la cadena de
+	texto o el archivo
+	@param message: paquete a ser enviado, ya sea mensaje (o instancia) o un archivo (o instancia)
+	@param receiver: es el contacto al que se envia el mensaje
+	@param device: modo de envío preferente para ese mensaje en particular (puede no definirse)"""
+	global transmissionBuffer, messageClass
+	if not transmissionBuffer.full():
+		if not isinstance(message,messageClass.Message):
+			# Control sobre un mensaje simple
+			if not isinstance(message,str):
+				logger.write('WARNING', '[COMMUNICATOR] Mensaje descartado, porque no es texto simple ni subclase Mensaje')
+			if receiver == '':
+				logger.write('WARNING', '[COMMUNICATOR] Mensaje descartado, no se especifico el receptor')
+			# En caso de que se encuetre el archivo se crea una instancia de archivo
+			relativeFilePath = message
+			absoluteFilePath = os.path.abspath(relativeFilePath)
+			if os.path.isfile(absoluteFilePath): 
+				# Se determinan los parametros de la instancia archivo por configuración
+				sender = JSON_CONFIG["COMMUNICATOR"]["NAME"] 
+				priority = JSON_CONFIG["COMMUNICATOR"]["FILE_PRIORITY"]
+				timeOut = JSON_CONFIG["COMMUNICATOR"]["FILE_TIME_OUT"]
+				# El nombre o ruta del archivo corresponde al mensaje
+				message = messageClass.FileMessage(receiver, sender, priority, timeOut, device, message)
+			else:
+				# Se determinan los parametros de la instancia mensaje por configuración
+				sender = JSON_CONFIG["COMMUNICATOR"]["NAME"] 
+				priority = JSON_CONFIG["COMMUNICATOR"]["MESSAGE_PRIORITY"]
+				timeOut = JSON_CONFIG["COMMUNICATOR"]["MESSAGE_TIME_OUT"]
+				textMessageTemp = message # Para no perder el mensaje de texto
+				message = messageClass.Message(receiver, sender, priority, timeOut, device)
+				message.textMessage = textMessageTemp # Se añade un campo para almacenar el mensaje
+			# Se añade un campo para no enviar esta instancia, porque corresponden a mensajes simples
+			message.sendInstance = False  
+		else:
+			message.sendInstance = True # Corresponde enviar la instancia  
+		# Se añade al mensaje un timestamp, lo mismo "sendInstance" solo sirven para
+		# el envio, se borran al dejar de ser necesarios => no transmitir datos innecesarios
+		message.timeStamp = time.time()
+		# Se añade el mensaje, la cola se encarga de la sincronización de la inserción
+		# la prioridad es una resta de 100 porque la priorityQueue saca primero la de prioridad
+		# de menor valor, que no va con la lógica de esta implementación. Entonces priority < 100
+		if message.priority > 100: 
+			message.priority = 99 # Se le da la máxima prioridad 
+			logger.write('WARNING', '[COMMUNICATOR] Se configuro una prioridad superior a las establecidas, se cambia por la máxima (99)')
+		# Se guarda también con el timeOut, entonces si la prioridad es la misma se
+		# decide por el segundo parametro, cual es menor.. Y si selecciona el timeOut
+		# determinara el mensaje más proximo a descartarse, que es el de mayor prioridad
+		transmissionBuffer.put((100 - message.priority, message.timeOut, message)) # Se almacena una Tupla
 	else:
-		messageLength = len(messageToSend)
-	# Determinamos si el contacto existe. Si no existe, no se intenta enviar por ningún medio.
-	if not contactExists:
-		networkPriority = 0
-		bluetoothPriority = 0
-		emailPriority = 0
-		smsPriority = 0
-		if contactList.allowedIpAddress.has_key(receiver) and checkerInstance.availableNetwork:
-			networkPriority = JSON_CONFIG["PRIORITY_LEVELS"]["NETWORK"]
-			if device == 'Network':		# En caso de preferencia de Red se da máxima prioridad
-				networkPriority = 10 
-			contactExists = True
-		if contactList.allowedMacAddress.has_key(receiver) and checkerInstance.availableBluetooth:
-			bluetoothPriority = JSON_CONFIG["PRIORITY_LEVELS"]["BLUETOOTH"]
-			if device == 'Bluetooth':
-				bluetoothPriority = 10
-			contactExists = True
-		if contactList.allowedEmails.has_key(receiver) and checkerInstance.availableEmail:
-			emailPriority = JSON_CONFIG["PRIORITY_LEVELS"]["EMAIL"]
-			if device == 'Email':
-				emailPriority = 10
-			contactExists = True
-		# Para SMS solo se habilita el modo si la cantidad de caracteres a enviar no supera el limite
-		if contactList.allowedNumbers.has_key(receiver) and checkerInstance.availableSms and (messageLength < JSON_CONFIG["SMS"]["CLARO_CHARACTER_LIMIT"]):
-			smsPriority = JSON_CONFIG["PRIORITY_LEVELS"]["SMS"]
-			if device == 'SMS':
-				smsPriority = 10
-			contactExists = True
-		if not contactExists:
-			logger.write('WARNING', '[COMUNICADOR] El contacto \'%s\' no se encuentra registrado.' % receiver)
-			return False
-	# Intentamos transmitir por NETWORK
-	if networkPriority != 0 and networkPriority >= bluetoothPriority and networkPriority >= emailPriority and networkPriority >= smsPriority:
-		destinationIp = contactList.allowedIpAddress[receiver][0]
-		destinationTcpPort = contactList.allowedIpAddress[receiver][1]
-		destinationUdpPort = contactList.allowedIpAddress[receiver][2]
-		resultOk = networkInstance.send(destinationIp, destinationTcpPort, destinationUdpPort, messageToSend)
-		if resultOk:
-			logger.write('INFO', '[NETWORK] Mensaje enviado a \'%s\'.' % receiver)
-			contactExists = False
-			return True
-		else:
-			logger.write('WARNING', '[NETWORK] Envio fallido. Reintentando con otro periférico.')
-			networkPriority = 0   # Entonces se descarta para la proxima selección
-			send(messageToSend, receiver) # Se reintenta con otros perifericos
-	# Intentamos transmitir por BLUETOOTH
-	elif bluetoothPriority != 0 and bluetoothPriority >= emailPriority and bluetoothPriority >= smsPriority:
-		destinationServiceName = contactList.allowedMacAddress[receiver][0]
-		destinationMAC = contactList.allowedMacAddress[receiver][1]
-		destinationUUID = contactList.allowedMacAddress[receiver][2]
-		resultOk = bluetoothInstance.send(destinationServiceName, destinationMAC, destinationUUID, messageToSend)
-		if resultOk:
-			logger.write('INFO', '[BLUETOOTH] Mensaje enviado a \'%s\'.' % receiver)
-			contactExists = False
-			return True
-		else:
-			logger.write('WARNING', '[BLUETOOTH] Envio fallido. Reintentando con otro periférico.')
-			bluetoothPriority = 0  # Entonces se descarta para la proxima selección
-			send(messageToSend, receiver) # Se reintenta con otros perifericos
-	# Intentamos transmitir por EMAIL
-	elif emailPriority != 0 and emailPriority >= smsPriority:
-		destinationEmail = contactList.allowedEmails[receiver]
-		resultOk  = emailInstance.send(destinationEmail, 'Proyecto Datalogger - Comunicador', messageToSend)
-		if resultOk:
-			logger.write('INFO', '[EMAIL] Mensaje enviado a \'%s\'.' % receiver)
-			contactExists = False
-			return True
-		else:
-			logger.write('WARNING', '[EMAIL] Envio fallido. Reintentando con otro periférico.')
-			emailPriority = 0      # Entonces se descarta para la proxima selección
-			send(messageToSend, receiver) # Se reintenta con otros perifericos
-	# Intentamos transmitir por SMS
-	elif smsPriority != 0:
-		destinationNumbsmsPriorityer = contactList.allowedNumbers[receiver]
-		resultOk = smsInstance.send(destinationNumber, messageToSend)
-		if resultOk:
-			logger.write('INFO', '[SMS] Mensaje enviado a \'%s\'.' % receiver)
-			contactExists = False
-			return True
-		else:
-			logger.write('WARNING', '[SMS] Envio fallido. Reintentando con otro periférico.')
-			smsPriority = 0 # Entonces se descarta para la proxima selección
-			send(messageToSend, receiver)
-	# No fue posible transmitir por ningún medio
-	else:
-		logger.write('WARNING', '[COMUNICADOR] No hay módulos para el envío de mensajes a \'%s\'.' % receiver)
-		contactExists = False
-		return False
+		logger.write('WARNING', '[COMMUNICATOR] El Buffer de transmisión esta lleno, no se puede enviar por el momento.')
 
 def receive():
 	"""Se obtiene de un buffer circular el mensaje recibido mas antiguo.
@@ -234,12 +183,15 @@ def disconnectGprs():
 
 def close():
 	"""Se cierran los componentes del sistema, unicamente los abiertos previamente"""
-	global checkerThread, receptionBuffer, checkerInstance
+	global checkerThread, receptionBuffer, transmissionBuffer, checkerInstance, transmitterInstance
 	global smsInstance, networkInstance, gprsInstance, bluetoothInstance, emailInstance
 	receptionBuffer.queue.clear()
+	#transmissionBuffer.queue.clear()
 	checkerInstance.isActive = False
+	transmitterInstance.isActive = False
 	checkerThread.join()
 	del checkerInstance
+	del transmitterInstance
 	del smsInstance
 	del networkInstance
 	del gprsInstance

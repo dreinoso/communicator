@@ -16,14 +16,24 @@ Corresponde a un módulo de comunicación inteligente para comunicación punto a
 	
 	{
 	# --------- CONFIGURACIÓN NETWORK ---------
+	"COMMUNICATOR":
+	{
+		"NAME"					: "Datalogger_1", 	# Nombre del Communicador para identificarse
+		"TRANSMISSION_BUFFER" 	: 10,				# Máxima cantidad de elementos para el buffer de transmissión
+		"RECEPTION_BUFFER" 		: 10,				# Máxima cantidad de elementos para el buffer de recepción
+		"FILE_PRIORITY"			: 20,				# Prioridad fija para archivos simples
+		"FILE_TIME_OUT"			: 300,				# Tiempo (en Segundos) para descarte de arcvhivo simple
+		"MESSAGE_PRIORITY"		: 30,				# Prioridad fija para mensajes simples
+		"MESSAGE_TIME_OUT"		: 400				# Tiempo (en Segundos) para descarte de mensaje simple
+		},
 	"NETWORK":
 		{
-		"LOCAL_ADDRESS" : "localhost", 		# (192.168.0.15) Dirección de Ip del Comunicador
-		"SET_IP" 	: 1,			# (0/1) Habilitado: Configura la dirección IP de manera automática, en base a la interfaz que se tenga disponible
+		"LOCAL_ADDRESS" : "localhost", 	# (192.168.0.15) Dirección de Ip del Comunicador
+		"SET_IP" 	: 1,				# (0/1) Habilitado: Configura la dirección IP de manera automática, en base a la interfaz que se tenga disponible
 		"PROTOCOL"      : "UDP",		# (UDP/TCP) Determinar el Protocolo a utilizar
 		"TCP_PORT"      : 5000,			# (1024 - 65635) Selección del puerto TCP para recepción de mensajes TCP
 		"UDP_PORT"      : 5010,			# (1024 - 65635) Selección del puerto UDP para recepción de mensajes UDP. No puede ser el mismo que el puerto TCP
-		"CLOSE_PORT"	: 1			# (0/1) Habilitado: Cierra los puertos TCP / UDP en caso de estar siendo ocupados por otro proceso
+		"CLOSE_PORT"	: 1				# (0/1) Habilitado: Cierra los puertos TCP / UDP en caso de estar siendo ocupados por otro proceso
 	 	},
 	# ------- CONFIGURACIÓN BLUETOOTH -------
 		# PROTOCOL
@@ -41,21 +51,21 @@ Corresponde a un módulo de comunicación inteligente para comunicación punto a
 	# ------- CONFIGURACIÓN EMAIL -------
 	"EMAIL":
 		{
-		"NAME"        : "client01",		# Nombre del administrador de la cuenta de correo
+		"NAME"        : "client01",			# Nombre del administrador de la cuenta de correo
 		"ACCOUNT"     : "client01.datalogger@gmail.com",  # Nombre de la cuenta de correo electrónico, debe ser una cuenta de google
 		"PASSWORD"    : "client01dl",		# Contraseña de la cuenta
 		"SMTP_SERVER" : "smtp.gmail.com",	# Servidor de correo para envio (De cambiar este paramétro el módulo podría no funcionar)
 		"IMAP_SERVER" : "imap.gmail.com",	# Servidor de correo para recepción (De cambiar este paramétro el módulo podría no funcionar)
-		"SMTP_PORT"   : 587,			# Número de puerto para envio (De cambiar este paramétro el módulo podría no funcionar)
-		"IMAP_PORT"   : 993			# Número de puerto para recepción (De cambiar este paramétro el módulo podría no funcionar)
+		"SMTP_PORT"   : 587,				# Número de puerto para envio (De cambiar este paramétro el módulo podría no funcionar)
+		"IMAP_PORT"   : 993					# Número de puerto para recepción (De cambiar este paramétro el módulo podría no funcionar)
 		},
 	# ------- CONFIGURACIÓN SMS -------
 	"SMS":
 		{
-		"CLARO_MESSAGES_CENTER"  : 543200000001,  # Centro de mensajes de claro, es para no rechazar esos mensajes
-		"CLARO_TELEPHONE_NUMBER" : 3516178949,  # N° de telefono del chip utilizado   
-		"CLARO_WEB_PAGE"         : 876966,	# Página web de claro, es para no rechazar esos mensajes
-		"CLARO_CHARACTER_LIMIT"  : 160 		# Limite de caracteres para mensajes de claro
+		"CLARO_MESSAGES_CENTER"  : 543200000001,  	# Centro de mensajes de claro, es para no rechazar esos mensajes
+		"CLARO_TELEPHONE_NUMBER" : 3516178949,  	# N° de telefono del chip utilizado   
+		"CLARO_WEB_PAGE"         : 876966,			# Página web de claro, es para no rechazar esos mensajes
+		"CLARO_CHARACTER_LIMIT"  : 160 				# Limite de caracteres para mensajes de claro
 		},
 	# ------- NIVELES DE PRIORIDAD -------
 		# 4 --> Alto
