@@ -6,6 +6,7 @@
 	@organization: UNC - Fcefyn
 	@date: Lunes 16 de Mayo de 2015 """
 
+import json
 import os
 import pickle
 import Queue
@@ -14,6 +15,9 @@ import threading
 
 import messageClass
 import logger
+
+JSON_FILE = 'config.json'
+JSON_CONFIG = json.load(open(JSON_FILE))
 
 # Tamano del buffer en bytes (cantidad de caracteres)
 BUFFER_SIZE = 1024
@@ -48,7 +52,7 @@ class TcpReceptor(threading.Thread):
 			elif dataReceived == 'START_OF_FILE':
 				self.receiveFile()
 			else: # Se trata de un mensaje simple, solo se guarda 
-				self.receptionBuffer.put(dataReceived)
+				self.receptionBuffer.put((100 - JSON_CONFIG["COMMUNICATOR"]["MESSAGE_PRIORITY"], dataReceived))
 		except socket.error as errorMessage:
 			logger.write('WARNING', '[NETWORK] Error al intentar descargar el archivo \'%s\'.' % fileName)
 		finally:
@@ -62,6 +66,7 @@ class TcpReceptor(threading.Thread):
 		archivo, pero tiene un control adicional. En caso de que el archivo se reciba se indica
 		en uno de los campos de la instancia recibida.'''
 		try:
+			message = ''
 			self.remoteSocket.send('ACK')
 			inputData = self.remoteSocket.recv(BUFFER_SIZE)
 			while inputData != 'END_OF_FILE_INSTANCE':
@@ -70,7 +75,6 @@ class TcpReceptor(threading.Thread):
 				self.remoteSocket.send('ACK')
 				inputData = self.remoteSocket.recv(BUFFER_SIZE)
 			message = pickle.loads(serializedMessage) # Deserialización de la instancia
-			
 			# Se prosigue con la recepcion del archivo
 			currentDirectory = os.getcwd()                 # Obtenemos el directorio actual de trabajo
 			fileName = message.fileName # Obtenemos el nombre del archivo a recibir
@@ -99,7 +103,8 @@ class TcpReceptor(threading.Thread):
 		except socket.error as errorMessage:
 			logger.write('WARNING', '[NETWORK] Error al intentar recibir una instancia de mensaje.')
 		finally:
-			self.receptionBuffer.put(message)
+			if message != None:
+				self.receptionBuffer.put((100 - message.priority, message))
 			self.remoteSocket.close()
 
 	def receiveMessageInstance(self):
@@ -116,14 +121,11 @@ class TcpReceptor(threading.Thread):
 				self.remoteSocket.send('ACK')
 				inputData = self.remoteSocket.recv(BUFFER_SIZE)
 			message = pickle.loads(serializedMessage) # Deserialización de la instancia
-			self.receptionBuffer.put(message)
+			self.receptionBuffer.put((100 - message.priority, message))
 		except socket.error as errorMessage:
 			logger.write('WARNING', '[NETWORK] Error al intentar recibir una instancia de mensaje.')
 		finally:
-			# En caso de que se trate de un archivo, se debe esperar a que se reciba por el mismo puerto, 
-			# por eso no se cierra el puerta 
-			if not isinstance(message, messageClass.FileMessage):
-				self.remoteSocket.close() # Cierra la conexion del socket cliente
+			self.remoteSocket.close() # Cierra la conexion del socket cliente
 
 	def receiveFile(self):
 		'''Para la recepción del archivo, primero se verifica que le archivo no 
@@ -151,7 +153,7 @@ class TcpReceptor(threading.Thread):
 						self.remoteSocket.send('ACK')
 					else: 
 						fileObject.close()
-						self.receptionBuffer.put('ARCHIVO_RECIBIDO: ' + fileName)
+						self.receptionBuffer.put((100 - JSON_CONFIG["COMMUNICATOR"]["FILE_PRIORITY"], 'ARCHIVO_RECIBIDO: ' + fileName))
 						logger.write('DEBUG', '[NETWORK] Archivo \'%s\' descargado correctamente!' % fileName)
 						break
 			else:

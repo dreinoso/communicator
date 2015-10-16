@@ -37,7 +37,7 @@ import checkerClass
 JSON_FILE = 'config.json'
 JSON_CONFIG = json.load(open(JSON_FILE))
 
-receptionBuffer = Queue.Queue(JSON_CONFIG["COMMUNICATOR"]["RECEPTION_BUFFER"])
+receptionBuffer = Queue.PriorityQueue(JSON_CONFIG["COMMUNICATOR"]["RECEPTION_BUFFER"])
 transmissionBuffer = Queue.PriorityQueue(JSON_CONFIG["COMMUNICATOR"]["TRANSMISSION_BUFFER"])
 modemSemaphore = threading.Semaphore(value = 1)
 
@@ -53,7 +53,7 @@ checkerInstance = checkerClass.Checker(modemSemaphore, networkInstance, gprsInst
 checkerThread = threading.Thread(target = checkerInstance.verifyConnections, name = 'checkerThread')
 
 # Se crea la instancia para la transmisión de paquetes
-transmitterInstance = transmitterClass.Transmitter(transmissionBuffer,networkInstance, bluetoothInstance, emailInstance, smsInstance, checkerInstance)
+transmitterInstance = transmitterClass.Transmitter(transmissionBuffer, networkInstance, bluetoothInstance, emailInstance, smsInstance, checkerInstance)
 
 def open():
 	"""Se realiza la apertura, inicialización de los componentes que se tengan disponibles
@@ -131,8 +131,8 @@ def receive():
 	@return: Mensaje recibido
 	@rtype: str"""
 	if receptionBuffer.qsize() > 0:
-		message = receptionBuffer.get(False) # False implica que no se bloquee esperando un elemento
-		return message
+		message = receptionBuffer.get_nowait()
+		return message[1] # Es una tupla y el primer elemento corresponde a la prioridad
 	else:
 		logger.write('INFO', '[COMUNICADOR] El buffer de mensajes esta vacio.')
 		return None
@@ -185,8 +185,8 @@ def close():
 	"""Se cierran los componentes del sistema, unicamente los abiertos previamente"""
 	global checkerThread, receptionBuffer, transmissionBuffer, checkerInstance, transmitterInstance
 	global smsInstance, networkInstance, gprsInstance, bluetoothInstance, emailInstance
-	receptionBuffer.queue.clear()
-	#transmissionBuffer.queue.clear()
+	del receptionBuffer # No hay metodo para limpiar la cola prioridad
+	del transmissionBuffer
 	checkerInstance.isActive = False
 	transmitterInstance.isActive = False
 	checkerThread.join()

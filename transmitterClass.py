@@ -6,6 +6,7 @@
 	@organization: UNC - Fcefyn
 	@date: Lunes 16 de Mayo de 2015 """
 
+import inspect
 import json
 import pickle
 import Queue
@@ -66,10 +67,12 @@ class Transmitter(threading.Thread):
 				else: # El tiempo expiro se debe descartar el mensaje
 					logger.write('WARNING', '[COMUNICADOR] Se descarta mensaje para el contacto "%s", expiro el tiempo .' % message.receiver)
 					del message # Como ya no esta en el buffer el mensaje se elimina
-			time.sleep(1) # Para no preguntar constantemente en el while 
+			time.sleep(1) 
+			# Para no preguntar constantemente en el while, además da tiempo a que 
+			# el mensaje tome alguno de los modos, sin que se los quite el siguiente
 			# TODO cambiar el sleep por un monitor que envie un signal en caso que se 
 			# vuelva a cargar el buffer
-		logger.write('WARNING', '[CHECKER] Funcion \'%s\' terminada.' % inspect.stack()[0][3])
+		logger.write('WARNING', '[TRANSMITTER] Funcion \'%s\' terminada.' % inspect.stack()[0][3])
 
 
 	def expectTransmission(self,message):

@@ -6,14 +6,18 @@
 	@organization: UNC - Fcefyn
 	@date: Lunes 16 de Mayo de 2015 """
 
-import logger
-import messageClass
-
+import json
 import os
+import pickle
 import Queue
 import socket
-import pickle
 import threading
+
+import messageClass
+import logger
+
+JSON_FILE = 'config.json'
+JSON_CONFIG = json.load(open(JSON_FILE))
 
 # Tamano del buffer en bytes (cantidad de caracteres)
 BUFFER_SIZE = 1024
@@ -112,7 +116,7 @@ class UdpReceptor(threading.Thread):
 			self.transmissionSocket.close()
 			self.receptionSocket.close()
 			if message != None:
-				self.receptionBuffer.put(message)
+				self.receptionBuffer.put((100 - message.priority, message))
 			logger.write('DEBUG', '[NETWORK] \'%s\' terminado y cliente desconectado.' % self.getName())
 
 	def receiveMessageInstance(self):
@@ -130,7 +134,7 @@ class UdpReceptor(threading.Thread):
 				self.transmissionSocket.sendto('ACK', (self.remoteAddress, self.remotePort))
 				inputData, addr = self.receptionSocket.recvfrom(BUFFER_SIZE)
 			message = pickle.loads(serializedMessage) # Deserialización de la instancia
-			self.receptionBuffer.put(message)
+			self.receptionBuffer.put((100 - message.priority, message))
 		except socket.error as errorMessage:
 			logger.write('WARNING', '[NETWORK] Error al intentar recibir instancia de mensaje.')
 		finally:
@@ -171,7 +175,7 @@ class UdpReceptor(threading.Thread):
 					else: 
 						fileObject.close()
 						logger.write('DEBUG', '[NETWORK] Archivo \'%s\' descargado correctamente!' % fileName)
-						self.receptionBuffer.put('ARCHIVO_RECIBIDO: ' + fileName)
+						self.receptionBuffer.put((100 - JSON_CONFIG["COMMUNICATOR"]["FILE_PRIORITY"], 'ARCHIVO_RECIBIDO: ' + fileName))
 						break
 			else:
 				# Comunicamos al transmisor que el archivo ya existe

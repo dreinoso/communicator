@@ -6,13 +6,6 @@
 	@organization: UNC - Fcefyn
 	@date: Lunes 16 de Mayo de 2015 """
 
-import logger
-import tcpTransmitter
-import udpTransmitter
-import udpReceptor
-import tcpReceptor
-import contactList
-
 import os
 import time
 import Queue
@@ -20,6 +13,13 @@ import socket
 import inspect
 import threading
 import json
+
+import logger
+import tcpTransmitter
+import udpTransmitter
+import udpReceptor
+import tcpReceptor
+import contactList
 
 TIMEOUT = 1.5
 BUFFER_SIZE = 1024
@@ -43,7 +43,7 @@ class Network(object):
 	udpTransmitterInstance = udpTransmitter.UdpTransmitter(localAddress)
 	tcpTransmitterInstance = tcpTransmitter.TcpTransmitter()
 
-	receptionBuffer = Queue.Queue()
+	receptionBuffer = Queue.PriorityQueue()
 	isActive = False
 
 	def __init__(self, _receptionBuffer):
@@ -183,7 +183,7 @@ class Network(object):
 					receptorThread.start()
 				else:
 					logger.write('DEBUG', '[NETWORK] Ha llegado un nuevo mensaje!')
-					self.receptionBuffer.put(data)
+					self.receptionBuffer.put((100 - JSON_CONFIG["COMMUNICATOR"]["MESSAGE_PRIORITY"], data))
 			except socket.timeout, errorMessage:
 				pass # Esta excepción es parte de la ejecución, no implica un error
 		self.udpReceptionSocket.close()

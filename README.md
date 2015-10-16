@@ -1,5 +1,5 @@
 #Módulo de Comunicación Inteligente
-Corresponde a un módulo de comunicación inteligente para comunicación punto a punto. Las comunicaciones que se pretenden son SMS, Email, Ethernet, Wifi y Bluetooth.
+Corresponde a un módulo de comunicación inteligente para comunicación punto a punto. Las comunicaciones que se pretenden son SMS, Email, Red, Wifi y Bluetooth.
 
 ##Requisitos del módulo
 	-Python 2.7
@@ -124,3 +124,4 @@ Para mayor entenimiento del módulo se recomienda analizar el archivo de ejemplo
 
 ##ISSUES
 	-En caso de excpeción y el programa no finalize correctamente se debe eliminar un archivo temporal de manera manual: sudo rm /tmp/activeInterfaces 
+	-Solo funciona modo Red con TCP y UDP
