@@ -215,7 +215,7 @@ class Sms(Modem):
 		# Control para determinar si se envia una instancia o un mensaje simple
 		if message.sendInstance:
 			del message.sendInstance
-			smsMessage = pickle.dumps(message)
+			smsMessage = 'IS_INSTANCE' + pickle.dumps(message) # TODO modificar recepción para deserializar
 			message.sendInstance = True # Si no lo envia, despues requiere este campo
 		else:
 			smsMessage = message.textMessage # Se saca el mensaje de la instancia
