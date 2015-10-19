@@ -41,11 +41,13 @@ class UdpTransmitter(object):
 		'''Dependiendo del tipo de mensaje de que se trate, el envio del mensaje
 		se comportara diferente'''
 		if isinstance(message, messageClass.FileMessage) and message.sendInstance:
+			del message.sendInstance # Se elimina el campo auxiliar, no es info util
 			return self.sendFileInstance(message, destinationIp, destinationPort)
 		elif isinstance(message, messageClass.FileMessage) and not message.sendInstance:
 			message = message.fileName
 			return self.sendFile(message, destinationIp, destinationPort)
 		elif isinstance(message, messageClass.Message) and message.sendInstance:
+			del message.sendInstance
 			return self.sendMessageInstance(message, destinationIp, destinationPort)
 		elif isinstance(message, messageClass.Message) and not message.sendInstance:
 			message = message.textMessage
@@ -62,59 +64,57 @@ class UdpTransmitter(object):
 		se recibió, no se podria hacer con una llamada a sendFile.'''
 		try:
 			transmissionSocket, receptionSocket, receptionPort = self.createSockets()
-			relativeFilePath = message.fileName
-			absoluteFilePath = os.path.abspath(relativeFilePath)
-			if os.path.isfile(absoluteFilePath): # En caso de que se encuetre el archivo lo envia
-				# Indicamos al otro extremo que vamos a transmitir un paquete, y que debe responder al puerto indicado
-				transmissionSocket.sendto('START_OF_FILE_INSTANCE ' + self.localAddress + ' ' +  str(receptionPort), (destinationIp, destinationPort))
-				# Establecemos el nuevo puerto destino al cual enviar el paquete
-				destinationPort, addr = receptionSocket.recvfrom(BUFFER_SIZE)
-				destinationPort = int(destinationPort)
-				fileDirectory, fileName = os.path.split(absoluteFilePath) # Se obtiene el filename sin la ruta.
-				message.fileName = fileName # Se guarda el nombre del archivo antes de serializar.
-				message = pickle.dumps(message)
-				# Emviamos la instancia, de ser menor a 1024 bytes el envio es de un solo paquete
-				logger.write('DEBUG', '[NETWORK] Transfiriendo instancia de Mensaje.')
+			# Indicamos al otro extremo que vamos a transmitir un paquete, y que debe responder al puerto indicado
+			transmissionSocket.sendto('START_OF_FILE_INSTANCE ' + self.localAddress + ' ' +  str(receptionPort), (destinationIp, destinationPort))
+			# Establecemos el nuevo puerto destino al cual enviar el paquete
+			destinationPort, addr = receptionSocket.recvfrom(BUFFER_SIZE)
+			destinationPort = int(destinationPort)
+			# Se obtiene el filename sin la ruta.
+			absoluteFilePath = os.path.abspath(message.fileName)
+			fileDirectory, fileName = os.path.split(absoluteFilePath) 
+			message.fileName = fileName # Se guarda el nombre del archivo antes de serializar.
+			message = pickle.dumps(message)
+			# Emviamos la instancia, de ser menor a 1024 bytes el envio es de un solo paquete
+			logger.write('DEBUG', '[NETWORK] Transfiriendo instancia de Mensaje.')
+			bytesSent = 0
+			while bytesSent < len(message):
+				outputData = message[bytesSent:bytesSent + BUFFER_SIZE]
+				bytesSent = bytesSent + BUFFER_SIZE
+				transmissionSocket.sendto(outputData, (destinationIp, destinationPort))
+				receivedData, addr = receptionSocket.recvfrom(BUFFER_SIZE) # ACK
+			transmissionSocket.sendto('END_OF_FILE_INSTANCE', (destinationIp, destinationPort))
+			# Se abre el archivo y se recibe confirmación para comenzar a transmitir (READY)
+			fileObject = open(absoluteFilePath, 'rb') 
+			receivedData, addr = receptionSocket.recvfrom(BUFFER_SIZE)
+			if receivedData == "READY":
+				# Guardamos la posición inicial del archivo (donde comienza)
+				fileBeginning = fileObject.tell()
+				# Apuntamos al final del archivo
+				fileObject.seek(0, os.SEEK_END)
+				# Obtenemos la posición final del mismo (que sería el tamaño)
+				fileSize = fileObject.tell()
+				# Apuntamos nuevamente al comienzo del archivo, para comenzar a transmitir
+				fileObject.seek(fileBeginning, os.SEEK_SET)
+				# Envio del contenido del archivo
 				bytesSent = 0
-				while bytesSent < len(message):
-					outputData = message[bytesSent:bytesSent + BUFFER_SIZE]
-					bytesSent = bytesSent + BUFFER_SIZE
+				logger.write('DEBUG', '[NETWORK] Transfiriendo archivo \'%s\'...' % fileName)
+				while bytesSent < fileSize:
+					outputData = fileObject.read(BUFFER_SIZE)
+					bytesSent += len(outputData)
 					transmissionSocket.sendto(outputData, (destinationIp, destinationPort))
 					receivedData, addr = receptionSocket.recvfrom(BUFFER_SIZE) # ACK
-				transmissionSocket.sendto('END_OF_FILE_INSTANCE', (destinationIp, destinationPort))
-				# Se abre el archivo y se recibe confirmación para comenzar a transmitir (READY)
-				fileObject = open(absoluteFilePath, 'rb') 
-				receivedData, addr = receptionSocket.recvfrom(BUFFER_SIZE)
-				if receivedData == "READY":
-					# Guardamos la posición inicial del archivo (donde comienza)
-					fileBeginning = fileObject.tell()
-					# Apuntamos al final del archivo
-					fileObject.seek(0, os.SEEK_END)
-					# Obtenemos la posición final del mismo (que sería el tamaño)
-					fileSize = fileObject.tell()
-					# Apuntamos nuevamente al comienzo del archivo, para comenzar a transmitir
-					fileObject.seek(fileBeginning, os.SEEK_SET)
-					# Envio del contenido del archivo
-					bytesSent = 0
-					logger.write('DEBUG', '[NETWORK] Transfiriendo archivo \'%s\'...' % fileName)
-					while bytesSent < fileSize:
-						outputData = fileObject.read(BUFFER_SIZE)
-						bytesSent += len(outputData)
-						transmissionSocket.sendto(outputData, (destinationIp, destinationPort))
-						receivedData, addr = receptionSocket.recvfrom(BUFFER_SIZE) # ACK
-					fileObject.close()
-					transmissionSocket.sendto('END_OF_FILE', (destinationIp, destinationPort))
-					logger.write('INFO', '[NETWORK] Instancia de Archivo \'%s\' enviada correctamente!' % fileName)
-					return True
-				else:
-					logger.write('WARNING', '[NETWORK] El archivo \'%s\' ya existe, fue rechazado!' % fileName)
-					return True # Para que no se vuelva a intentar el envio. El control esta en la notificación
+				fileObject.close()
+				transmissionSocket.sendto('END_OF_FILE', (destinationIp, destinationPort))
+				logger.write('INFO', '[NETWORK] Instancia de Archivo \'%s\' enviada correctamente!' % fileName)
+				return True
 			else:
-				logger.write('WARNING', '[NETWORK] Envio cancelado, no se encuentra el archivo (' + message.fileName + ') para el envio.')
+				logger.write('WARNING', '[NETWORK] El archivo \'%s\' ya existe, fue rechazado!' % fileName)
 				return True # Para que no se vuelva a intentar el envio. El control esta en la notificación
 		except Exception as errorMessage:
 			logger.write('WARNING', '[NETWORK] Instancia de Mensaje no enviado: %s' % str(errorMessage))
+			return False
 		finally:
+			message.sendInstance = True # En caso de no enviar se requiere el campo auxiliar
 			# Cerramos los sockets que permitieron la conexión con el cliente
 			transmissionSocket.close()
 			receptionSocket.close()
@@ -144,6 +144,7 @@ class UdpTransmitter(object):
 			logger.write('WARNING', '[NETWORK] Instancia de Mensaje no enviado: %s' % str(errorMessage))
 			return False
 		finally:
+			meesage.sendInstance = True
 			# Cerramos los sockets que permitieron la conexión con el cliente
 			transmissionSocket.close()
 			receptionSocket.close()

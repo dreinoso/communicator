@@ -86,8 +86,10 @@ def send(message, receiver = '', device = ''):
 			# Control sobre un mensaje simple
 			if not isinstance(message,str):
 				logger.write('WARNING', '[COMMUNICATOR] Mensaje descartado, porque no es texto simple ni subclase Mensaje')
+				return False
 			if receiver == '':
 				logger.write('WARNING', '[COMMUNICATOR] Mensaje descartado, no se especifico el receptor')
+				return False
 			# En caso de que se encuetre el archivo se crea una instancia de archivo
 			relativeFilePath = message
 			absoluteFilePath = os.path.abspath(relativeFilePath)
@@ -109,6 +111,13 @@ def send(message, receiver = '', device = ''):
 			# Se añade un campo para no enviar esta instancia, porque corresponden a mensajes simples
 			message.sendInstance = False  
 		else:
+			# Control de la existencia del archivo
+			if isinstance(message, messageClass.FileMessage):
+				relativeFilePath = message.fileName
+				absoluteFilePath = os.path.abspath(relativeFilePath)
+				if not os.path.isfile(absoluteFilePath): # En caso de que se encuetre el archivo lo envia
+					logger.write('WARNING', '[NETWORK] Envio cancelado, no se encuentra el archivo (' + message.fileName + ') para el envío.')
+					return False
 			message.sendInstance = True # Corresponde enviar la instancia  
 		# Se añade al mensaje un timestamp, lo mismo "sendInstance" solo sirven para
 		# el envio, se borran al dejar de ser necesarios => no transmitir datos innecesarios
@@ -123,8 +132,10 @@ def send(message, receiver = '', device = ''):
 		# decide por el segundo parametro, cual es menor.. Y si selecciona el timeOut
 		# determinara el mensaje más proximo a descartarse, que es el de mayor prioridad
 		transmissionBuffer.put((100 - message.priority, message.timeOut, message)) # Se almacena una Tupla
+		return True
 	else:
 		logger.write('WARNING', '[COMMUNICATOR] El Buffer de transmisión esta lleno, no se puede enviar por el momento.')
+		return False
 
 def receive():
 	"""Se obtiene de un buffer circular el mensaje recibido mas antiguo.

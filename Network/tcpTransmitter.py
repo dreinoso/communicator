@@ -25,14 +25,16 @@ class TcpTransmitter():
 		'''Dependiendo del tipo de mensaje de que se trate, el envio del mensaje
 		se comportara diferente'''
 		if isinstance(message, messageClass.FileMessage) and message.sendInstance:
-			return self.sendFileInstance(message, remoteSocket)
+			del message.sendInstance  # Se elimina el campo auxiliar, no es info útil
+			return self.sendFileInstance(message, remoteSocket) 
 		elif isinstance(message, messageClass.FileMessage) and not message.sendInstance:
 			message = message.fileName
 			return self.sendFile(message, remoteSocket)
 		elif isinstance(message, messageClass.Message) and message.sendInstance:
+			del message.sendInstance
 			return self.sendMessageInstance(message, remoteSocket)
 		elif isinstance(message, messageClass.Message) and not message.sendInstance:
-			message = message.textMessage
+			message = message.textMessage 
 			return self.sendMessage(message, remoteSocket)
 		else:
 			logger.write('DEBUG', '[NETWORK] Mensaje con formato que no correspondes')
@@ -46,58 +48,53 @@ class TcpTransmitter():
 		puerto. Además se permite que en el receptor determine en la instancia si el archivo 
 		se recibió, no se podria hacer con una llamada a sendFile.'''
 		try:
-			#Primero se intenta la apertura del archivo
-			relativeFilePath = message.fileName
-			absoluteFilePath = os.path.abspath(relativeFilePath)
-			if os.path.isfile(absoluteFilePath): # En caso de que se encuetre el archivo lo envia
-				fileDirectory, fileName = os.path.split(absoluteFilePath)
+			# Se obtiene el filename sin la ruta.
+			absoluteFilePath = os.path.abspath(message.fileName)
+			fileDirectory, fileName = os.path.split(absoluteFilePath) 
+			fileName = message.fileName # Se guarda el nombre del archivo antes de serializar
+			#Continua con el envio de la instancia si el archivo a enviar existe
+			remoteSocket.send('START_OF_FILE_INSTANCE')	# Indicamos al otro extremo que vamos a transmitir una instancia de mensaje
+			remoteSocket.recv(BUFFER_SIZE) # Espera de confirmación ACK
+			message = pickle.dumps(message) # Serialización de la instancia
+			logger.write('DEBUG', '[NETWORK] Transfiriendo instancia de Mensaje.')
+			bytesSent = 0 
+			while bytesSent < len(message): # Comienza el envio de la instancia
+				outputData = message[bytesSent:bytesSent + BUFFER_SIZE]
+				bytesSent = bytesSent + BUFFER_SIZE
+				remoteSocket.send(outputData)
+				remoteSocket.recv(BUFFER_SIZE) # ACK
+			remoteSocket.send('END_OF_FILE_INSTANCE')
+			# Se procede con la respuesta del receptor y envio del archivo
+			if remoteSocket.recv(BUFFER_SIZE) == "READY":
 				fileObject = open(absoluteFilePath, 'rb')
-				#Continua con el envio de la instancia si el archivo a enviar existe
-				remoteSocket.send('START_OF_FILE_INSTANCE')	# Indicamos al otro extremo que vamos a transmitir una instancia de mensaje
-				remoteSocket.recv(BUFFER_SIZE) # Espera de confirmación ACK
-				fileDirectory, fileName = os.path.split(absoluteFilePath) # Se obtiene el filename sin la ruta.
-				fileName = message.fileName # Se guarda el nombre del archivo antes de serializar
-				message = pickle.dumps(message) # Serialización de la instancia
-				logger.write('DEBUG', '[NETWORK] Transfiriendo instancia de Mensaje.')
-				bytesSent = 0 
-				while bytesSent < len(message): # Comienza el envio de la instancia
-					outputData = message[bytesSent:bytesSent + BUFFER_SIZE]
-					bytesSent = bytesSent + BUFFER_SIZE
+				# Guardamos la posición inicial del archivo (donde comienza)
+				fileBeginning = fileObject.tell()
+				# Apuntamos al final del archivo
+				fileObject.seek(0, os.SEEK_END)
+				# Obtenemos la posición final del mismo (que sería el tamaño)
+				fileSize = fileObject.tell()
+				# Apuntamos nuevamente al comienzo del archivo, para comenzar a transmitir
+				fileObject.seek(fileBeginning, os.SEEK_SET)
+				# Envio del contenido del archivo
+				bytesSent = 0
+				logger.write('DEBUG', '[NETWORK] Transfiriendo archivo \'%s\'...' % fileName)
+				while bytesSent < fileSize:
+					outputData = fileObject.read(BUFFER_SIZE)
+					bytesSent += len(outputData)
 					remoteSocket.send(outputData)
 					remoteSocket.recv(BUFFER_SIZE) # ACK
-				remoteSocket.send('END_OF_FILE_INSTANCE')
-				# Se procede con la respuesta del receptor y envio del archivo
-				if remoteSocket.recv(BUFFER_SIZE) == "READY":
-					# Guardamos la posición inicial del archivo (donde comienza)
-					fileBeginning = fileObject.tell()
-					# Apuntamos al final del archivo
-					fileObject.seek(0, os.SEEK_END)
-					# Obtenemos la posición final del mismo (que sería el tamaño)
-					fileSize = fileObject.tell()
-					# Apuntamos nuevamente al comienzo del archivo, para comenzar a transmitir
-					fileObject.seek(fileBeginning, os.SEEK_SET)
-					# Envio del contenido del archivo
-					bytesSent = 0
-					logger.write('DEBUG', '[NETWORK] Transfiriendo archivo \'%s\'...' % fileName)
-					while bytesSent < fileSize:
-						outputData = fileObject.read(BUFFER_SIZE)
-						bytesSent += len(outputData)
-						remoteSocket.send(outputData)
-						remoteSocket.recv(BUFFER_SIZE) # ACK
-					fileObject.close()
-					remoteSocket.send('END_OF_FILE')
-					logger.write('DEBUG', '[NETWORK] Instancia de Archivo \'%s\' enviado correctamente!' % fileName)
-					return True
-				else:
-					logger.write('WARNING', '[NETWORK] El archivo \'%s\' ya existe, fue rechazado!' % fileName)
-					return True # Para que no se vuelva a intentar el envio. El control esta en la notificación
+				fileObject.close()
+				remoteSocket.send('END_OF_FILE')
+				logger.write('DEBUG', '[NETWORK] Instancia de Archivo \'%s\' enviado correctamente!' % fileName)
+				return True
 			else:
-				logger.write('WARNING', '[NETWORK] Envio cancelado, no se encuentra el archivo (' + message.fileName + ') para el envío.')
-				return True # Porque el mensaje debe ser eliminado ya que no existe
+				logger.write('WARNING', '[NETWORK] El archivo \'%s\' ya existe, fue rechazado!' % fileName)
+				return True # Para que no se vuelva a intentar el envio. El control esta en la notificación	
 		except Exception as errorMessage:
 			logger.write('WARNING', '[NETWORK] Instancia de Archivo (' + fileName +') no enviado: ' +  str(errorMessage))
 			return False
 		finally: # Se ejecuta sin importar los return previos
+			message.sendInstance = True # En caso de error se requiere este campo auxiliar
 			remoteSocket.close() # Cierra la conexion del socket cliente
 
 	def sendMessageInstance(self, message, remoteSocket):
@@ -121,6 +118,7 @@ class TcpTransmitter():
 			logger.write('WARNING', '[NETWORK] Instancia de Mensaje no enviado: %s' % str(errorMessage))
 			return False
 		finally:
+			message.sendInstance = True
 			remoteSocket.close() # Cerramos los sockets que permitieron la conexión con el cliente
 			
 

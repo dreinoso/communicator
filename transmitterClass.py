@@ -63,7 +63,7 @@ class Transmitter(threading.Thread):
 				if message.timeOut > 0: # Todavia no vence el timeout y el mensaje es válido
 					transmitterThread = threading.Thread(target = self.expectTransmission(message), name = 'transmitterThread')
 					transmitterThread.start()
-					transmitterThread.join()
+					transmitterThread.join() # Este hilo no termina hasta que terminen sus hijos
 				else: # El tiempo expiro se debe descartar el mensaje
 					logger.write('WARNING', '[COMUNICADOR] Se descarta mensaje para el contacto "%s", expiro el tiempo .' % message.receiver)
 					del message # Como ya no esta en el buffer el mensaje se elimina
@@ -83,10 +83,15 @@ class Transmitter(threading.Thread):
 		Si en cambio se recibe False el mensaje no se pudo enviar, pero el mensaje
 		es correcto entonces debe volverse a guardar en el buffer. Los controles sobre
 		el envio se hacen en cada uno de los modos, estos deciden y notifican'''
+		# Se almacenan los campos auxiliares en caso de que se borren y el mensaje no se envie
+		timeStampTemp = message.timeStamp
+		sendInstanceTemp = message.sendInstance
 		resultOk = self.send(message, message.receiver, message.device)
 		if resultOk:
 			del message # Mensaje enviado por lo que se elimina
 		else: # Se vuelve a colocar el mensaje en buffer para ser enviado nuevamente
+			message.timeStamp = timeStampTemp
+			message.sendInstance = sendInstanceTemp
 			time.sleep(10) # Intervalo de tiempo entre envios sucesivos del mismo paquete
 			while self.transmissionBuffer.full():
 				time.sleep(2) # Espera a que haya lugar
@@ -106,6 +111,8 @@ class Transmitter(threading.Thread):
 		messageLength = len(pickle.dumps(message))
 		# Determinamos si el contacto existe. Si no existe, no se intenta enviar por ningún medio.
 		if not self.contactExists:
+			del message.timeStamp # Se elimina el campo auxiliar
+			# Se resetean las prioridades
 			self.networkPriority = 0
 			self.bluetoothPriority = 0
 			self.emailPriority = 0
