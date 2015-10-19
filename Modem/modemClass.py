@@ -206,19 +206,19 @@ class Sms(Modem):
 				break
 		logger.write('WARNING', '[SMS] Funcion \'%s\' terminada.' % inspect.stack()[0][3])
 
-	def send(self, telephoneNumber, smsMessage):
+	def send(self, telephoneNumber, message):
 		""" Envia el comando AT correspondiente para enviar un mensaje de texto.
 			@param telephoneNumber: numero de telefono del destinatario
 			@type telephoneNumber: int
-			@param smsMessage: mensaje de texto a enviar
-			@type smsMessage: str """
+			@param message: mensaje de texto a enviar
+			@type message: str """
 		# Control para determinar si se envia una instancia o un mensaje simple
-		sendInstanceTemp = smsMessage.sendInstance
-		if smsMessage.sendInstance:
-			del smsMessage.sendInstance
-			smsMessage = pickle.dumps(smsMessage)
+		if message.sendInstance:
+			del message.sendInstance
+			smsMessage = pickle.dumps(message)
+			message.sendInstance = True # Si no lo envia, despues requiere este campo
 		else:
-			smsMessage = smsMessage.textMessage # Se saca el mensaje de la instancia
+			smsMessage = message.textMessage # Se saca el mensaje de la instancia
 		atResult01 = self.sendAT('AT+CMGS="' + str(telephoneNumber) + '"\r') # Numero al cual enviar el Sms
 		atResult02 = self.sendAT(smsMessage + ascii.ctrl('z')) 				 # Mensaje de texto terminado en Ctrl+Z
 		# --------------------- Caso de envío EXITOSO ---------------------
@@ -227,7 +227,6 @@ class Sms(Modem):
 		# Ejemplo de atResult02[3]: OK\r\n
 		if self.atError:
 			print 'Ocurrió un problema al enviar el mensaje.'
-			smsMessage.sendInstance = sendInstanceTemp # Si no lo envia, despues requiere este campo
 			return False
 		else:
 			for i, resultElement in enumerate(atResult02):
