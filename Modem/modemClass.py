@@ -10,6 +10,7 @@
 	@date: Miercoles 17 de Junio de 2015 """
 
 import os
+import pickle
 import time
 import shlex
 import Queue
@@ -211,6 +212,13 @@ class Sms(Modem):
 			@type telephoneNumber: int
 			@param smsMessage: mensaje de texto a enviar
 			@type smsMessage: str """
+		# Control para determinar si se envia una instancia o un mensaje simple
+		sendInstanceTemp = smsMessage.sendInstance
+		if smsMessage.sendInstance:
+			del smsMessage.sendInstance
+			smsMessage = pickle.dumps(smsMessage)
+		else:
+			smsMessage = smsMessage.textMessage # Se saca el mensaje de la instancia
 		atResult01 = self.sendAT('AT+CMGS="' + str(telephoneNumber) + '"\r') # Numero al cual enviar el Sms
 		atResult02 = self.sendAT(smsMessage + ascii.ctrl('z')) 				 # Mensaje de texto terminado en Ctrl+Z
 		# --------------------- Caso de envío EXITOSO ---------------------
@@ -219,6 +227,7 @@ class Sms(Modem):
 		# Ejemplo de atResult02[3]: OK\r\n
 		if self.atError:
 			print 'Ocurrió un problema al enviar el mensaje.'
+			smsMessage.sendInstance = sendInstanceTemp # Si no lo envia, despues requiere este campo
 			return False
 		else:
 			for i, resultElement in enumerate(atResult02):

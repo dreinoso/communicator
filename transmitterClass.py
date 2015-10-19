@@ -107,8 +107,6 @@ class Transmitter(threading.Thread):
 		@type receiver: str
 		@param device: Dispositivo de envio preferente
 		@type device: str"""
-		# Se debe almacenar el tamño para determinar si es demasiado grande para SMS
-		messageLength = len(pickle.dumps(message))
 		# Determinamos si el contacto existe. Si no existe, no se intenta enviar por ningún medio.
 		if not self.contactExists:
 			del message.timeStamp # Se elimina el campo auxiliar
@@ -132,10 +130,14 @@ class Transmitter(threading.Thread):
 				if device == 'Email':
 					self.emailPriority = 10
 				self.contactExists = True
-			if contactList.allowedNumbers.has_key(receiver) and self.checkerInstance.availableSms: 
-				# Para SMS solo se habilita el modo si la cantidad de caracteres a enviar no supera el limite
-				# y el mensaje no es un archivo
-				if messageLength < JSON_CONFIG["SMS"]["CLARO_CHARACTER_LIMIT"] and not isinstance(message, messageClass.FileMessage):
+			if contactList.allowedNumbers.has_key(receiver) and self.checkerInstance.availableSms and not isinstance(message, messageClass.FileMessage): 
+				# Solo se habilita SMS si no es un archivo, o si la cantidad de caracteres 
+				# a enviar no supera el limite (que depende si es instancia o mensaje simple)
+				if message.sendInstance: 
+					messageLength = len(pickle.dumps(message))
+				else:
+					messageLength = len(message.textMessage)
+				if messageLength < JSON_CONFIG["SMS"]["CLARO_CHARACTER_LIMIT"]:
 					self.smsPriority = JSON_CONFIG["PRIORITY_LEVELS"]["SMS"]
 					if device == 'SMS':
 						self.smsPriority = 10
