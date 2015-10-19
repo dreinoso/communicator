@@ -101,7 +101,6 @@ class Sms(Modem):
 	smsHeaderList = list()
 	smsBodyList = list()
 
-	receptionBuffer = Queue.Queue()
 	isActive = False
 
 	def __init__(self, _receptionBuffer, _modemSemaphore):
@@ -184,8 +183,14 @@ class Sms(Modem):
 					logger.write('DEBUG','Procesando mensaje de ' + str(self.telephoneNumber))
 					# Comprobamos si el remitente del mensaje (un teléfono) esta registrado...
 					if self.telephoneNumber in contactList.allowedNumbers.values():
-						self.smsMessage = self.getSmsBody(self.smsBody) # Obtenemos el mensaje de texto
-						self.sendOutput(self.telephoneNumber, self.smsMessage) # -----> SOLO PARA LA DEMO <-----
+						smsMessage = self.getSmsBody(self.smsBody) # Obtenemos el mensaje de texto
+						if smsMessage.startswith('IS_INSTANCE'):
+							smsMessage = smsMessage[len('IS_INSTANCE'):] # Se quita la indicación de instancia
+							message = pickle.loads(smsMessage)
+							self.receptionBuffer.put((100 - message.priority, message))
+						else: 
+							self.receptionBuffer.put((100 - JSON_CONFIG["COMMUNICATOR"]["MESSAGE_PRIORITY"],smsMessage))
+						self.sendOutput(self.telephoneNumber, smsMessage) # -----> SOLO PARA LA DEMO <-----
 						print 'Mensaje procesado correctamente.'
 					else:
 						# ... caso contrario, verificamos si el mensaje proviene de la pagina web de CLARO...
@@ -194,8 +199,8 @@ class Sms(Modem):
 						# ... sino, comunicamos al usuario que no se encuentra registrado.
 						else:
 							logger.write('WARNING','[SMS] Imposible procesar una solicitud. El número no se encuentra registrado!')
-							self.smsMessage = 'Imposible procesar la solicitud. Usted no se encuentra registrado!'
-							#self.send(self.telephoneNumber, self.smsMessage)
+							smsMessage = 'Imposible procesar la solicitud. Usted no se encuentra registrado!'
+							#self.send(self.telephoneNumber, smsMessage)
 					self.smsIndex = self.getSmsIndex(self.smsHeader.split(',')[0]) # Obtenemos el índice del mensaje en memoria
 					self.removeSms(self.smsIndex) # Eliminamos el mensaje porque ya fue leído
 					self.smsAmount -= 1 # Decrementamos la cantidad de mensajes a procesar
