@@ -9,12 +9,14 @@
 
 import logger
 import contactList
+import messageClass
 
 import os
 import time
 import shlex
 import Queue
 import email
+import pickle
 import socket
 import inspect
 import smtplib
@@ -82,23 +84,43 @@ class Email(object):
 		except socket.error as emailError:
 			logger.write('ERROR','[EMAIL] %s.' % emailError)
 
-	def send(self, emailDestination, emailSubject, messageToSend):
-		""" Envia un mensaje de correo electronico.
+	def send(self, emailDestination, emailSubject, message):
+		""" Envia un mensaje de correo electronico. Debe determinar el tipo de mensaje
+		para determinar si enviar o no un archivo adjunto
 		@param emailDestination: correo electronico del destinatario
 		@type emailDestination: str
 		@param emailSubject: asunto del mensaje
 		@type emailSubject: str
-		@param messageToSend: correo electronico a enviar
-		@type messageToSend: str """
+		@param message: correo electronico a enviar
+		@type message: str """
+		if isinstance(message, messageClass.FileMessage) and message.sendInstance:
+			del message.sendInstance  # Se elimina el campo auxiliar, no es info útil
+			emailMessage = 'START_OF_FILE_INSTANCE ' + pickle.dumps(message)
+			message.sendInstance = True
+			return self.sendAttachment(emailDestination, message.fileName, emailMessage) 
+		elif isinstance(message, messageClass.FileMessage) and not message.sendInstance:
+			return self.sendAttachment(emailDestination, message.fileName, 'START_OF_FILE ' + message.fileName)
+		elif isinstance(message, messageClass.Message) and message.sendInstance:
+			del message.sendInstance  # Se elimina el campo auxiliar, no es info útil
+			emailMessage = 'START_OF_MESSAGE_INSTANCE ' + pickle.dumps(message)
+			message.sendInstance = True
+			return self.sendText(emailDestination, emailSubject, emailMessage) 
+		else: #isinstance(message, messageClass.Message) and not message.sendInstance:
+			emailMessage = message.textMessage 
+			return self.sendText(emailDestination, emailSubject, emailMessage) 
+
+	def sendText(self, emailDestination, emailSubject, message):
 		try:
 			# Se construye un mensaje simple
-			mimeText = MIMEText(messageToSend)
+			mimeText = MIMEText(message)
 			mimeText['From'] = '%s <%s>' % (JSON_CONFIG["EMAIL"]["NAME"], JSON_CONFIG["EMAIL"]["ACCOUNT"])
 			mimeText['To'] = emailDestination
 			mimeText['Subject'] = emailSubject
 			self.smtpServer.sendmail(mimeText['From'], mimeText['To'], mimeText.as_string())
+			logger.write('INFO', '[EMAIL] Mensaje enviado correctamente a ' + emailDestination)
 			return True
-		except Exception as e:
+		except Exception as errorMessage:
+			logger.write('WARNING', '[EMAIL] Mensaje no enviado, error: ' + str(errorMessage))
 			return False
 
 	def sendAttachment(self, emailDestination, fileToSend, messageToSend = 'Este email tiene un archivo adjunto.'):
@@ -139,13 +161,13 @@ class Email(object):
 				mimeMultipart.attach(attachmentFile)
 				mimeMultipart.attach(mimeText)
 				self.smtpServer.sendmail(mimeMultipart['From'], mimeMultipart['To'], mimeMultipart.as_string())
-				print 'Mensaje enviado.'
+				logger.write('INFO', '[EMAIL] Archivo ('+ fileName + ') enviado correctamente a ' + emailDestination)
 				return True
-			except Exception as e:
-				print 'Hubo un problema con el envío. Inténtelo nuevamente.'
+			except Exception as errorMessage:
+				logger.write('WARNING', '[EMAIL] Archivo no enviado, error: ' + str(errorMessage))
 				return False
 		else:
-			print 'El archivo no existe!'
+			print 'El archivo no existe!' # TODO borrar
 			return False
 
 	def receiveAttachment(self, emailHeader):
@@ -197,18 +219,31 @@ class Email(object):
 					emailSubject = self.getEmailSubject(emailReceived) # Almacenamos el asunto correspondiente
 					logger.write('DEBUG', '[EMAIL] Procesando correo de ' + sourceName + ' - ' + sourceEmail)
 					# Comprobamos si el remitente del mensaje (un correo) esta registrado...
+					#self.sendOutput(sourceEmail, emailSubject, emailBody) # -----> SOLO PARA LA DEMO <-----
 					if sourceEmail in contactList.allowedEmails.values():
 						for emailHeader in emailReceived.walk():
 							if emailHeader.get('Content-Disposition') is not None:
 								self.receiveAttachment(emailHeader)
 						emailBody = self.getEmailBody(emailReceived) # Obtenemos el cuerpo del email
-						if emailBody is not None:
-							#self.sendOutput(sourceEmail, emailSubject, emailBody) # -----> SOLO PARA LA DEMO <-----
-							self.receptionBuffer.put(emailBody)
+						#self.sendOutput(sourceEmail, emailSubject, emailBody) # -----> SOLO PARA LA DEMO <-----
+						if emailBody.startswith('START_OF_FILE_INSTANCE '):
+							emailBody = emailBody[len('START_OF_FILE_INSTANCE '):]
+							message = pickle.loads(emailBody)
+							self.receptionBuffer.put((100 - message.priority, message))	
+						elif emailBody.startswith('START_OF_FILE '):
+							emailBody = emailBody[len('START_OF_FILE '):]
+							self.receptionBuffer.put((100 - JSON_CONFIG["COMMUNICATOR"]["FILE_PRIORITY"], 'ARCHIVO_RECIBIDO: ' + emailBody))
+						elif emailBody.startswith('START_OF_MESSAGE_INSTANCE '):
+							emailBody = emailBody[len('START_OF_MESSAGE_INSTANCE '):]
+							message = pickle.loads(emailBody)
+							self.receptionBuffer.put((100 - message.priority, message))	
+						elif emailBody != None:
+							emailBody = emailBody[:emailBody.rfind('\r\n')] # Elimina el salto de línea del final
+							self.receptionBuffer.put((100 - JSON_CONFIG["COMMUNICATOR"]["MESSAGE_PRIORITY"], emailBody))
 					else:
 						logger.write('WARNING', '[EMAIL] Imposible procesar la solicitud. El correo no se encuentra registrado!')
 						messageToSend = 'Imposible procesar la solicitud. Usted no se encuentra registrado!'
-						self.send(sourceEmail, emailSubject, messageToSend)
+						self.sendText(sourceEmail, emailSubject, messageToSend)
 			# ... sino, dejamos de esperar mensajes
 			else:
 				break
@@ -258,7 +293,9 @@ class Email(object):
 		for emailHeader in emailReceived.walk():
 			if emailHeader.get_content_type() == 'text/plain':
 				plainText = emailHeader.get_payload()
-				plainText = plainText[:plainText.rfind('\r\n')] # Elimina el salto de línea del final
+				# Se debe convertir texto de DOS(windows) a UNIX (LINUX) porque 
+				# de la forma que lo devulve email, da errores en pickle
+				plainText = plainText.replace('\r\n', '\n')
 				break
 		# Si el cuerpo del email no está vacío, retornamos el texto plano
 		if plainText:
@@ -282,4 +319,4 @@ class Email(object):
 		except OSError as e: # El comando no fue encontrado (el ejecutable no existe)
 			emailBody = str(e)
 		finally:
-			self.send(sourceEmail, emailSubject, emailBody)
+			self.sendText(sourceEmail, emailSubject, emailBody)

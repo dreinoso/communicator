@@ -133,11 +133,11 @@ class Transmitter(threading.Thread):
 			if contactList.allowedNumbers.has_key(receiver) and self.checkerInstance.availableSms and not isinstance(message, messageClass.FileMessage): 
 				# Solo se habilita SMS si no es un archivo, o si la cantidad de caracteres 
 				# a enviar no supera el limite (que depende si es instancia o mensaje simple)
-				if message.sendInstance: 
+				if message.sendInstance:
 					messageLength = len(pickle.dumps(message))
 				else:
 					messageLength = len(message.textMessage)
-				if messageLength < JSON_CONFIG["SMS"]["CLARO_CHARACTER_LIMIT"]:
+				if messageLength < JSON_CONFIG["SMS"]["CHARACTER_LIMIT"]:
 					self.smsPriority = JSON_CONFIG["PRIORITY_LEVELS"]["SMS"]
 					if device == 'SMS':
 						self.smsPriority = 10
