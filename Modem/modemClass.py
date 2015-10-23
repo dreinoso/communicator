@@ -182,7 +182,7 @@ class Sms(Modem):
 					self.telephoneNumber = self.getTelephoneNumber(self.smsHeader) # Obtenemos el numero de telefono
 					logger.write('DEBUG','Procesando mensaje de ' + str(self.telephoneNumber))
 					# Comprobamos si el remitente del mensaje (un teléfono) esta registrado...
-					if self.telephoneNumber in contactList.allowedNumbers.values():
+					if self.telephoneNumber in contactList.allowedNumbers.values() or not JSON_CONFIG["COMMUNICATOR"]["RECEPTION_FILTER"]:
 						smsMessage = self.getSmsBody(self.smsBody) # Obtenemos el mensaje de texto
 						if smsMessage.startswith('IS_INSTANCE'):
 							smsMessage = smsMessage[len('IS_INSTANCE'):] # Se quita la indicación de instancia
