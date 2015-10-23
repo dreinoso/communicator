@@ -177,7 +177,7 @@ class Transmitter(threading.Thread):
 		# Intentamos transmitir por EMAIL
 		elif self.emailPriority != 0 and self.emailPriority >= self.smsPriority:
 			destinationEmail = contactList.allowedEmails[receiver]
-			resultOk  = self.emailInstance.send(destinationEmail, 'Proyecto Datalogger - Comunicador', message)
+			resultOk  = self.emailInstance.send(destinationEmail, JSON_CONFIG["EMAIL"]["SUBJECT"], message)
 			if resultOk:
 				self.contactExists = False
 				return True

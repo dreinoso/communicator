@@ -2,6 +2,7 @@
 "COMMUNICATOR":
 	{
 	"NAME"					: "Datalogger_1",
+	"RECEPTION_FILTER"		: 1,
 	"TRANSMISSION_BUFFER" 	: 10,
 	"RECEPTION_BUFFER" 		: 10,
 	"FILE_PRIORITY"			: 20,
@@ -30,6 +31,7 @@
 	"NAME"        : "client01",
 	"ACCOUNT"     : "client01.datalogger@gmail.com",
 	"PASSWORD"    : "client01dl",
+	"SUBJECT"	  : "Comunicador Inteligente",
 	"SMTP_SERVER" : "smtp.gmail.com",
 	"IMAP_SERVER" : "imap.gmail.com",
 	"SMTP_PORT"   : 587,

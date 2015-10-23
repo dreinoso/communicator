@@ -19,6 +19,7 @@ Corresponde a un módulo de comunicación inteligente para comunicación punto a
 	"COMMUNICATOR":
 	{
 		"NAME"					: "Datalogger_1", 	# Nombre del Communicador para identificarse
+		"RECEPTION_FILTER"		: 1,				# (0/1) Habilitado: Filtra los mensajes que no sean de contactos registrados
 		"TRANSMISSION_BUFFER" 	: 10,				# Máxima cantidad de elementos para el buffer de transmissión
 		"RECEPTION_BUFFER" 		: 10,				# Máxima cantidad de elementos para el buffer de recepción
 		"FILE_PRIORITY"			: 20,				# Prioridad fija para archivos simples
@@ -54,6 +55,7 @@ Corresponde a un módulo de comunicación inteligente para comunicación punto a
 		"NAME"        : "client01",			# Nombre del administrador de la cuenta de correo
 		"ACCOUNT"     : "client01.datalogger@gmail.com",  # Nombre de la cuenta de correo electrónico, debe ser una cuenta de google
 		"PASSWORD"    : "client01dl",		# Contraseña de la cuenta
+		"SUBJECT"	  : "Comunicador Inteligente", # Asunto para los mails que se envian
 		"SMTP_SERVER" : "smtp.gmail.com",	# Servidor de correo para envio (De cambiar este paramétro el módulo podría no funcionar)
 		"IMAP_SERVER" : "imap.gmail.com",	# Servidor de correo para recepción (De cambiar este paramétro el módulo podría no funcionar)
 		"SMTP_PORT"   : 587,				# Número de puerto para envio (De cambiar este paramétro el módulo podría no funcionar)
@@ -124,4 +126,4 @@ Para mayor entenimiento del módulo se recomienda analizar el archivo de ejemplo
 
 ##ISSUES
 	-En caso de excpeción y el programa no finalize correctamente se debe eliminar un archivo temporal de manera manual: sudo rm /tmp/activeInterfaces 
-	-Solo funciona modo Red con TCP y UDP
+	-No funciona el modo Bluetooth

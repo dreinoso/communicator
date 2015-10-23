@@ -220,7 +220,7 @@ class Email(object):
 					logger.write('DEBUG', '[EMAIL] Procesando correo de ' + sourceName + ' - ' + sourceEmail)
 					# Comprobamos si el remitente del mensaje (un correo) esta registrado...
 					#self.sendOutput(sourceEmail, emailSubject, emailBody) # -----> SOLO PARA LA DEMO <-----
-					if sourceEmail in contactList.allowedEmails.values():
+					if sourceEmail in contactList.allowedEmails.values() or not JSON_CONFIG["COMMUNICATOR"]["RECEPTION_FILTER"]:
 						for emailHeader in emailReceived.walk():
 							if emailHeader.get('Content-Disposition') is not None:
 								self.receiveAttachment(emailHeader)
