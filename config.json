@@ -8,7 +8,8 @@
 	"FILE_PRIORITY"			: 20,
 	"FILE_TIME_OUT"			: 300,
 	"MESSAGE_PRIORITY"		: 30,
-	"MESSAGE_TIME_OUT"		: 400
+	"MESSAGE_TIME_OUT"		: 400,
+	"RETRANSMISSION_TIME" 	: 4
 	},
 "NETWORK":
 	{
@@ -49,7 +50,7 @@
 	{
 	"NETWORK"   : 5,
 	"SMS"       : 4,
-	"EMAIL"     : 6,
+	"EMAIL"     : 0,
 	"BLUETOOTH" : 0
 	},
 "FILE_LOGGING_LEVEL"    : "DEBUG",

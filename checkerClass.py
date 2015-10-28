@@ -35,6 +35,7 @@ class Checker(object):
 	threadNameList = [networkThreadName, smsThreadName, emailThreadName, gprsThreadName, bluetoothThreadName]
 
 	isActive = False
+	emailTries = 0 # Para evitar los falsos posistivos de email
 
 	def __init__(self, _modemSemaphore, _networkInstance, _gprsInstance, _emailInstance, _smsInstance, _bluetoothInstance):
 		self.modemSemaphore = _modemSemaphore
@@ -161,12 +162,15 @@ class Checker(object):
 				self.emailInstance.isActive = True
 				emailThread = threading.Thread(target = self.emailInstance.receive, name = self.emailThreadName)
 				emailThread.start()
+				self.emailTries = 0
 				logger.write('INFO', '[EMAIL] Listo para usarse.')
 			return True
 		except:
-			if self.emailInstance.isActive:
+			self.emailTries = self.emailTries + 1
+			if self.emailInstance.isActive and self.emailTries > 3:
 				self.emailInstance.isActive = False
-			return False
+				return False
+			return True
 
 	def verifyBluetoothConnection(self):
 		"""Se determina la disponibilidad de la comunicación por medio de comunicación Bluetooth.

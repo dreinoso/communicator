@@ -63,7 +63,8 @@ class Transmitter(threading.Thread):
 				if message.timeOut > 0: # Todavia no vence el timeout y el mensaje es válido
 					transmitterThread = threading.Thread(target = self.expectTransmission(message), name = 'transmitterThread')
 					transmitterThread.start()
-					transmitterThread.join() # Este hilo no termina hasta que terminen sus hijos
+					# No se usa join porque cuando este hilo para, sus hijos deben
+					# terminar, de otro modo dejaria el programa en espera
 				else: # El tiempo expiro se debe descartar el mensaje
 					logger.write('WARNING', '[COMUNICADOR] Se descarta mensaje para el contacto "%s", expiro el tiempo .' % message.receiver)
 					del message # Como ya no esta en el buffer el mensaje se elimina
@@ -92,7 +93,7 @@ class Transmitter(threading.Thread):
 		else: # Se vuelve a colocar el mensaje en buffer para ser enviado nuevamente
 			message.timeStamp = timeStampTemp
 			message.sendInstance = sendInstanceTemp
-			time.sleep(10) # Intervalo de tiempo entre envios sucesivos del mismo paquete
+			time.sleep(JSON_CONFIG["COMMUNICATOR"]["RETRANSMISSION_TIME"]) # Intervalo de tiempo entre envios sucesivos del mismo paquete
 			while self.transmissionBuffer.full():
 				time.sleep(2) # Espera a que haya lugar
 			self.transmissionBuffer.put((100 - message.priority, message.timeOut, message)) 
