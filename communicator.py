@@ -36,30 +36,45 @@ import checkerClass
 
 JSON_FILE = 'config.json'
 JSON_CONFIG = json.load(open(JSON_FILE))
+logger.set() # Solo se setea una vez, todos los objetos usan esta misma configuración
 
-receptionBuffer = Queue.PriorityQueue(JSON_CONFIG["COMMUNICATOR"]["RECEPTION_BUFFER"])
-transmissionBuffer = Queue.PriorityQueue(JSON_CONFIG["COMMUNICATOR"]["TRANSMISSION_BUFFER"])
-modemSemaphore = threading.Semaphore(value = 1)
+receptionBuffer = ''
+transmissionBuffer = ''
+modemSemaphore = ''
 
-# Creamos las instancias de los periféricos
-networkInstance = networkClass.Network(receptionBuffer)
-gprsInstance = modemClass.Gprs(modemSemaphore)
-emailInstance = emailClass.Email(receptionBuffer)
-smsInstance = modemClass.Sms(receptionBuffer, modemSemaphore)
-bluetoothInstance = bluetoothClass.Bluetooth(receptionBuffer)
+networkInstance = ''
+gprsInstance = ''
+emailInstance = ''
+smsInstance = ''
+bluetoothInstance = ''
 
-# Creamos la instancia del checker y el hilo que va a verificar las conexiones
-checkerInstance = checkerClass.Checker(modemSemaphore, networkInstance, gprsInstance, emailInstance, smsInstance, bluetoothInstance)
-
-# Se crea la instancia para la transmisión de paquetes
-transmitterInstance = transmitterClass.Transmitter(transmissionBuffer, networkInstance, bluetoothInstance, emailInstance, smsInstance, checkerInstance)
+checkerInstance = ''	 # Hilo que va a verificar las conexiones
+transmitterInstance = '' # Hilo para la transmisión de paquetes
 
 def open():
 	"""Se realiza la apertura, inicialización de los componentes que se tengan disponibles
 	"""
+	global receptionBuffer, transmissionBuffer 
+	global modemSemaphore, networkInstance, gprsInstance, emailInstance, smsInstance, bluetoothInstance
 	global checkerInstance, transmitterInstance
 
-	logger.set() # Solo se setea una vez, todos los objetos usan esta misma configuración
+	receptionBuffer = Queue.PriorityQueue(JSON_CONFIG["COMMUNICATOR"]["RECEPTION_BUFFER"])
+	transmissionBuffer = Queue.PriorityQueue(JSON_CONFIG["COMMUNICATOR"]["TRANSMISSION_BUFFER"])
+	modemSemaphore = threading.Semaphore(value = 1)
+
+	# Creamos las instancias de los periféricos
+	networkInstance = networkClass.Network(receptionBuffer)
+	gprsInstance = modemClass.Gprs(modemSemaphore)
+	emailInstance = emailClass.Email(receptionBuffer)
+	smsInstance = modemClass.Sms(receptionBuffer, modemSemaphore)
+	bluetoothInstance = bluetoothClass.Bluetooth(receptionBuffer)
+
+	# Creamos la instancia del checker y el hilo que va a verificar las conexiones
+	checkerInstance = checkerClass.Checker(modemSemaphore, networkInstance, gprsInstance, emailInstance, smsInstance, bluetoothInstance)
+
+	# Se crea la instancia para la transmisión de paquetes
+	transmitterInstance = transmitterClass.Transmitter(transmissionBuffer, networkInstance, bluetoothInstance, emailInstance, smsInstance, checkerInstance)
+
 	checkerInstance.verifyNetworkConnection()
 	checkerInstance.verifySmsConnection()
 	checkerInstance.verifyEmailConnection()
@@ -200,15 +215,21 @@ def close():
 	"""Se cierran los componentes del sistema, unicamente los abiertos previamente"""
 	global receptionBuffer, transmissionBuffer, checkerInstance, transmitterInstance
 	global smsInstance, networkInstance, gprsInstance, bluetoothInstance, emailInstance
+	
+	del receptionBuffer
+	del transmissionBuffer
+
 	checkerInstance.isActive = False
 	checkerInstance.join()
 	del checkerInstance
+	
 	transmitterInstance.isActive = False
 	transmitterInstance.notEmpty.acquire() # Por si esta a la espera de mensajes
 	transmitterInstance.notEmpty.notify()
 	transmitterInstance.notEmpty.release()
 	transmitterInstance.join()
 	del transmitterInstance
+	
 	del smsInstance
 	del networkInstance
 	del gprsInstance
