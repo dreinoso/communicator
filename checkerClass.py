@@ -19,7 +19,7 @@ import logger
 
 TIME_REFRESH = 5
 
-class Checker(object):
+class Checker(threading.Thread):
 
 	networkThreadName = 'networkReceptor'
 	smsThreadName = 'smsReceptor'
@@ -38,6 +38,8 @@ class Checker(object):
 	emailTries = 0 # Para evitar los falsos posistivos de email
 
 	def __init__(self, _modemSemaphore, _networkInstance, _gprsInstance, _emailInstance, _smsInstance, _bluetoothInstance):
+		threading.Thread.__init__(self, name = 'CheckerThread')
+		self.isActive = True
 		self.modemSemaphore = _modemSemaphore
 		self.networkInstance = _networkInstance
 		self.smsInstance = _smsInstance
@@ -57,7 +59,7 @@ class Checker(object):
 				receptorThread.join()
 		logger.write('INFO', '[CHECKER] Objeto destruido.')
 
-	def verifyConnections(self):
+	def run(self):
 		while self.isActive:
 			self.availableNetwork = self.verifyNetworkConnection()
 			self.availableSms = self.verifySmsConnection()

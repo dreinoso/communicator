@@ -39,7 +39,10 @@ class Transmitter(threading.Thread):
 		@type: string
 		@type: Message"""
 		threading.Thread.__init__(self, name = 'TransmitterThread')
+		self.isActive = True
 		self.transmissionBuffer = _transmissionBuffer
+		# Condición para la espera pasiva del transmisor, a que llegue un mensaje
+		self.notEmpty = threading.Condition() 
 		self.networkInstance = _networkInstance
 		self.bluetoothInstance = _bluetoothInstance
 		self.emailInstance = _emailInstance
@@ -55,28 +58,32 @@ class Transmitter(threading.Thread):
  		adicionales en la instancia para determinar si el mensaje es válido en relación 
  		al timeout. De ser posible'''
 		while self.isActive: 
-			if not self.transmissionBuffer.empty():
+			while not self.transmissionBuffer.empty():
 				# Por ser una cola de prioridad, automaticamente entrega el elemeneto de mayor prioridad
 				message = self.transmissionBuffer.get_nowait()[2] # Devuelve una tupla, el tercer elemento es el mensaje 
 				elapsedTime = time.time() - message.timeStamp
 				message.timeOut = message.timeOut - elapsedTime
 				if message.timeOut > 0: # Todavia no vence el timeout y el mensaje es válido
-					transmitterThread = threading.Thread(target = self.expectTransmission(message), name = 'transmitterThread')
+					transmitterThread = threading.Thread(target = self.expectTransmission, args=(message,), name = 'ExcpectThread')
 					transmitterThread.start()
 					# No se usa join porque cuando este hilo para, sus hijos deben
 					# terminar, de otro modo dejaria el programa en espera
 				else: # El tiempo expiro se debe descartar el mensaje
 					logger.write('WARNING', '[COMUNICADOR] Se descarta mensaje para el contacto "%s", expiro el tiempo .' % message.receiver)
 					del message # Como ya no esta en el buffer el mensaje se elimina
-			time.sleep(1) 
-			# Para no preguntar constantemente en el while, además da tiempo a que 
-			# el mensaje tome alguno de los modos, sin que se los quite el siguiente
-			# TODO cambiar el sleep por un monitor que envie un signal en caso que se 
-			# vuelva a cargar el buffer
+				# Se espera 1 segundo porque asi se da tiempo a que se cargue el buffer
+				# de otro modo "nunca se llenaria" pero la memoria de la computadora
+				# estaria llenandose de mas del limite de mensajes para el buffer
+				time.sleep(1) 
+			
+			# Se espera una señal para continuar con la transmisión
+			self.notEmpty.acquire()
+			self.notEmpty.wait()
+			self.notEmpty.release()
+
 		logger.write('WARNING', '[TRANSMITTER] Funcion \'%s\' terminada.' % inspect.stack()[0][3])
 
-
-	def expectTransmission(self,message):
+	def expectTransmission(self, message):
 		'''Esta función es lanzada por un nuevo hilo, entonces puede quedarse esperando
 		el resultado del envio, sin generar una parada en el programa controlador.
 		En caso de que se reciva True no implica que el mensaje se ha enviado, solo 
@@ -96,7 +103,14 @@ class Transmitter(threading.Thread):
 			time.sleep(JSON_CONFIG["COMMUNICATOR"]["RETRANSMISSION_TIME"]) # Intervalo de tiempo entre envios sucesivos del mismo paquete
 			while self.transmissionBuffer.full():
 				time.sleep(2) # Espera a que haya lugar
+			wakeUpTransmitter = self.transmissionBuffer.empty() # Para despertar al transmisor
 			self.transmissionBuffer.put((100 - message.priority, message.timeOut, message)) 
+			
+			# Se despierta al hilo transmisor porque estaba esperando un mensaje
+			if wakeUpTransmitter: 
+				self.notEmpty.acquire()
+				self.notEmpty.notify()
+				self.notEmpty.release()
 
 	def send(self, message, receiver, device = ''):
 		"""Se envia de modo inteligente un paquete de datos a un contacto previamente 

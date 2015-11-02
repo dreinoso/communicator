@@ -50,15 +50,16 @@ bluetoothInstance = bluetoothClass.Bluetooth(receptionBuffer)
 
 # Creamos la instancia del checker y el hilo que va a verificar las conexiones
 checkerInstance = checkerClass.Checker(modemSemaphore, networkInstance, gprsInstance, emailInstance, smsInstance, bluetoothInstance)
-checkerThread = threading.Thread(target = checkerInstance.verifyConnections, name = 'checkerThread')
+#checkerThread = threading.Thread(target = checkerInstance.verifyConnections, name = 'checkerThread')
 
 # Se crea la instancia para la transmisión de paquetes
 transmitterInstance = transmitterClass.Transmitter(transmissionBuffer, networkInstance, bluetoothInstance, emailInstance, smsInstance, checkerInstance)
+#transmitterThread = threading.Thread(target = transmitterInstance.startTransmission, name = 'TransmitterThread')
 
 def open():
 	"""Se realiza la apertura, inicialización de los componentes que se tengan disponibles
 	"""
-	global checkerInstance, checkerThread
+	global checkerInstance, transmitterInstance
 
 	logger.set() # Solo se setea una vez, todos los objetos usan esta misma configuración
 	checkerInstance.verifyNetworkConnection()
@@ -66,9 +67,7 @@ def open():
 	checkerInstance.verifyEmailConnection()
 	checkerInstance.verifyBluetoothConnection()
 	# Lanzamos el hilo que comprueba las conexiones
-	checkerInstance.isActive = True
-	checkerThread.start()
-	transmitterInstance.isActive = True
+	checkerInstance.start()
 	transmitterInstance.start()
 
 def send(message, receiver = '', device = ''):
@@ -128,10 +127,17 @@ def send(message, receiver = '', device = ''):
 		if message.priority > 100: 
 			message.priority = 99 # Se le da la máxima prioridad 
 			logger.write('WARNING', '[COMMUNICATOR] Se configuro una prioridad superior a las establecidas, se cambia por la máxima (99)')
+		wakeUpTransmitter = transmissionBuffer.empty()
 		# Se guarda también con el timeOut, entonces si la prioridad es la misma se
 		# decide por el segundo parametro, cual es menor.. Y si selecciona el timeOut
 		# determinara el mensaje más proximo a descartarse, que es el de mayor prioridad
 		transmissionBuffer.put((100 - message.priority, message.timeOut, message)) # Se almacena una Tupla
+		if wakeUpTransmitter:
+			# Se despierta al hilo transmisor porque estaba esperando un mensaje
+			transmitterInstance.notEmpty.acquire()
+			transmitterInstance.notEmpty.notify()
+			transmitterInstance.notEmpty.release()
+		logger.write('DEBUG', '[COMMUNICATOR] Paquete almacenado en transmisor')
 		return True
 	else:
 		logger.write('WARNING', '[COMMUNICATOR] El Buffer de transmisión esta lleno, no se puede enviar por el momento.')
@@ -194,14 +200,16 @@ def disconnectGprs():
 
 def close():
 	"""Se cierran los componentes del sistema, unicamente los abiertos previamente"""
-	global checkerThread, receptionBuffer, transmissionBuffer, checkerInstance, transmitterInstance
+	global receptionBuffer, transmissionBuffer, checkerInstance, transmitterInstance
 	global smsInstance, networkInstance, gprsInstance, bluetoothInstance, emailInstance
-	del receptionBuffer # No hay metodo para limpiar la cola prioridad
-	del transmissionBuffer
 	checkerInstance.isActive = False
-	transmitterInstance.isActive = False
-	checkerThread.join()
+	checkerInstance.join()
 	del checkerInstance
+	transmitterInstance.isActive = False
+	transmitterInstance.notEmpty.acquire() # Por si esta a la espera de mensajes
+	transmitterInstance.notEmpty.notify()
+	transmitterInstance.notEmpty.release()
+	transmitterInstance.join()
 	del transmitterInstance
 	del smsInstance
 	del networkInstance
