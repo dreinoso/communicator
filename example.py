@@ -46,6 +46,7 @@ def main():
 						print 'El cliente no existe. Operación abortada.'
 						continue
 				elif showClients is 'N' or showClients is 'n':
+					receiver = raw_input('Cliente a enviar: ')
 					messageToSend = raw_input('Mensaje/archivo a enviar: ')
 				else:
 					print 'Abortado.'
