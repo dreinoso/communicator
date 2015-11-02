@@ -24,7 +24,10 @@ def main():
 	print '\t\t6 - Enviar instancia mensaje preestablecido'
 	print '\t\t7 - Enviar archivo simple preestablecido'
 	print '\t\t8 - Enviar instancia archivo preestablecido'
-	print '\t\t9 - Salir\n'
+	print '\t\t9 - Salir'
+	print '\t\tc - DEBUG: Cerrar Comunicador'
+	print '\t\ta - DEBUG: Abrir Comunicador\n'
+
 
 	print 'Configurando el módulo de comunicación...'
 	communicator.open() # Se abre el comunicador para detectar medios
@@ -102,6 +105,10 @@ def main():
 			# Opcion 9 - Salir
 			elif optionSelected is '9':
 				endMain = True
+			elif optionSelected is 'c':
+				communicator.close()
+			elif optionSelected is 'a':
+				communicator.open()
 			# Opcion inválida
 			else:
 				print 'Opción inválida!'
