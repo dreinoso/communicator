@@ -39,7 +39,6 @@ class Checker(threading.Thread):
 
 	def __init__(self, _modemSemaphore, _networkInstance, _gprsInstance, _emailInstance, _smsInstance, _bluetoothInstance):
 		threading.Thread.__init__(self, name = 'CheckerThread')
-		self.isActive = True
 		self.modemSemaphore = _modemSemaphore
 		self.networkInstance = _networkInstance
 		self.smsInstance = _smsInstance
@@ -60,6 +59,7 @@ class Checker(threading.Thread):
 		logger.write('INFO', '[CHECKER] Objeto destruido.')
 
 	def run(self):
+		self.isActive = True
 		while self.isActive:
 			self.availableNetwork = self.verifyNetworkConnection()
 			self.availableSms = self.verifySmsConnection()

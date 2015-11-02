@@ -50,11 +50,9 @@ bluetoothInstance = bluetoothClass.Bluetooth(receptionBuffer)
 
 # Creamos la instancia del checker y el hilo que va a verificar las conexiones
 checkerInstance = checkerClass.Checker(modemSemaphore, networkInstance, gprsInstance, emailInstance, smsInstance, bluetoothInstance)
-#checkerThread = threading.Thread(target = checkerInstance.verifyConnections, name = 'checkerThread')
 
 # Se crea la instancia para la transmisión de paquetes
 transmitterInstance = transmitterClass.Transmitter(transmissionBuffer, networkInstance, bluetoothInstance, emailInstance, smsInstance, checkerInstance)
-#transmitterThread = threading.Thread(target = transmitterInstance.startTransmission, name = 'TransmitterThread')
 
 def open():
 	"""Se realiza la apertura, inicialización de los componentes que se tengan disponibles

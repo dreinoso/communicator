@@ -39,7 +39,6 @@ class Transmitter(threading.Thread):
 		@type: string
 		@type: Message"""
 		threading.Thread.__init__(self, name = 'TransmitterThread')
-		self.isActive = True
 		self.transmissionBuffer = _transmissionBuffer
 		# Condición para la espera pasiva del transmisor, a que llegue un mensaje
 		self.notEmpty = threading.Condition() 
@@ -57,6 +56,7 @@ class Transmitter(threading.Thread):
  		'''Toma del buffer una instancia mensaje (la de mayor prioridad) con parametros 
  		adicionales en la instancia para determinar si el mensaje es válido en relación 
  		al timeout. De ser posible'''
+ 		self.isActive = True
 		while self.isActive: 
 			while not self.transmissionBuffer.empty():
 				# Por ser una cola de prioridad, automaticamente entrega el elemeneto de mayor prioridad
