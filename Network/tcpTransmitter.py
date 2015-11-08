@@ -28,7 +28,6 @@ class TcpTransmitter():
 			del message.sendInstance  # Se elimina el campo auxiliar, no es info útil
 			return self.sendFileInstance(message, remoteSocket) 
 		elif isinstance(message, messageClass.FileMessage) and not message.sendInstance:
-			message = message.fileName
 			return self.sendFile(message, remoteSocket)
 		elif isinstance(message, messageClass.Message) and message.sendInstance:
 			del message.sendInstance
@@ -49,24 +48,24 @@ class TcpTransmitter():
 		se recibió, no se podria hacer con una llamada a sendFile.'''
 		try:
 			# Se obtiene el filename sin la ruta.
-			absoluteFilePath = os.path.abspath(message.fileName)
-			fileDirectory, fileName = os.path.split(absoluteFilePath) 
-			fileName = message.fileName # Se guarda el nombre del archivo antes de serializar
+			fileDirectory, fileName = os.path.split(message.fileName) 
+			filePath = message.fileName # Se guarda el path del archivo en caso de no enviar
+			message.fileName = filename # Solo se debe enviar el nombre
 			#Continua con el envio de la instancia si el archivo a enviar existe
 			remoteSocket.send('START_OF_FILE_INSTANCE')	# Indicamos al otro extremo que vamos a transmitir una instancia de mensaje
 			remoteSocket.recv(BUFFER_SIZE) # Espera de confirmación ACK
-			message = pickle.dumps(message) # Serialización de la instancia
+			messageSerialized = pickle.dumps(message) # Serialización de la instancia
 			logger.write('DEBUG', '[NETWORK] Transfiriendo instancia de Mensaje.')
 			bytesSent = 0 
-			while bytesSent < len(message): # Comienza el envio de la instancia
-				outputData = message[bytesSent:bytesSent + BUFFER_SIZE]
+			while bytesSent < len(messageSerialized): # Comienza el envio de la instancia
+				outputData = messageSerialized[bytesSent:bytesSent + BUFFER_SIZE]
 				bytesSent = bytesSent + BUFFER_SIZE
 				remoteSocket.send(outputData)
 				remoteSocket.recv(BUFFER_SIZE) # ACK
 			remoteSocket.send('END_OF_FILE_INSTANCE')
 			# Se procede con la respuesta del receptor y envio del archivo
 			if remoteSocket.recv(BUFFER_SIZE) == "READY":
-				fileObject = open(absoluteFilePath, 'rb')
+				fileObject = open(filePath, 'rb')
 				# Guardamos la posición inicial del archivo (donde comienza)
 				fileBeginning = fileObject.tell()
 				# Apuntamos al final del archivo
@@ -95,6 +94,7 @@ class TcpTransmitter():
 			return False
 		finally: # Se ejecuta sin importar los return previos
 			message.sendInstance = True # En caso de error se requiere este campo auxiliar
+			message.fileName = filePath # Se restaura el path absoluto
 			remoteSocket.close() # Cierra la conexion del socket cliente
 
 	def sendMessageInstance(self, message, remoteSocket):
@@ -103,11 +103,11 @@ class TcpTransmitter():
 		try:
 			remoteSocket.send('START_OF_MESSAGE_INSTANCE') # Indicamos al otro extremo que vamos a transmitir una instancia de mensaje
 			remoteSocket.recv(BUFFER_SIZE) # Espera de confirmación ACK
-			message = pickle.dumps(message) # Serialización de la instancia
+			messageSerialized = pickle.dumps(message) # Serialización de la instancia
 			logger.write('DEBUG', '[NETWORK] Transfiriendo instancia de Mensaje.')
 			bytesSent = 0 
-			while bytesSent < len(message): # Comienza el envio de la instancia
-				outputData = message[bytesSent:bytesSent + BUFFER_SIZE]
+			while bytesSent < len(messageSerialized): # Comienza el envio de la instancia
+				outputData = messageSerialized[bytesSent:bytesSent + BUFFER_SIZE]
 				bytesSent = bytesSent + BUFFER_SIZE
 				remoteSocket.send(outputData)
 				remoteSocket.recv(BUFFER_SIZE) # ACK
@@ -129,10 +129,8 @@ class TcpTransmitter():
 		rearmar	el archivo. Se utiliza una sincronización de mensajes para evitar perder paquetes,
 		además que lleguen en orden.'''
 		try:
-			relativeFilePath = message
-			absoluteFilePath = os.path.abspath(relativeFilePath)
-			fileDirectory, fileName = os.path.split(absoluteFilePath)
-			fileObject = open(absoluteFilePath, 'rb')
+			fileDirectory, fileName = os.path.split(message.fileName)
+			fileObject = open(message.fileName, 'rb')
 			remoteSocket.send('START_OF_FILE')
 			remoteSocket.recv(BUFFER_SIZE) # ACK
 			remoteSocket.send(fileName) # Enviamos el nombre del archivo

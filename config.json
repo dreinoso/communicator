@@ -2,20 +2,22 @@
 "COMMUNICATOR":
 	{
 	"NAME"					: "Datalogger_1",
-	"RECEPTION_FILTER"		: 1,
+	"FILES_PATH"			: "/home/denis/Tesis/Communicator/Archivos",
+	"DOWNLOAD_PATH"			: "/home/denis/Tesis/Communicator/Descargas",
+	"RECEPTION_FILTER"		: 0,
 	"TRANSMISSION_BUFFER" 	: 10,
 	"RECEPTION_BUFFER" 		: 10,
 	"FILE_PRIORITY"			: 20,
-	"FILE_TIME_OUT"			: 300,
+	"FILE_TIME_OUT"			: 30,
 	"MESSAGE_PRIORITY"		: 30,
-	"MESSAGE_TIME_OUT"		: 400,
+	"MESSAGE_TIME_OUT"		: 40,
 	"RETRANSMISSION_TIME" 	: 4
 	},
 "NETWORK":
 	{
 	"LOCAL_ADDRESS" : "localhost",
-	"SET_IP" 		: 1,
-	"PROTOCOL"      : "TCP",
+	"SET_IP" 		: 0,
+	"PROTOCOL"      : "UDP",
 	"TCP_PORT"      : 5000,
 	"UDP_PORT"      : 5010,
 	"CLOSE_PORT"	: 1
@@ -29,7 +31,6 @@
 	},
 "EMAIL":
 	{
-	"NAME"        : "client01",
 	"ACCOUNT"     : "client01.datalogger@gmail.com",
 	"PASSWORD"    : "client01dl",
 	"SUBJECT"	  : "Comunicador Inteligente",
@@ -49,7 +50,7 @@
 "PRIORITY_LEVELS":
 	{
 	"NETWORK"   : 5,
-	"SMS"       : 4,
+	"SMS"       : 0,
 	"EMAIL"     : 0,
 	"BLUETOOTH" : 0
 	},

@@ -40,8 +40,8 @@ class Network(object):
 	udpReceptionSocket = socket.socket
 	udpReceptionPort = JSON_CONFIG["NETWORK"]["UDP_PORT"]
 
-	udpTransmitterInstance = udpTransmitter.UdpTransmitter(localAddress)
-	tcpTransmitterInstance = tcpTransmitter.TcpTransmitter()
+	udpTransmitterInstance = ''
+	tcpTransmitterInstance = ''
 
 	receptionBuffer = Queue.PriorityQueue()
 	isActive = False
@@ -52,7 +52,8 @@ class Network(object):
 		@param _receptionBuffer: Buffer para la recepción de datos
 		@type: list"""
 		self.receptionBuffer = _receptionBuffer
-		# TODO: Crear aca las instancias para la tranasmisión
+		self.udpTransmitterInstance = udpTransmitter.UdpTransmitter(self.localAddress)
+		self.tcpTransmitterInstance = tcpTransmitter.TcpTransmitter()
 
 	def __del__(self):
 		"""Elminación de la instancia de esta clase, cerrando conexiones establecidas, para no dejar
@@ -152,7 +153,7 @@ class Network(object):
 				else:
 					self.tcpTransmitterInstance.sendMessage('Usted no pertenece a un ccontacto registrado.',remoteSocket)
 					remoteSocket.close()
-					logger.write('WARNING', '[NETWORK] Se rechazo un mensaje de emisor (' + addr + ') no registrado.')
+					logger.write('WARNING', '[NETWORK] Se rechazo un mensaje de emisor (' + str(addr) + ') no registrado.')
 			except socket.timeout as errorMessage:
 				# Para que no se quede esperando indefinidamente en el'accept'
 				pass

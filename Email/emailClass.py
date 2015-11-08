@@ -37,7 +37,7 @@ from email.mime.audio import MIMEAudio
 from email.mime.image import MIMEImage
 
 TIMEOUT = 5
-ATTACHMENTS = 'attachments'
+ATTACHMENTS = 'Attachments'
 
 JSON_FILE = 'config.json'
 JSON_CONFIG = json.load(open(JSON_FILE))
@@ -84,7 +84,7 @@ class Email(object):
 		except socket.error as emailError:
 			logger.write('ERROR','[EMAIL] %s.' % emailError)
 
-	def send(self, emailDestination, emailSubject, message):
+	def send(self, emailDestination, message):
 		""" Envia un mensaje de correo electronico. Debe determinar el tipo de mensaje
 		para determinar si enviar o no un archivo adjunto
 		@param emailDestination: correo electronico del destinatario
@@ -95,27 +95,30 @@ class Email(object):
 		@type message: str """
 		if isinstance(message, messageClass.FileMessage) and message.sendInstance:
 			del message.sendInstance  # Se elimina el campo auxiliar, no es info útil
+			fileName = message.fileName
+			message.fileName = os.path.basename(message.fileName) # Solo se envia el nombre
 			emailMessage = 'START_OF_FILE_INSTANCE ' + pickle.dumps(message)
-			message.sendInstance = True
-			return self.sendAttachment(emailDestination, message.fileName, emailMessage) 
+			message.sendInstance = True	# Se restauran los campos
+			message.fileName = fileName
+			return self.sendAttachment(emailDestination, fileName, emailMessage) 
 		elif isinstance(message, messageClass.FileMessage) and not message.sendInstance:
-			return self.sendAttachment(emailDestination, message.fileName, 'START_OF_FILE ' + message.fileName)
+			return self.sendAttachment(emailDestination, message.fileName, 'START_OF_FILE ' + os.path.basename(message.fileName))
 		elif isinstance(message, messageClass.Message) and message.sendInstance:
 			del message.sendInstance  # Se elimina el campo auxiliar, no es info útil
 			emailMessage = 'START_OF_MESSAGE_INSTANCE ' + pickle.dumps(message)
 			message.sendInstance = True
-			return self.sendText(emailDestination, emailSubject, emailMessage) 
+			return self.sendText(emailDestination, emailMessage) 
 		else: #isinstance(message, messageClass.Message) and not message.sendInstance:
 			emailMessage = message.textMessage 
-			return self.sendText(emailDestination, emailSubject, emailMessage) 
+			return self.sendText(emailDestination, emailMessage) 
 
-	def sendText(self, emailDestination, emailSubject, message):
+	def sendText(self, emailDestination, message):
 		try:
 			# Se construye un mensaje simple
 			mimeText = MIMEText(message)
-			mimeText['From'] = '%s <%s>' % (JSON_CONFIG["EMAIL"]["NAME"], JSON_CONFIG["EMAIL"]["ACCOUNT"])
+			mimeText['From'] = '%s <%s>' % (JSON_CONFIG["COMMUNICATOR"]["NAME"], JSON_CONFIG["EMAIL"]["ACCOUNT"])
 			mimeText['To'] = emailDestination
-			mimeText['Subject'] = emailSubject
+			mimeText['Subject'] = JSON_CONFIG["EMAIL"]["SUBJECT"]
 			self.smtpServer.sendmail(mimeText['From'], mimeText['To'], mimeText.as_string())
 			logger.write('INFO', '[EMAIL] Mensaje enviado correctamente a ' + emailDestination)
 			return True
@@ -124,50 +127,44 @@ class Email(object):
 			return False
 
 	def sendAttachment(self, emailDestination, fileToSend, messageToSend = 'Este email tiene un archivo adjunto.'):
-		relativePath = fileToSend
-		absolutePath = os.path.abspath(relativePath)
-		if os.path.isfile(absolutePath):
-			try:
-				fileDirectory, fileName = os.path.split(absolutePath)
-				cType = mimetypes.guess_type(absolutePath)[0]
-				mainType, subType = cType.split('/', 1)
-				mimeMultipart = MIMEMultipart()
-				mimeMultipart['Subject'] = 'Contenido de %s' % fileDirectory
-				mimeMultipart['From'] = '%s <%s>' % (JSON_CONFIG["EMAIL"]["NAME"], JSON_CONFIG["EMAIL"]["ACCOUNT"])
-				mimeMultipart['To'] = emailDestination
-				if mainType == 'text':
-					fileObject = open(absolutePath)
-					# Note: we should handle calculating the charset
-					attachmentFile = MIMEText(fileObject.read(), _subtype = subType)
-					fileObject.close()
-				elif mainType == 'image':
-					fileObject = open(absolutePath, 'rb')
-					attachmentFile = MIMEImage(fileObject.read(), _subtype = subType)
-					fileObject.close()
-				elif mainType == 'audio':
-					fileObject = open(absolutePath, 'rb')
-					attachmentFile = MIMEAudio(fileObject.read(), _subtype = subType)
-					fileObject.close()
-				else:
-					fileObject = open(absolutePath, 'rb')
-					attachmentFile = MIMEBase(mainType, subType)
-					attachmentFile.set_payload(fileObject.read())
-					fileObject.close()
-					# Codificamos el payload (carga útil) usando Base64
-					encoders.encode_base64(attachmentFile)
-				# Agregamos una cabecera al email, de nombre 'Content-Disposition' y valor 'attachment' ('filename' es el parámetro)
-				attachmentFile.add_header('Content-Disposition', 'attachment', filename = fileName)
-				mimeText = MIMEText(messageToSend, _subtype = 'plain')
-				mimeMultipart.attach(attachmentFile)
-				mimeMultipart.attach(mimeText)
-				self.smtpServer.sendmail(mimeMultipart['From'], mimeMultipart['To'], mimeMultipart.as_string())
-				logger.write('INFO', '[EMAIL] Archivo ('+ fileName + ') enviado correctamente a ' + emailDestination)
-				return True
-			except Exception as errorMessage:
-				logger.write('WARNING', '[EMAIL] Archivo no enviado, error: ' + str(errorMessage))
-				return False
-		else:
-			print 'El archivo no existe!' # TODO borrar
+		try:
+			fileDirectory, fileName = os.path.split(fileToSend)
+			cType = mimetypes.guess_type(fileToSend)[0]
+			mainType, subType = cType.split('/', 1)
+			mimeMultipart = MIMEMultipart()
+			mimeMultipart['Subject'] = JSON_CONFIG["EMAIL"]["SUBJECT"]
+			mimeMultipart['From'] = '%s <%s>' % (JSON_CONFIG["COMMUNICATOR"]["NAME"], JSON_CONFIG["EMAIL"]["ACCOUNT"])
+			mimeMultipart['To'] = emailDestination
+			if mainType == 'text':
+				fileObject = open(fileToSend)
+				# Note: we should handle calculating the charset
+				attachmentFile = MIMEText(fileObject.read(), _subtype = subType)
+				fileObject.close()
+			elif mainType == 'image':
+				fileObject = open(fileToSend, 'rb')
+				attachmentFile = MIMEImage(fileObject.read(), _subtype = subType)
+				fileObject.close()
+			elif mainType == 'audio':
+				fileObject = open(fileToSend, 'rb')
+				attachmentFile = MIMEAudio(fileObject.read(), _subtype = subType)
+				fileObject.close()
+			else:
+				fileObject = open(fileToSend, 'rb')
+				attachmentFile = MIMEBase(mainType, subType)
+				attachmentFile.set_payload(fileObject.read())
+				fileObject.close()
+				# Codificamos el payload (carga útil) usando Base64
+				encoders.encode_base64(attachmentFile)
+			# Agregamos una cabecera al email, de nombre 'Content-Disposition' y valor 'attachment' ('filename' es el parámetro)
+			attachmentFile.add_header('Content-Disposition', 'attachment', filename = fileName)
+			mimeText = MIMEText(messageToSend, _subtype = 'plain')
+			mimeMultipart.attach(attachmentFile)
+			mimeMultipart.attach(mimeText)
+			self.smtpServer.sendmail(mimeMultipart['From'], mimeMultipart['To'], mimeMultipart.as_string())
+			logger.write('INFO', '[EMAIL] Archivo ('+ fileName + ') enviado correctamente a ' + emailDestination)
+			return True
+		except Exception as errorMessage:
+			logger.write('WARNING', '[EMAIL] Archivo no enviado, error: ' + str(errorMessage))
 			return False
 
 	def receiveAttachment(self, emailHeader):
@@ -175,7 +172,11 @@ class Email(object):
 		fileName = emailHeader.get_filename()                            # Obtenemos el nombre del archivo adjunto
 		filePath = os.path.join(currentDirectory, ATTACHMENTS, fileName) # Obtenemos el path relativo del archivo a descargar
 		# Verificamos si el directorio 'ATTACHMENTS' no está creado en el directorio actual
-		if ATTACHMENTS not in os.listdir(currentDirectory):
+		if JSON_CONFIG["COMMUNICATOR"]["DOWNLOAD_PATH"]:
+			if not os.path.exists(JSON_CONFIG["COMMUNICATOR"]["DOWNLOAD_PATH"]):
+				os.mkdir(JSON_CONFIG["COMMUNICATOR"]["DOWNLOAD_PATH"])
+			filePath = JSON_CONFIG["COMMUNICATOR"]["DOWNLOAD_PATH"] + '/' + fileName
+		elif ATTACHMENTS not in os.listdir(currentDirectory):
 			os.mkdir(ATTACHMENTS)
 		# Verificamos si el archivo a descargar no existe en la carpeta 'ATTACHMENTS'
 		if not os.path.isfile(filePath):
@@ -183,8 +184,10 @@ class Email(object):
 			fileObject.write(emailHeader.get_payload(decode = True))
 			fileObject.close()
 			logger.write('INFO', '[EMAIL] Archivo adjunto \'%s\' descargado.' % fileName)
+			return True
 		else:
 			logger.write('WARNING', '[EMAIL] El archivo \'%s\' ya existe! Imposible descargar.' % fileName)
+			return False
 
 	def receive(self):
 		""" Funcion que se encarga de consultar el correo electronico asociado al modulo
@@ -211,6 +214,7 @@ class Email(object):
 				logger.write('DEBUG', '[EMAIL] Ha(n) llegado ' + str(emailAmount) + ' nuevo(s) mensaje(s) de correo electronico!')
 				# Recorremos los emails recibidos...
 				for i in emailIdsList:
+					fileReceived = False # Condición de recepción de archivos
 					result, emailData = self.imapServer.uid('fetch', i, '(RFC822)')
 					# Retorna un objeto 'message', y podemos acceder a los items de su cabecera como un diccionario.
 					emailReceived = email.message_from_string(emailData[0][1])
@@ -223,12 +227,13 @@ class Email(object):
 					if sourceEmail in contactList.allowedEmails.values() or not JSON_CONFIG["COMMUNICATOR"]["RECEPTION_FILTER"]:
 						for emailHeader in emailReceived.walk():
 							if emailHeader.get('Content-Disposition') is not None:
-								self.receiveAttachment(emailHeader)
+								fileReceived = self.receiveAttachment(emailHeader)
 						emailBody = self.getEmailBody(emailReceived) # Obtenemos el cuerpo del email
 						#self.sendOutput(sourceEmail, emailSubject, emailBody) # -----> SOLO PARA LA DEMO <-----
 						if emailBody.startswith('START_OF_FILE_INSTANCE '):
 							emailBody = emailBody[len('START_OF_FILE_INSTANCE '):]
 							message = pickle.loads(emailBody)
+							message.received = fileReceived
 							self.receptionBuffer.put((100 - message.priority, message))	
 						elif emailBody.startswith('START_OF_FILE '):
 							emailBody = emailBody[len('START_OF_FILE '):]

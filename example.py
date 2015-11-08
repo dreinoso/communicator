@@ -80,7 +80,7 @@ def main():
 					elif messageRecived.startswith('ARCHIVO_RECIBIDO'):
 						print 'El Archivo recibido es: ' + messageRecived.split()[1]
 					else:
-						print 'El mensaje recibido es: ' + messageRecived
+						print 'El Mensaje recibido es: ' + messageRecived
 			# Opcion 3 - Conectar GPRS
 			elif optionSelected is '3':
 				communicator.connectGprs()

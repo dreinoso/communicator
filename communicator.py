@@ -17,11 +17,14 @@ import pickle
 import threading
 import subprocess
 
+currentDirectory = os.getcwd() 
+if not currentDirectory.endswith('Communicator'):
+	os.chdir(currentDirectory + '/Communicator')
+
 sys.path.append(os.path.abspath('Network/'))
 sys.path.append(os.path.abspath('Email/'))
 sys.path.append(os.path.abspath('Modem/'))
 sys.path.append(os.path.abspath('Bluetooth/'))
-#TODO el módulo se pueda importar desde otra carpeta y aún asi poder hacer los imports relativos al módulo
 
 import networkClass
 import modemClass
@@ -36,6 +39,9 @@ import checkerClass
 
 JSON_FILE = 'config.json'
 JSON_CONFIG = json.load(open(JSON_FILE))
+
+os.chdir(currentDirectory)
+
 logger.set() # Solo se setea una vez, todos los objetos usan esta misma configuración
 
 receptionBuffer = ''
@@ -75,13 +81,15 @@ def open():
 	# Se crea la instancia para la transmisión de paquetes
 	transmitterInstance = transmitterClass.Transmitter(transmissionBuffer, networkInstance, bluetoothInstance, emailInstance, smsInstance, checkerInstance)
 
-	checkerInstance.verifyNetworkConnection()
-	checkerInstance.verifySmsConnection()
-	checkerInstance.verifyEmailConnection()
-	checkerInstance.verifyBluetoothConnection()
-	# Lanzamos el hilo que comprueba las conexiones
-	checkerInstance.start()
-	transmitterInstance.start()
+	if checkerInstance.verifyNetworkConnection() or checkerInstance.verifySmsConnection() or checkerInstance.verifyEmailConnection() or checkerInstance.verifyBluetoothConnection():
+		checkerInstance.start()
+		transmitterInstance.start()
+		return True
+	else:
+		checkerInstance.start()
+		transmitterInstance.start()
+		logger.write('WARNING', '[COMMUNICATOR] No hay Modos para la recepción')
+		return False
 
 def send(message, receiver = '', device = ''):
 	"""Se almacena en el buffer de transmisión el paquete a ser enviado, se guardara
@@ -102,32 +110,41 @@ def send(message, receiver = '', device = ''):
 			if receiver == '':
 				logger.write('WARNING', '[COMMUNICATOR] Mensaje descartado, no se especifico el receptor')
 				return False
+
+			sender = JSON_CONFIG["COMMUNICATOR"]["NAME"] 
 			# En caso de que se encuetre el archivo se crea una instancia de archivo
-			relativeFilePath = message
-			absoluteFilePath = os.path.abspath(relativeFilePath)
-			if os.path.isfile(absoluteFilePath): 
+			if os.path.isfile(message): # Comprueba el path absoluto
+				absoluteFilePath = message
+				if not absoluteFilePath.startswith('/'): # Si no es un path absoluto, agrega el path a la carpeta actual
+					absoluteFilePath = currentDirectory + '/' + absoluteFilePath
 				# Se determinan los parametros de la instancia archivo por configuración
-				sender = JSON_CONFIG["COMMUNICATOR"]["NAME"] 
 				priority = JSON_CONFIG["COMMUNICATOR"]["FILE_PRIORITY"]
 				timeOut = JSON_CONFIG["COMMUNICATOR"]["FILE_TIME_OUT"]
-				# El nombre o ruta del archivo corresponde al mensaje
-				message = messageClass.FileMessage(receiver, sender, priority, timeOut, device, message)
-			else:
-				# Se determinan los parametros de la instancia mensaje por configuración
-				sender = JSON_CONFIG["COMMUNICATOR"]["NAME"] 
+				message = messageClass.FileMessage(receiver, sender, priority, timeOut, device, absoluteFilePath)
+			elif os.path.isfile(JSON_CONFIG["COMMUNICATOR"]["FILES_PATH"] + '/' + message): # Commprueba en la carpeta actual
+				absoluteFilePath = JSON_CONFIG["COMMUNICATOR"]["FILES_PATH"] + '/' + message
+				# Se determinan los parametros de la instancia archivo por configuración
+				priority = JSON_CONFIG["COMMUNICATOR"]["FILE_PRIORITY"]
+				timeOut = JSON_CONFIG["COMMUNICATOR"]["FILE_TIME_OUT"]
+				message = messageClass.FileMessage(receiver, sender, priority, timeOut, device, absoluteFilePath)
+			else: # Se configura una instancia de Mensaje simple
 				priority = JSON_CONFIG["COMMUNICATOR"]["MESSAGE_PRIORITY"]
 				timeOut = JSON_CONFIG["COMMUNICATOR"]["MESSAGE_TIME_OUT"]
 				textMessageTemp = message # Para no perder el mensaje de texto
 				message = messageClass.Message(receiver, sender, priority, timeOut, device)
 				message.textMessage = textMessageTemp # Se añade un campo para almacenar el mensaje
 			# Se añade un campo para no enviar esta instancia, porque corresponden a mensajes simples
-			message.sendInstance = False  
+			message.sendInstance = False
 		else:
 			# Control de la existencia del archivo
 			if isinstance(message, messageClass.FileMessage):
-				relativeFilePath = message.fileName
-				absoluteFilePath = os.path.abspath(relativeFilePath)
-				if not os.path.isfile(absoluteFilePath): # En caso de que se encuetre el archivo lo envia
+				# En caso de que se encuetre el archivo lo envia
+				if os.path.isfile(message.fileName): # Comprueba el path absoluto
+					if not message.fileName.startswith('/'): # Se añade el path al directorio, sino es un path absoluto
+						message.fileName = currentDirectory + '/' + message.fileName
+				elif os.path.isfile(JSON_CONFIG["COMMUNICATOR"]["FILES_PATH"] + '/' + message.fileName): # Commprueba en la carpeta configurada
+					message.fileName = JSON_CONFIG["COMMUNICATOR"]["FILES_PATH"] + '/' + message.fileName
+				else:
 					logger.write('WARNING', '[NETWORK] Envio cancelado, no se encuentra el archivo (' + message.fileName + ') para el envío.')
 					return False
 			message.sendInstance = True # Corresponde enviar la instancia  

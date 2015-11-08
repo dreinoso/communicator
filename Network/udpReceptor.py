@@ -87,7 +87,11 @@ class UdpReceptor(threading.Thread):
 			# Obtenemos el path relativo del archivo a descargar
 			relativeFilePath = os.path.join(currentDirectory, DOWNLOADS, message.fileName)
 			# Verificamos si el directorio 'DOWNLOADS' no está creado en el directorio actual
-			if DOWNLOADS not in os.listdir(currentDirectory):
+			if JSON_CONFIG["COMMUNICATOR"]["DOWNLOAD_PATH"]:
+				if not os.path.exists(JSON_CONFIG["COMMUNICATOR"]["DOWNLOAD_PATH"]):
+					os.mkdir(JSON_CONFIG["COMMUNICATOR"]["DOWNLOAD_PATH"])
+				relativeFilePath = JSON_CONFIG["COMMUNICATOR"]["DOWNLOAD_PATH"] + '/' + fileName
+			elif DOWNLOADS not in os.listdir(currentDirectory):
 				os.mkdir(DOWNLOADS)
 			# Verificamos si el archivo a descargar no existe en la carpeta 'DOWNLOADS'
 			if not os.path.isfile(relativeFilePath):
@@ -159,7 +163,11 @@ class UdpReceptor(threading.Thread):
 			# Obtenemos el path relativo del archivo a descargar
 			relativeFilePath = os.path.join(currentDirectory, DOWNLOADS, fileName)
 			# Verificamos si el directorio 'DOWNLOADS' no está creado en el directorio actual
-			if DOWNLOADS not in os.listdir(currentDirectory):
+			if JSON_CONFIG["COMMUNICATOR"]["DOWNLOAD_PATH"]:
+				if not os.path.exists(JSON_CONFIG["COMMUNICATOR"]["DOWNLOAD_PATH"]):
+					os.mkdir(JSON_CONFIG["COMMUNICATOR"]["DOWNLOAD_PATH"])
+				relativeFilePath = JSON_CONFIG["COMMUNICATOR"]["DOWNLOAD_PATH"] + '/' + fileName
+			elif DOWNLOADS not in os.listdir(currentDirectory):
 				os.mkdir(DOWNLOADS)
 			# Verificamos si el archivo a descargar no existe en la carpeta 'DOWNLOADS'
 			if not os.path.isfile(relativeFilePath):

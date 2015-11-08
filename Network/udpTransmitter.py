@@ -44,7 +44,6 @@ class UdpTransmitter(object):
 			del message.sendInstance # Se elimina el campo auxiliar, no es info util
 			return self.sendFileInstance(message, destinationIp, destinationPort)
 		elif isinstance(message, messageClass.FileMessage) and not message.sendInstance:
-			message = message.fileName
 			return self.sendFile(message, destinationIp, destinationPort)
 		elif isinstance(message, messageClass.Message) and message.sendInstance:
 			del message.sendInstance
@@ -70,21 +69,21 @@ class UdpTransmitter(object):
 			destinationPort, addr = receptionSocket.recvfrom(BUFFER_SIZE)
 			destinationPort = int(destinationPort)
 			# Se obtiene el filename sin la ruta.
-			absoluteFilePath = os.path.abspath(message.fileName)
-			fileDirectory, fileName = os.path.split(absoluteFilePath) 
+			fileDirectory, fileName = os.path.split(message.fileName) 
+			filePath = message.fileName
 			message.fileName = fileName # Se guarda el nombre del archivo antes de serializar.
-			message = pickle.dumps(message)
+			messageSerialized = pickle.dumps(message)
 			# Emviamos la instancia, de ser menor a 1024 bytes el envio es de un solo paquete
 			logger.write('DEBUG', '[NETWORK] Transfiriendo instancia de Mensaje.')
 			bytesSent = 0
-			while bytesSent < len(message):
-				outputData = message[bytesSent:bytesSent + BUFFER_SIZE]
+			while bytesSent < len(messageSerialized):
+				outputData = messageSerialized[bytesSent:bytesSent + BUFFER_SIZE]
 				bytesSent = bytesSent + BUFFER_SIZE
 				transmissionSocket.sendto(outputData, (destinationIp, destinationPort))
 				receivedData, addr = receptionSocket.recvfrom(BUFFER_SIZE) # ACK
 			transmissionSocket.sendto('END_OF_FILE_INSTANCE', (destinationIp, destinationPort))
 			# Se abre el archivo y se recibe confirmación para comenzar a transmitir (READY)
-			fileObject = open(absoluteFilePath, 'rb') 
+			fileObject = open(message.fileName, 'rb') 
 			receivedData, addr = receptionSocket.recvfrom(BUFFER_SIZE)
 			if receivedData == "READY":
 				# Guardamos la posición inicial del archivo (donde comienza)
@@ -115,6 +114,7 @@ class UdpTransmitter(object):
 			return False
 		finally:
 			message.sendInstance = True # En caso de no enviar se requiere el campo auxiliar
+			message.fileName = filePath 
 			# Cerramos los sockets que permitieron la conexión con el cliente
 			transmissionSocket.close()
 			receptionSocket.close()
@@ -129,11 +129,11 @@ class UdpTransmitter(object):
 			# Establecemos el nuevo puerto destino al cual enviar el paquete
 			destinationPort, addr = receptionSocket.recvfrom(BUFFER_SIZE)
 			destinationPort = int(destinationPort)
-			message = pickle.dumps(message) # Serialización de la clase
+			messageSerialized = pickle.dumps(message) # Serialización de la clase
 			logger.write('DEBUG', '[NETWORK] Transfiriendo instancia de Mensaje.')
 			bytesSent = 0
-			while bytesSent < len(message):
-				outputData = message[bytesSent:bytesSent + BUFFER_SIZE] # Se envia la cadena de a partes, el receptor las une.
+			while bytesSent < len(messageSerialized):
+				outputData = messageSerialized[bytesSent:bytesSent + BUFFER_SIZE] # Se envia la cadena de a partes, el receptor las une.
 				bytesSent = bytesSent + BUFFER_SIZE
 				transmissionSocket.sendto(outputData, (destinationIp, destinationPort))
 				receivedData, addr = receptionSocket.recvfrom(BUFFER_SIZE) # ACK
@@ -144,7 +144,7 @@ class UdpTransmitter(object):
 			logger.write('WARNING', '[NETWORK] Instancia de Mensaje no enviado: %s' % str(errorMessage))
 			return False
 		finally:
-			meesage.sendInstance = True
+			message.sendInstance = True
 			# Cerramos los sockets que permitieron la conexión con el cliente
 			transmissionSocket.close()
 			receptionSocket.close()
@@ -157,17 +157,13 @@ class UdpTransmitter(object):
 		además que lleguen en orden.'''
 		try:
 			transmissionSocket, receptionSocket, receptionPort = self.createSockets()
-			relativeFilePath = message
-			absoluteFilePath = os.path.abspath(relativeFilePath)
 			# Indicamos al otro extremo que vamos a transmitir un paquete, y que debe responder al puerto indicado
-			#if byInstance: syncMessage = 'START_OF_FILE_BY_INSTANCE' # Para que no se almacene la instancia del archivo, y además el "nombre del archivo" en el receptor
-			#else: syncMessage = 'START_OF_FILE' # Para envio de archivo simple
 			transmissionSocket.sendto( 'START_OF_FILE ' + self.localAddress + ' ' +  str(receptionPort), (destinationIp, destinationPort))
 			# Establecemos el nuevo puerto destino al cual enviar el paquete
 			destinationPort, addr = receptionSocket.recvfrom(BUFFER_SIZE)
 			destinationPort = int(destinationPort)
-			fileDirectory, fileName = os.path.split(absoluteFilePath)
-			fileObject = open(absoluteFilePath, 'rb')
+			fileDirectory, fileName = os.path.split(message.fileName)
+			fileObject = open(message.fileName, 'rb')
 			# Enviamos el nombre del archivo
 			transmissionSocket.sendto(fileName, (destinationIp, destinationPort))
 			# Recibe confirmación para comenzar a transmitir (READY)
@@ -215,7 +211,7 @@ class UdpTransmitter(object):
 			return False
 		finally:
 			# Cerramos los sockets que permitieron la conexión con el cliente
-			transmissionSocket.close()
+			transmissionSocket.close() 
 
 	def createSockets(self):
 		# Crea un nuevo socket transmisor que usa el protocolo de transporte especificado

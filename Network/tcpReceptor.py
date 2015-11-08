@@ -80,7 +80,11 @@ class TcpReceptor(threading.Thread):
 			fileName = message.fileName # Obtenemos el nombre del archivo a recibir
 			relativeFilePath = os.path.join(currentDirectory, DOWNLOADS, fileName) # Obtenemos el path relativo del archivo a descargar
 			# Verificamos si el directorio 'DOWNLOADS' no está creado en el directorio actual
-			if DOWNLOADS not in os.listdir(currentDirectory):
+			if JSON_CONFIG["COMMUNICATOR"]["DOWNLOAD_PATH"]:
+				if not os.path.exists(JSON_CONFIG["COMMUNICATOR"]["DOWNLOAD_PATH"]):
+					os.mkdir(JSON_CONFIG["COMMUNICATOR"]["DOWNLOAD_PATH"])
+				relativeFilePath = JSON_CONFIG["COMMUNICATOR"]["DOWNLOAD_PATH"] + '/' + fileName
+			elif DOWNLOADS not in os.listdir(currentDirectory):
 				os.mkdir(DOWNLOADS)
 			# Verificamos si el archivo a descargar no existe en la carpeta 'DOWNLOADS'
 			if not os.path.isfile(relativeFilePath):
@@ -139,7 +143,11 @@ class TcpReceptor(threading.Thread):
 			fileName = self.remoteSocket.recv(BUFFER_SIZE) # Obtenemos el nombre del archivo a recibir
 			relativeFilePath = os.path.join(currentDirectory, DOWNLOADS, fileName) # Obtenemos el path relativo del archivo a descargar
 			# Verificamos si el directorio 'DOWNLOADS' no está creado en el directorio actual
-			if DOWNLOADS not in os.listdir(currentDirectory):
+			if JSON_CONFIG["COMMUNICATOR"]["DOWNLOAD_PATH"]:
+				if not os.path.exists(JSON_CONFIG["COMMUNICATOR"]["DOWNLOAD_PATH"]):
+					os.mkdir(JSON_CONFIG["COMMUNICATOR"]["DOWNLOAD_PATH"])
+				relativeFilePath = JSON_CONFIG["COMMUNICATOR"]["DOWNLOAD_PATH"] + '/' + fileName
+			elif DOWNLOADS not in os.listdir(currentDirectory):
 				os.mkdir(DOWNLOADS)
 			# Verificamos si el archivo a descargar no existe en la carpeta 'DOWNLOADS'
 			if not os.path.isfile(relativeFilePath):
@@ -164,4 +172,3 @@ class TcpReceptor(threading.Thread):
 		finally:
 			# Cierra la conexion del socket cliente
 			self.remoteSocket.close()
-

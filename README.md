@@ -19,6 +19,8 @@ Corresponde a un módulo de comunicación inteligente para comunicación punto a
 	"COMMUNICATOR":
 	{
 		"NAME"					: "Datalogger_1", 	# Nombre del Communicador para identificarse
+		"FILES_PATH"			: "/home/user/Communicator/Archivos", # Ruta para buscar archivos a enviar
+		"DOWNLOAD_PATH"			: "/home/user/Communicator/Descargas", # Ruta para las descargas de los archivos
 		"RECEPTION_FILTER"		: 1,				# (0/1) Habilitado: Filtra los mensajes que no sean de contactos registrados
 		"TRANSMISSION_BUFFER" 	: 10,				# Máxima cantidad de elementos para el buffer de transmissión
 		"RECEPTION_BUFFER" 		: 10,				# Máxima cantidad de elementos para el buffer de recepción
@@ -93,7 +95,11 @@ Corresponde a un módulo de comunicación inteligente para comunicación punto a
 }
 
 ##Ejecución del Módulo
-En su aplicación se debe tener importado el modulo "import communicator.py" (su programa debe estar en la misma carpeta del comunicador). En caso de usar el módem se requiere correr la aplicación como root. El uso del comunicador se basa en el llamado de las siguientes funciones:
+En su aplicación se debe tener importado el modulo "import communicator.py" (su programa debe estar en la misma carpeta del comunicador). En caso de usar el módem se requiere correr la aplicación como root. 
+Si se ejecuta la aplicación en una carpeta superior al Communicator se deben añadir las siguientes lineas para que se encuentre el módulo de no estar añadido en las carpetas de librerias de Python
+	import sys
+	sys.path.append(os.path.abspath('Communicator/'))
+El uso del comunicador se basa en el llamado de las siguientes funciones:
 ###communicator.open()
 	Se realiza la apertura, inicialización de los componentes que se tengan disponibles	.
 ###communicator.send()
