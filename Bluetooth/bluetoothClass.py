@@ -27,7 +27,9 @@ class Bluetooth(object):
 	localPortRFCOMM = 0
 	localPortL2CAP = 0
 
-	receptionBuffer = Queue.Queue()
+	bluetoothTransmitter = bluetoothTransmitter.BluetoothTransmitter()
+
+	receptionBuffer = Queue.PriorityQueue()
 	isActive = False
 
 	def __init__(self, _receptionBuffer):
@@ -57,11 +59,10 @@ class Bluetooth(object):
 		self.localPortL2CAP = self.localSocketL2CAP.getsockname()[1]
 
 	def __del__(self):
-		self.localSocketRFCOMM.close()
 		logger.write('INFO', '[BLUETOOTH] Objeto destruido.')
 
 	def connect(self):
-		'HACER'
+		'VOLVER A CREAR EL SOCKET RFCOMM'
 		pass #TODO
 
 	def send(self, destinationServiceName, destinationMAC, destinationUUID, messageToSend):
@@ -82,10 +83,8 @@ class Bluetooth(object):
 				remoteSocket.connect((host, port))
 				logger.write('DEBUG', '[BLUETOOTH] Conectado con la dirección \'%s\'.' % host)
 				# Lanzamos un hilo que se va a encargar de manejar la transmisión del mensaje
-				threadName = 'Thread-%s' % JSON_CONFIG["BLUETOOTH"]["MAC"]
-				transmitterThread = bluetoothTransmitter.BluetoothTransmitter(threadName, remoteSocket, messageToSend)
-				transmitterThread.start()
-				return True
+				#threadName = 'Thread-%s' % JSON_CONFIG["BLUETOOTH"]["MAC"]
+				return self.bluetoothTransmitter.send(messageToSend, remoteSocket)
 			except bluetooth.btcommon.BluetoothError as bluetoothError:
 				# (11, 'Resource temporarily unavailable')
 				# (16, 'Device or resource busy')
@@ -101,13 +100,20 @@ class Bluetooth(object):
 		while self.isActive:
 			try:
 				# Espera por una conexion entrante y devuelve un nuevo socket que representa la conexion, como asi tambien la direccion del cliente
-				remoteSocket, remoteAddress = self.localSocketRFCOMM.accept()
-				remoteSocket.settimeout(TIMEOUT)
-				logger.write('DEBUG', '[BLUETOOTH] Conexion desde \'%s\' aceptada.' % remoteAddress[0])
-				threadName = 'Thread-%s' % remoteAddress[0]
-				receptorThread = bluetoothReceptor.BluetoothReceptor(threadName, remoteSocket, self.receptionBuffer)
-				receptorThread.start()
+				remoteSocket, addr = self.localSocketRFCOMM.accept()
+				for valueList in contactList.allowedMacAddress.values():
+					if addr[0] in valueList or not JSON_CONFIG["COMMUNICATOR"]["RECEPTION_FILTER"]:
+						remoteSocket.settimeout(TIMEOUT)
+						logger.write('DEBUG', '[BLUETOOTH] Conexion desde \'%s\' aceptada.' % addr[0])
+						threadName = 'Thread-%s' % addr[0]
+						receptorThread = bluetoothReceptor.BluetoothReceptor(threadName, remoteSocket, self.receptionBuffer)
+						receptorThread.start()
+					else:
+						self.bluetoothTransmitter.sendMessage('Usted no pertenece a un contacto registrado.', remoteSocket)
+						remoteSocket.close()
+						logger.write('WARNING', '[BLUETOOTH] Se rechazo un mensaje de emisor (' + addr[0] + ') no registrado.')
 			except bluetooth.BluetoothError, msg:
 				# Para que el bloque 'try' (en la funcion 'accept') no se quede esperando indefinidamente
 				pass
+		self.localSocketRFCOMM.close()
 		logger.write('WARNING','[BLUETOOTH] Función \'%s\' terminada.' % inspect.stack()[0][3])

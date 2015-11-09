@@ -7,9 +7,9 @@
 	@date: Lunes 16 de Mayo de 2015 """
 
 import os
-import pickle
 import Queue
 import socket
+import pickle
 
 import logger
 import messageClass
@@ -39,7 +39,6 @@ class TcpTransmitter():
 		else:
 			logger.write('DEBUG', '[NETWORK] Mensaje con formato que no correspondes')
 			#TODO borrar despues de limpiar, este ultimo else en realidad nunca deberia imprimirlo
-
 
 	def sendFileInstance(self, message, remoteSocket):
 		'''Se envia primero la instancia archivo, con los parametros de prioridad, u otros

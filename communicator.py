@@ -78,10 +78,11 @@ def send(message, receiver = '', device = ''):
 	@param receiver: es el contacto al que se envia el mensaje
 	@param device: modo de envío preferente para ese mensaje en particular (puede no definirse)"""
 	global transmissionBuffer, messageClass
+
 	if not transmissionBuffer.full():
-		if not isinstance(message,messageClass.Message):
+		if not isinstance(message, messageClass.Message):
 			# Control sobre un mensaje simple
-			if not isinstance(message,str):
+			if not isinstance(message, str):
 				logger.write('WARNING', '[COMMUNICATOR] Mensaje descartado, porque no es texto simple ni subclase Mensaje')
 				return False
 			if receiver == '':

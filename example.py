@@ -98,7 +98,7 @@ def main():
 				communicator.send('imagen.jpg', 'client02') # Prioridad definida por configuración
 			# Opción 8 - Instancia de archivo de prueba
 			elif optionSelected is '8':
-				fileInstance = messageClass.FileMessage('client02', 'Comunicardor Emisor Alfa', 10, 100, 'Email', 'imagen.jpg') # Prioridad email
+				fileInstance = messageClass.FileMessage('client02', 'Comunicardor Emisor Alfa', 10, 100, '', 'imagen.jpg') # Prioridad email
 				communicator.send(fileInstance)
 			# Opcion 9 - Salir
 			elif optionSelected is '9':
