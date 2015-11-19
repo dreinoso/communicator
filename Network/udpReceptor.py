@@ -6,15 +6,14 @@
 	@organization: UNC - Fcefyn
 	@date: Lunes 16 de Mayo de 2015 """
 
-import json
 import os
+import json
 import pickle
-import Queue
 import socket
 import threading
 
-import messageClass
 import logger
+import messageClass
 
 JSON_FILE = 'config.json'
 JSON_CONFIG = json.load(open(JSON_FILE))
@@ -57,91 +56,11 @@ class UdpReceptor(threading.Thread):
 		instancia. Esto lo determina LanClass, y se indica en el nombre del hilo. A diferencia de 
 		TCP en caso de que se reciba un mensaje simple solo se guarda no requiere conexión
 		por lo que no hay un método para esa recepción.'''
-		if str(self.name) == 'Thread-UDPReceptor-FileInstance':
-			self.receiveFileInstance()
-		elif str(self.name) == 'Thread-UDPReceptor-MessageInstance':
-			self.receiveMessageInstance()
-		else:
+		if self.name == 'Thread-File':
 			self.receiveFile()
-
-	def receiveFileInstance(self):
-		'''Primero se recive la instancia FileMessage propiamente dicha, para luego preprarse
-		para el envio del archivo en si en caso de que este no se encuentre ya en el receptor.
-		Es una combinación de los métodos de recepción de instancia mensaje y recepción de 
-		archivo, pero tiene un control adicional. En caso de que el archivo se reciba se indica
-		en uno de los campos de la instancia recibida.'''
-		try:
-			message = ''
-			# Indicamos al otro extremo nuestro puerto al cual debe enviar el paquete
-			self.transmissionSocket.sendto(str(self.receptionPort), (self.remoteAddress, self.remotePort))
-			inputData, addr = self.receptionSocket.recvfrom(BUFFER_SIZE)
-			while inputData != 'END_OF_FILE_INSTANCE':
-				serializedMessage = ''
-				serializedMessage = serializedMessage + inputData
-				self.transmissionSocket.sendto('ACK', (self.remoteAddress, self.remotePort))
-				inputData, addr = self.receptionSocket.recvfrom(BUFFER_SIZE)
-			message = pickle.loads(serializedMessage) # Deserialización de la instancia
-			# Obtenemos el nombre del archivo a recibir
-			# Obtenemos el directorio actual de trabajo
-			currentDirectory = os.getcwd()
-			# Obtenemos el path relativo del archivo a descargar
-			relativeFilePath = os.path.join(currentDirectory, DOWNLOADS, message.fileName)
-			# Verificamos si el directorio 'DOWNLOADS' no está creado en el directorio actual
-			if DOWNLOADS not in os.listdir(currentDirectory):
-				os.mkdir(DOWNLOADS)
-			# Verificamos si el archivo a descargar no existe en la carpeta 'DOWNLOADS'
-			if not os.path.isfile(relativeFilePath):
-				fileObject = open(relativeFilePath, 'w+')
-				logger.write('DEBUG', '[NETWORK] Descargando archivo \'%s\'...' % message.fileName)
-				self.transmissionSocket.sendto('READY', (self.remoteAddress, self.remotePort))
-				# Comenzamos a descargar el archivo
-				while True:
-					inputData, addr = self.receptionSocket.recvfrom(BUFFER_SIZE)
-					if inputData != 'END_OF_FILE':
-						fileObject.write(inputData)
-						self.transmissionSocket.sendto('ACK', (self.remoteAddress, self.remotePort))
-					else: 
-						fileObject.close()
-						logger.write('DEBUG', '[NETWORK] Archivo \'%s\' descargado correctamente!' % message.fileName)
-						message.received = True 
-						break
-			else:
-				# Comunicamos al transmisor que el archivo ya existe
-				self.transmissionSocket.sendto('FILE_EXISTS', (self.remoteAddress, self.remotePort))
-				logger.write('WARNING', '[NETWORK] El archivo \'%s\' ya existe! Imposible descargar.' % message.fileName)
-		except socket.error as errorMessage:
-			logger.write('WARNING', '[NETWORK] Error al intentar descargar el archivo')
-		finally:
-			# Cerramos los sockets que permitieron la conexión con el cliente
-			self.transmissionSocket.close()
-			self.receptionSocket.close()
-			if message != None:
-				self.receptionBuffer.put((100 - message.priority, message))
-			logger.write('DEBUG', '[NETWORK] \'%s\' terminado y cliente desconectado.' % self.getName())
-
-	def receiveMessageInstance(self):
-		'''Por medio de una sincronización de mensajes se recibe la cadena de a partes
-		que corresponde a la instancia serializada, y se arma a medida que lleguen los 
-		caracteres, cuando se tiene la cadena completa se la deserializa para obtener 
-		la instancia y almacenarla en el buffer.'''
-		try:
-			# Indicamos al otro extremo nuestro puerto al cual debe enviar el paquete
-			self.transmissionSocket.sendto(str(self.receptionPort), (self.remoteAddress, self.remotePort))
-			inputData, addr = self.receptionSocket.recvfrom(BUFFER_SIZE)
-			while inputData != 'END_OF_MESSAGE_INSTANCE':
-				serializedMessage = ''
-				serializedMessage = serializedMessage + inputData
-				self.transmissionSocket.sendto('ACK', (self.remoteAddress, self.remotePort))
-				inputData, addr = self.receptionSocket.recvfrom(BUFFER_SIZE)
-			message = pickle.loads(serializedMessage) # Deserialización de la instancia
-			self.receptionBuffer.put((100 - message.priority, message))
-		except socket.error as errorMessage:
-			logger.write('WARNING', '[NETWORK] Error al intentar recibir instancia de mensaje.')
-		finally:
-			# Cerramos los sockets que permitieron la conexión con el cliente
-			self.transmissionSocket.close()
-			self.receptionSocket.close()
-			logger.write('DEBUG', '[NETWORK] \'%s\' terminado y cliente desconectado.' % self.getName())
+		elif self.name == 'Thread-MessageInstance':
+			self.receiveMessageInstance()
+		logger.write('DEBUG', '[NETWORK] \'%s\' terminado y cliente desconectado.' % self.getName())
 
 	def receiveFile(self):
 		'''Para la recepción del archivo, primero se verifica que le archivo no 
@@ -169,22 +88,57 @@ class UdpReceptor(threading.Thread):
 				# Comenzamos a descargar el archivo
 				while True:
 					inputData, addr = self.receptionSocket.recvfrom(BUFFER_SIZE)
-					if inputData != 'END_OF_FILE':
+					if inputData != 'EOF':
 						fileObject.write(inputData)
 						self.transmissionSocket.sendto('ACK', (self.remoteAddress, self.remotePort))
 					else: 
 						fileObject.close()
 						logger.write('DEBUG', '[NETWORK] Archivo \'%s\' descargado correctamente!' % fileName)
-						self.receptionBuffer.put((100 - JSON_CONFIG["COMMUNICATOR"]["FILE_PRIORITY"], 'ARCHIVO_RECIBIDO: ' + fileName))
 						break
+				return True
 			else:
 				# Comunicamos al transmisor que el archivo ya existe
 				self.transmissionSocket.sendto('FILE_EXISTS', (self.remoteAddress, self.remotePort))
 				logger.write('WARNING', '[NETWORK] El archivo \'%s\' ya existe! Imposible descargar.' % fileName)
+				return False
 		except socket.error as errorMessage:
-			logger.write('WARNING', '[NETWORK] Error al intentar descargar el archivo \'%s\'.' % fileName)
+			logger.write('WARNING', '[NETWORK] Error al intentar descargar el archivo \'%s\': %s' % (fileName, str(errorMessage)))
 		finally:
 			# Cerramos los sockets que permitieron la conexión con el cliente
-			self.transmissionSocket.close()
 			self.receptionSocket.close()
-			logger.write('DEBUG', '[NETWORK] \'%s\' terminado y cliente desconectado.' % self.getName())
+			self.transmissionSocket.close()
+
+	def receiveMessageInstance(self):
+		'''Por medio de una sincronización de mensajes se recibe la cadena de a partes
+		que corresponde a la instancia serializada, y se arma a medida que lleguen los 
+		caracteres, cuando se tiene la cadena completa se la deserializa para obtener 
+		la instancia y almacenarla en el buffer.'''
+		try:
+			serializedMessage = ''
+			# Indicamos al otro extremo nuestro puerto al cual debe enviar el paquete
+			self.transmissionSocket.sendto(str(self.receptionPort), (self.remoteAddress, self.remotePort))
+			while True:
+				inputData, addr = self.receptionSocket.recvfrom(BUFFER_SIZE)
+				if inputData != 'END_OF_INSTANCE':
+					serializedMessage = serializedMessage + inputData
+					self.transmissionSocket.sendto('ACK', (self.remoteAddress, self.remotePort))
+				else:
+					# Deserialización de la instancia
+					message = pickle.loads(serializedMessage)
+					break
+			###########################################################
+			if isinstance(message, messageClass.FileMessage):
+				dataReceived = self.receptionSocket.recv(BUFFER_SIZE) # START_OF_FILE
+				self.remotePort = int(dataReceived.split()[2])
+				if self.receiveFile():
+					self.receptionBuffer.put((100 - message.priority, message))
+			else:
+				self.receptionBuffer.put((100 - message.priority, message))
+				logger.write('DEBUG', '[NETWORK] Ha llegado una nueva instancia de mensaje!')
+			###########################################################
+		except socket.error as errorMessage:
+			logger.write('WARNING', '[NETWORK] Error al intentar recibir una instancia de mensaje ' + str(errorMessage))
+		finally:
+			# Cerramos los sockets que permitieron la conexión con el cliente
+			self.receptionSocket.close()
+			self.transmissionSocket.close()

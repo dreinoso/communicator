@@ -10,15 +10,14 @@
 	@date: Miercoles 17 de Junio de 2015 """
 
 import os
-import pickle
+import json
 import time
 import shlex
-import Queue
 import serial
 import signal
+import pickle
 import inspect
 import subprocess
-import json
 
 import logger
 import errorList
@@ -90,16 +89,18 @@ class Modem(object):
 class Sms(Modem):
 	""" Subclase de 'Modem' correspondiente al modo de operacion con el que se va
 		a trabajar. """
-	smsAmount = 0
 	smsIndex = 0
-	smsHeader = ''
-	smsBody = ''
-	smsMessage = ''
+	smsAmount = 0
+
+	smsBody = None
+	smsHeader = None
+	smsMessage = None
+
 	telephoneNumber = JSON_CONFIG["SMS"]["CLARO_TELEPHONE_NUMBER"]
 
+	smsBodyList = list()
 	receptionList = list()
 	smsHeaderList = list()
-	smsBodyList = list()
 
 	isActive = False
 
@@ -180,18 +181,20 @@ class Sms(Modem):
 					# Ejemplo smsHeader: +CMGL: 0,"REC UNREAD","+5493512560536",,"14/10/26,17:12:04-12"\r\n
 					# Ejemplo smsBody  : primero\r\n
 					self.telephoneNumber = self.getTelephoneNumber(self.smsHeader) # Obtenemos el numero de telefono
-					logger.write('DEBUG','Procesando mensaje de ' + str(self.telephoneNumber))
-					# Comprobamos si el remitente del mensaje (un teléfono) esta registrado...
+					logger.write('DEBUG','[SMS] Procesando mensaje de ' + str(self.telephoneNumber))
+					# Comprobamos si el remitente del mensaje (un teléfono) está registrado...
 					if self.telephoneNumber in contactList.allowedNumbers.values() or not JSON_CONFIG["COMMUNICATOR"]["RECEPTION_FILTER"]:
-						smsMessage = self.getSmsBody(self.smsBody) # Obtenemos el mensaje de texto
-						if smsMessage.startswith('IS_INSTANCE'):
-							smsMessage = smsMessage[len('IS_INSTANCE'):] # Se quita la indicación de instancia
-							message = pickle.loads(smsMessage)
-							self.receptionBuffer.put((100 - message.priority, message))
+						self.smsMessage = self.getSmsBody(self.smsBody) # Obtenemos el mensaje de texto
+						if self.smsMessage.startswith('INSTANCE'):
+							# Quitamos la 'etiqueta' que hace refencia a una instancia de mensaje
+							messageInstance = self.smsMessage[len('INSTANCE'):]
+							# 'Deserializamos' la instancia de mensaje para obtener el objeto en sí
+							messageInstance = pickle.loads(messageInstance)
+							self.receptionBuffer.put((100 - messageInstance.priority, messageInstance))
 						else: 
-							self.receptionBuffer.put((100 - JSON_CONFIG["COMMUNICATOR"]["MESSAGE_PRIORITY"],smsMessage))
-						self.sendOutput(self.telephoneNumber, smsMessage) # -----> SOLO PARA LA DEMO <-----
-						print 'Mensaje procesado correctamente.'
+							self.receptionBuffer.put((10, self.smsMessage))
+						#self.sendOutput(self.telephoneNumber, self.smsMessage) # -----> SOLO PARA LA DEMO <-----
+						logger.write('DEBUG','[SMS] Mensaje procesado correctamente!')
 					else:
 						# ... caso contrario, verificamos si el mensaje proviene de la pagina web de CLARO...
 						if self.telephoneNumber == JSON_CONFIG["SMS"]["CLARO_WEB_PAGE"]:
@@ -199,8 +202,8 @@ class Sms(Modem):
 						# ... sino, comunicamos al usuario que no se encuentra registrado.
 						else:
 							logger.write('WARNING','[SMS] Imposible procesar una solicitud. El número no se encuentra registrado!')
-							smsMessage = 'Imposible procesar la solicitud. Usted no se encuentra registrado!'
-							#self.send(self.telephoneNumber, smsMessage)
+							self.smsMessage = 'Imposible procesar la solicitud. Usted no se encuentra registrado!'
+							#self.send(self.telephoneNumber, self.smsMessage)
 					self.smsIndex = self.getSmsIndex(self.smsHeader.split(',')[0]) # Obtenemos el índice del mensaje en memoria
 					self.removeSms(self.smsIndex) # Eliminamos el mensaje porque ya fue leído
 					self.smsAmount -= 1 # Decrementamos la cantidad de mensajes a procesar
@@ -209,39 +212,40 @@ class Sms(Modem):
 			# ... sino, dejamos de leer los SMS
 			else:
 				break
-		logger.write('WARNING', '[SMS] Funcion \'%s\' terminada.' % inspect.stack()[0][3])
+		logger.write('WARNING', '[SMS] Función \'%s\' terminada.' % inspect.stack()[0][3])
 
-	def send(self, telephoneNumber, message):
+	def send(self, telephoneNumber, messageToSend):
 		""" Envia el comando AT correspondiente para enviar un mensaje de texto.
 			@param telephoneNumber: numero de telefono del destinatario
 			@type telephoneNumber: int
-			@param message: mensaje de texto a enviar
-			@type message: str """
-		# Control para determinar si se envia una instancia o un mensaje simple
-		if message.sendInstance:
-			del message.sendInstance
-			smsMessage = 'IS_INSTANCE' + pickle.dumps(message) 
-			message.sendInstance = True # Si no lo envia, despues requiere este campo
+			@param messageToSend: mensaje de texto a enviar
+			@type messageToSend: str """
+		# Comprobación de envío de texto plano
+		if isinstance(messageToSend, messageClass.SimpleMessage) and not messageToSend.isInstance:
+			smsMessage = messageToSend.plainText
+		# Entonces se trata de enviar una instancia de mensaje
 		else:
-			smsMessage = message.textMessage # Se saca el mensaje de la instancia
+			smsMessage = 'INSTANCE' + pickle.dumps(messageToSend)
+		# Enviamos los comandos AT correspondientes para efectuar el envío el mensaje de texto
 		atResult01 = self.sendAT('AT+CMGS="' + str(telephoneNumber) + '"\r') # Numero al cual enviar el Sms
 		atResult02 = self.sendAT(smsMessage + ascii.ctrl('z')) 				 # Mensaje de texto terminado en Ctrl+Z
 		# --------------------- Caso de envío EXITOSO ---------------------
 		# Ejemplo de atResult02[0]: Mensaje enviado desde el Modem.\x1a\r\n
 		# Ejemplo de atResult02[1]: +CMGS: 17\r\n
 		# Ejemplo de atResult02[3]: OK\r\n
-		if self.atError:
-			print 'Ocurrió un problema al enviar el mensaje.'
-			return False
-		else:
+		if not self.atError:
+			# Borramos el mensaje enviado, porque queda almacenado en la memoria y no lo necesitamos
 			for i, resultElement in enumerate(atResult02):
 				if resultElement.startswith('+CMGS'):
 					#self.smsIndex = self.getSmsIndex(atResult02[i].replace('\r\n', ''))
 					#self.removeSms(self.smsIndex)
 					self.removeAllSms()
 					break
-			print 'El mensaje fue enviado con éxito.'
+			logger.write('INFO','[SMS] El mensaje de texto fue enviado con éxito!')
 			return True
+		else:
+			logger.write('WARNING','[SMS] Ocurrió un problema al enviar el mensaje de texto.')
+			return False
 
 	def removeSms(self, smsIndex):
 		""" Envia el comando AT correspondiente para elimiar todos los mensajes del dispositivo.
@@ -256,8 +260,8 @@ class Sms(Modem):
 		self.sendAT('AT+CMGD=1,2\r') # Elimina todos los mensajes leidos y enviados
 
 	def getSmsIndex(self, atOutput):
-		# Ejemplo de atOutput (para un mensaje recibido): +CMGL: 2
-		# Ejemplo de atOutput (para un mensaje enviado) : +CMGS: 17
+		# Ejemplo de 'atOutput' (para un mensaje recibido): +CMGL: 2
+		# Ejemplo de 'atOutput' (para un mensaje enviado) : +CMGS: 17
 		# Quitamos el comando AT, dejando solamente el índice del mensaje en memoria
 		if atOutput.startswith('+CMGL'):
 			atOutput = atOutput.replace('+CMGL: ', '')

@@ -7,19 +7,19 @@
 	@date: Lunes 16 de Mayo de 2015 """
 
 import os
+import json
 import time
 import Queue
 import socket
 import inspect
 import threading
-import json
 
 import logger
-import tcpTransmitter
-import udpTransmitter
+import contactList
 import udpReceptor
 import tcpReceptor
-import contactList
+import udpTransmitter
+import tcpTransmitter
 
 TIMEOUT = 1.5
 BUFFER_SIZE = 1024
@@ -32,16 +32,10 @@ class Network(object):
 
 	localAddress = JSON_CONFIG["NETWORK"]["LOCAL_ADDRESS"]
 	lanProtocol = JSON_CONFIG["NETWORK"]["PROTOCOL"]
-	setIp = JSON_CONFIG["NETWORK"]["SET_IP"]
 	localInterface = None
 
-	tcpReceptionSocket = socket.socket
-	tcpReceptionPort = JSON_CONFIG["NETWORK"]["TCP_PORT"]
-	udpReceptionSocket = socket.socket
 	udpReceptionPort = JSON_CONFIG["NETWORK"]["UDP_PORT"]
-
-	udpTransmitterInstance = udpTransmitter.UdpTransmitter(localAddress)
-	tcpTransmitterInstance = tcpTransmitter.TcpTransmitter()
+	tcpReceptionPort = JSON_CONFIG["NETWORK"]["TCP_PORT"]
 
 	receptionBuffer = Queue.PriorityQueue()
 	isActive = False
@@ -52,7 +46,6 @@ class Network(object):
 		@param _receptionBuffer: Buffer para la recepción de datos
 		@type: list"""
 		self.receptionBuffer = _receptionBuffer
-		# TODO: Crear aca las instancias para la tranasmisión
 
 	def __del__(self):
 		"""Elminación de la instancia de esta clase, cerrando conexiones establecidas, para no dejar
@@ -66,7 +59,6 @@ class Network(object):
 			activeInterfacesFile.close()
 			self.udpReceptionSocket.close()
 			self.tcpReceptionSocket.close()
-			del udpTransmitterInstance
 		except Exception as errorMessage:
 			pass
 		finally:
@@ -78,26 +70,31 @@ class Network(object):
 		self.localInterface = _activeInterface
 		commandToExecute = 'ip addr show ' + self.localInterface + ' | grep inet'
 		# Obtenemos la dirección IP local asignada por DHCP
-		if self.setIp: 
-			self.localAddress = os.popen(commandToExecute).readline().split()[1].split('/')[0]
+		self.localAddress = os.popen(commandToExecute).readline().split()[1].split('/')[0]
 		try: # Intenta conexión UDP
 			self.udpReceptionSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-			if JSON_CONFIG["NETWORK"]["CLOSE_PORT"]: # Para cerrar el puerto en caso de estar ocupado 
+			'''if JSON_CONFIG["NETWORK"]["CLOSE_PORT"]: # Para cerrar el puerto en caso de estar ocupado
 				udpCommand = 'fuser -k -s ' + str(self.udpReceptionPort) + '/udp' # -k = kill; -s: modo silecioso 
-				os.system(udpCommand + '\n' + udpCommand)
+				os.system(udpCommand + '\n' + udpCommand)'''
 			self.udpReceptionSocket.bind((self.localAddress, self.udpReceptionPort))
 			self.udpReceptionSocket.settimeout(TIMEOUT)
+			#####################################################################
+			self.udpTransmitter = udpTransmitter.UdpTransmitter(self.localAddress)
+			#####################################################################
 		except socket.error as errorMessage:
 			logger.write('WARNING', '[NETWORK] Excepción en "' + str(inspect.stack()[0][3]) + ' para UDP " (' +str(errorMessage) + ')')
 		try: # Intenta conexión TCP
 			self.tcpReceptionSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 			self.tcpReceptionSocket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-			if JSON_CONFIG["NETWORK"]["CLOSE_PORT"]: # Para cerrar el puerto en caso de estar ocupado 
+			'''if JSON_CONFIG["NETWORK"]["CLOSE_PORT"]: # Para cerrar el puerto en caso de estar ocupado
 				tcpCommand = 'fuser -k -s ' + str(self.udpReceptionPort) + '/tcp' # -k = kill; -s: modo silecioso 
-				os.system(tcpCommand + '\n' + tcpCommand)
+				os.system(tcpCommand + '\n' + tcpCommand)'''
 			self.tcpReceptionSocket.bind((self.localAddress, self.tcpReceptionPort))
 			self.tcpReceptionSocket.listen(CONNECTION_LIMIT)
 			self.tcpReceptionSocket.settimeout(TIMEOUT)
+			####################################################
+			self.tcpTransmitter = tcpTransmitter.TcpTransmitter()
+			####################################################
 		except socket.error as errorMessage:
 			logger.write('WARNING', '[NETWORK] Excepción en "' + str(inspect.stack()[0][3]) + ' para TCP " (' +str(errorMessage) + ')')
 
@@ -113,15 +110,15 @@ class Network(object):
 		@param message: cadena de texto a enviar
 		@type message: str """
 		try:
-			if(self.lanProtocol == 'UDP'):
-				return self.udpTransmitterInstance.send(message, destinationIp, destinationUdpPort)
-			else:
+			if self.lanProtocol == 'TCP':
 				# Crea un nuevo socket que usa el protocolo de transporte especificado
 				remoteSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 				# Conecta el socket con el dispositivo remoto sobre el puerto especificado
 				remoteSocket.connect((destinationIp, destinationTcpPort))
 				logger.write('DEBUG', '[NETWORK] Conectado con la dirección \'%s\'.' % destinationIp)
-				return self.tcpTransmitterInstance.send(message, remoteSocket)
+				return self.tcpTransmitter.send(message, remoteSocket)
+			else:
+				return self.udpTransmitter.send(message, destinationIp, destinationUdpPort)
 		except socket.error as errorMessage:
 			logger.write('WARNING','[NETWORK] %s.' % errorMessage)
 			return False
@@ -130,12 +127,12 @@ class Network(object):
 		"""Comienza la recepción de datos por medio de los protocolos TCP y UDP
 		para esto requiere la inciación de hilos que esperen los datos en paralelo
 		a la ejecución del programa."""
-		receiveTcpThread = threading.Thread(target = self.receiveTcp, name = 'tcpReceptor')
 		receiveUdpThread = threading.Thread(target = self.receiveUdp, name = 'udpReceptor')
-		receiveTcpThread.start()
+		receiveTcpThread = threading.Thread(target = self.receiveTcp, name = 'tcpReceptor')
 		receiveUdpThread.start()
-		receiveTcpThread.join()
+		receiveTcpThread.start()
 		receiveUdpThread.join()
+		receiveTcpThread.join()
 
 	def receiveTcp(self):
 		""" Esta función es ejecutada en un hilo, se queda esperando los paquetes
@@ -144,17 +141,29 @@ class Network(object):
 			try:
 				# Espera por una conexion entrante y devuelve un nuevo socket que representa la conexion, como asi tambien la direccion del cliente
 				remoteSocket, addr = self.tcpReceptionSocket.accept()
-				if addr in contactList.allowedIpAddress.values() or not JSON_CONFIG["COMMUNICATOR"]["RECEPTION_FILTER"]:
-					remoteSocket.settimeout(TIMEOUT)
-					threadName = 'Thread-TCPReceptor'
+				ipAddress = addr[0]
+				remoteSocket.settimeout(TIMEOUT)
+				threadName = 'Thread-TCPReceptor'
+				# Aplicamos el filtro de recepción en caso de estar activado...
+				if JSON_CONFIG["COMMUNICATOR"]["RECEPTION_FILTER"]:
+					ipAddressFounded = False
+					for valueList in contactList.allowedIpAddress.values():
+						if ipAddress in valueList:
+							logger.write('DEBUG', '[NETWORK] Conexion desde \'%s\' aceptada.' % ipAddress)
+							receptorThread = tcpReceptor.TcpReceptor(threadName, remoteSocket, self.receptionBuffer)
+							ipAddressFounded = True
+							receptorThread.start()
+							break
+					if not ipAddressFounded:
+						logger.write('WARNING', '[NETWORK] Mensaje de \'%s\' rechazado!' % ipAddress)
+						remoteSocket.close()
+				# ... sino, recibimos todos los mensajes independientemente del origen
+				else:
+					logger.write('DEBUG', '[NETWORK] Conexion desde \'%s\' aceptada.' % ipAddress)
 					receptorThread = tcpReceptor.TcpReceptor(threadName, remoteSocket, self.receptionBuffer)
 					receptorThread.start()
-				else:
-					self.tcpTransmitterInstance.sendMessage('Usted no pertenece a un ccontacto registrado.',remoteSocket)
-					remoteSocket.close()
-					logger.write('WARNING', '[NETWORK] Se rechazo un mensaje de emisor (' + addr + ') no registrado.')
+			# Para que no se quede esperando indefinidamente en el'accept'
 			except socket.timeout as errorMessage:
-				# Para que no se quede esperando indefinidamente en el'accept'
 				pass
 		self.tcpReceptionSocket.close()
 		logger.write('WARNING','[NETWORK] Función \'%s\' terminada.' % inspect.stack()[0][3])
@@ -164,36 +173,26 @@ class Network(object):
 		y mensajes que lleguen al puerto UDP establecido para guardarlos en el buffer."""	
 		while self.isActive:
 			try:
-				data, addr = self.udpReceptionSocket.recvfrom(BUFFER_SIZE)
-				if addr in contactList.allowedIpAddress.values() or not JSON_CONFIG["COMMUNICATOR"]["RECEPTION_FILTER"]:
-					if data.startswith('START_OF_FILE_INSTANCE '):
-						# Recibimos el puerto al que se debe responder
-						remoteAddress = data.split()[1]
-						remotePort = int(data.split()[2])
-						threadName = 'Thread-UDPReceptor-FileInstance'
-						receptorThread = udpReceptor.UdpReceptor(threadName,self.receptionBuffer, self.localAddress, remoteAddress, remotePort)
-						receptorThread.start()
-					elif data.startswith('START_OF_MESSAGE_INSTANCE '):
-						# Recibimos el puerto al que se debe responder
-						remoteAddress = data.split()[1]
-						remotePort = int(data.split()[2])
-						threadName = 'Thread-UDPReceptor-MessageInstance'
-						receptorThread = udpReceptor.UdpReceptor(threadName,self.receptionBuffer, self.localAddress, remoteAddress, remotePort)
-						receptorThread.start()
-					elif data.startswith('START_OF_FILE '):
-						# Recibimos el puerto al que se debe responder
-						remoteAddress = data.split()[1]
-						remotePort = int(data.split()[2])
-						threadName = 'Thread-UDPReceptor-File'
-						receptorThread = udpReceptor.UdpReceptor(threadName, self.receptionBuffer, self.localAddress, remoteAddress, remotePort)
-						receptorThread.start()
-					else:
-						logger.write('DEBUG', '[NETWORK] Ha llegado un nuevo mensaje!')
-						self.receptionBuffer.put((100 - JSON_CONFIG["COMMUNICATOR"]["MESSAGE_PRIORITY"], data))
+				dataReceived, addr = self.udpReceptionSocket.recvfrom(BUFFER_SIZE)
+				if dataReceived.startswith('START_OF_FILE'):
+					# Recibimos el puerto al que se debe responder
+					remoteAddress = dataReceived.split()[1]
+					remotePort = int(dataReceived.split()[2])
+					threadName = 'Thread-File'
+					receptorThread = udpReceptor.UdpReceptor(threadName, self.receptionBuffer, self.localAddress, remoteAddress, remotePort)
+					receptorThread.start()
+				elif dataReceived.startswith('START_OF_INSTANCE'):
+					# Recibimos el puerto al que se debe responder
+					remoteAddress = dataReceived.split()[1]
+					remotePort = int(dataReceived.split()[2])
+					threadName = 'Thread-MessageInstance'
+					receptorThread = udpReceptor.UdpReceptor(threadName,self.receptionBuffer, self.localAddress, remoteAddress, remotePort)
+					receptorThread.start()
 				else:
-					# No se puede responder al emisor porque no se tiene el puerto UDP
-					logger.write('WARNING', '[NETWORK] Se rechazo un mensaje de emisor (' + addr + ') no registrado.')
+					self.receptionBuffer.put((10, dataReceived))
+					logger.write('DEBUG', '[NETWORK] Ha llegado un nuevo mensaje!')
+			# Esta excepción es parte de la ejecución, no implica un error
 			except socket.timeout, errorMessage:
-				pass # Esta excepción es parte de la ejecución, no implica un error
+				pass
 		self.udpReceptionSocket.close()
 		logger.write('WARNING', '[NETWORK] Funcion \'%s\' terminada.' % inspect.stack()[0][3])

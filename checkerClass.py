@@ -21,21 +21,20 @@ TIME_REFRESH = 5
 
 class Checker(threading.Thread):
 
-	networkThreadName = 'networkReceptor'
 	smsThreadName = 'smsReceptor'
 	emailThreadName = 'emailReceptor'
+	networkThreadName = 'networkReceptor'
 	gprsThreadName = 'gprsVerifyConnection'
 	bluetoothThreadName = 'bluetoothReceptor'
 
-	availableNetwork = False       # Indica si el modo NETWORK está disponible
 	availableSms = False       # Indica si el modo SMS está disponible
 	availableEmail = False     # Indica si el modo EMAIL está disponible
+	availableNetwork = False   # Indica si el modo NETWORK está disponible
 	availableBluetooth = False # Indica si el modo BLUTOOTH está disponible
 
 	threadNameList = [networkThreadName, smsThreadName, emailThreadName, gprsThreadName, bluetoothThreadName]
 
 	isActive = False
-	emailTries = 0 # Para evitar los falsos posistivos de email
 
 	def __init__(self, _modemSemaphore, _networkInstance, _gprsInstance, _emailInstance, _smsInstance, _bluetoothInstance):
 		threading.Thread.__init__(self, name = 'CheckerThread')
@@ -47,10 +46,10 @@ class Checker(threading.Thread):
 		self.bluetoothInstance = _bluetoothInstance
 
 	def __del__(self):
-		self.networkInstance.isActive = False
 		self.smsInstance.isActive = False
 		self.gprsInstance.isActive = False
 		self.emailInstance.isActive = False
+		self.networkInstance.isActive = False
 		self.bluetoothInstance.isActive = False
 		# Esperamos que terminen los hilos receptores networkzados
 		for receptorThread in threading.enumerate():
@@ -61,12 +60,51 @@ class Checker(threading.Thread):
 	def run(self):
 		self.isActive = True
 		while self.isActive:
-			self.availableNetwork = self.verifyNetworkConnection()
 			self.availableSms = self.verifySmsConnection()
 			self.availableEmail = self.verifyEmailConnection()
+			self.availableNetwork = self.verifyNetworkConnection()
 			self.availableBluetooth = self.verifyBluetoothConnection()
 			time.sleep(TIME_REFRESH)
 		logger.write('WARNING', '[CHECKER] Funcion \'%s\' terminada.' % inspect.stack()[0][3])
+
+	def verifySmsConnection(self):
+		"""Se determina la disponibilidad de la comunicación por medio comunicación SMS.
+		@return: Se determina si la comunicación por este medio se puede realizar.
+		@rtype: bool"""
+		ttyUSBPattern = re.compile('ttyUSB[0-9]+')
+		lsDevProcess = subprocess.Popen(['ls', '/dev/'], stdout = subprocess.PIPE, stderr = subprocess.PIPE)
+		lsDevOutput, lsDevError = lsDevProcess.communicate()
+		ttyUSBDevices = ttyUSBPattern.findall(lsDevOutput)
+		# Se detectaron dispositivos USB conectados
+		if len(ttyUSBDevices) > 0:
+			if self.smsInstance.serialPort not in ttyUSBDevices:
+				wvdialProcess = subprocess.Popen('wvdialconf', stdout = subprocess.PIPE, stderr = subprocess.PIPE)
+				wvdialOutput, wvdialError = wvdialProcess.communicate()
+				ttyUSBPattern = re.compile('ttyUSB[0-9]+<Info>')
+				modemsList = ttyUSBPattern.findall(wvdialError)
+				# Se detectaron dispositivos USB que responden como módems
+				if len(modemsList) > 0:
+					gsmSerialPort = modemsList[1].replace('<Info>','')
+					# Si no se produjo ningún error durante la configuración, ponemos al módem a recibir SMS
+					if self.smsInstance.connect(gsmSerialPort):
+						self.smsInstance.isActive = True
+						smsThread = threading.Thread(target = self.smsInstance.receive, name = self.smsThreadName)
+						smsThread.start()
+						smsInfo = gsmSerialPort + ' - ' + str(self.smsInstance.telephoneNumber)
+						logger.write('INFO', '[SMS] Listo para usarse (' + smsInfo + ').')
+						return True
+					else:
+						self.smsInstance.closePort()
+						return False
+			# Si el módem ya está en modo activo (funcionando), devolvemos 'True'
+			elif self.smsInstance.isActive:
+				return True
+		else:
+			if self.smsInstance.isActive:
+				self.smsInstance.closePort()
+				self.smsInstance.isActive = False
+				self.smsInstance.serialPort = None
+			return False
 
 	def verifyNetworkConnection(self):
 		"""Se determina la disponibilidad de la comunicación por medio de comunicación Lan.
@@ -94,9 +132,9 @@ class Checker(threading.Thread):
 						networkThread = threading.Thread(target = self.networkInstance.receive, name = self.networkThreadName)
 						networkThread.start()
 						networkInfo = patternMatched.group() + ' - ' + self.networkInstance.localAddress
-						logger.write('INFO','[NETWORK] Listo para usarse (' + networkInfo + ').')
+						logger.write('INFO', '[NETWORK] Listo para usarse (' + networkInfo + ').')
 						return True
-				# Si la interfaz ya está en modo activo (funcionando), devolvemos True
+				# Si la interfaz ya está en modo activo (funcionando), devolvemos 'True'
 				elif self.networkInstance.isActive:
 					return True
 		# Si ya no se encontró ninguna interfaz UP y ya estabamos escuchando, dejamos de hacerlo
@@ -110,45 +148,6 @@ class Checker(threading.Thread):
 			activeInterfacesFile.close()
 			return False
 
-	def verifySmsConnection(self):
-		"""Se determina la disponibilidad de la comunicación por medio comunicación SMS.
-		@return: Se determina si la comunicación por este medio se puede realizar.
-		@rtype: bool"""
-		ttyUSBPattern = re.compile('ttyUSB[0-9]+')
-		lsDevProcess = subprocess.Popen(['ls', '/dev/'], stdout = subprocess.PIPE, stderr = subprocess.PIPE)
-		lsDevOutput, lsDevError = lsDevProcess.communicate()
-		ttyUSBDevices = ttyUSBPattern.findall(lsDevOutput)
-		# Se detectaron dispositivos USB conectados
-		if len(ttyUSBDevices) > 0:
-			if self.smsInstance.serialPort not in ttyUSBDevices:
-				wvdialProcess = subprocess.Popen('wvdialconf', stdout = subprocess.PIPE, stderr = subprocess.PIPE)
-				wvdialOutput, wvdialError = wvdialProcess.communicate()
-				ttyUSBPattern = re.compile('ttyUSB[0-9]+<Info>')
-				modemsList = ttyUSBPattern.findall(wvdialError)
-				# Se detectaron dispositivos USB que responden como módems
-				if len(modemsList) > 0:
-					gsmSerialPort = modemsList[1].replace('<Info>','')
-					# Si no se produjo ningún error durante la configuración, ponemos al módem a recibir SMS
-					if self.smsInstance.connect(gsmSerialPort):
-						self.smsInstance.isActive = True
-						smsThread = threading.Thread(target = self.smsInstance.receive, name = self.smsThreadName)
-						smsThread.start()
-						smsInfo = gsmSerialPort + ' - ' + str(self.smsInstance.telephoneNumber)
-						logger.write('INFO','[SMS] Listo para usarse (' + smsInfo + ').')
-						return True
-					else:
-						self.smsInstance.closePort()
-						return False
-			# Si el módem ya está en modo activo (funcionando), devolvemos 'True'
-			elif self.smsInstance.isActive:
-				return True
-		else:
-			if self.smsInstance.isActive:
-				self.smsInstance.closePort()
-				self.smsInstance.isActive = False
-				self.smsInstance.serialPort = None
-			return False
-
 	def verifyEmailConnection(self):
 		"""Se determina la disponibilidad de la comunicación por medio de comunicación 
 		a través Email.
@@ -158,21 +157,28 @@ class Checker(threading.Thread):
 		try:
 			remoteHost = socket.gethostbyname(TEST_REMOTE_SERVER)
 			testSocket = socket.create_connection((remoteHost, 80), 2) # Se determina si es alcanzable
-			if not self.emailInstance.isActive:
-				time.sleep(3.0)
+			if not self.emailInstance.isActive and not self.emailInstance.failedConnection:
 				self.emailInstance.connect()
-				self.emailInstance.isActive = True
 				emailThread = threading.Thread(target = self.emailInstance.receive, name = self.emailThreadName)
 				emailThread.start()
-				self.emailTries = 0
-				logger.write('INFO', '[EMAIL] Listo para usarse.')
-			return True
-		except:
-			self.emailTries = self.emailTries + 1
-			if self.emailInstance.isActive and self.emailTries > 3:
-				self.emailInstance.isActive = False
+				logger.write('INFO', '[EMAIL] Listo para usarse (' + self.emailInstance.emailAccount + ').')
+				return True
+			# Si el email ya está en modo activo (funcionando), devolvemos 'True'
+			elif self.emailInstance.isActive:
+				return True
+			# Entonces significa que hubo un error en la conexión (función 'connect()')
+			else:
 				return False
-			return True
+		# No hay conexión a Internet, por lo que se debe hacer reintentos
+		except socket.error as DNSError:
+			if self.emailInstance.isActive:
+				self.emailInstance.isActive = False
+			return False
+		# Error con los servidores SMTP e IMAP (probablemente estén mal escritos o el puerto sea incorrecto)
+		except Exception as errorMessage:
+			logger.write('ERROR', '[EMAIL] Error al intentar conectar con los servidores SMTP e IMAP')
+			if not self.emailInstance.failedConnection:
+				self.emailInstance.failedConnection = True
 
 	def verifyBluetoothConnection(self):
 		"""Se determina la disponibilidad de la comunicación por medio de comunicación Bluetooth.
@@ -188,7 +194,7 @@ class Checker(threading.Thread):
 				self.bluetoothInstance.isActive = True
 				bluetoothThread = threading.Thread(target = self.bluetoothInstance.receive, name = self.bluetoothThreadName)
 				bluetoothThread.start()
-				logger.write('INFO','[BLUETOOTH] Listo para usarse.')
+				logger.write('INFO', '[BLUETOOTH] Listo para usarse.')
 			return True
 		else:
 			if self.bluetoothInstance.isActive:

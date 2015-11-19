@@ -7,24 +7,18 @@
 	@organization: UNC - Fcefyn
 	@date: Lunes 16 de Abril de 2015 """
 
-import logger
-import contactList
-import messageClass
-
 import os
-import time
+import json
 import shlex
-import Queue
 import email
+import Queue
 import pickle
 import socket
 import inspect
 import smtplib
 import imaplib
-import threading
 import mimetypes
 import subprocess
-import json
 
 from email import encoders
 from email.header import decode_header
@@ -36,18 +30,25 @@ from email.mime.text import MIMEText
 from email.mime.audio import MIMEAudio
 from email.mime.image import MIMEImage
 
+import logger
+import contactList
+import messageClass
+
 TIMEOUT = 5
-ATTACHMENTS = 'attachments'
+ATTACHMENTS = 'Attachments'
 
 JSON_FILE = 'config.json'
 JSON_CONFIG = json.load(open(JSON_FILE))
 
 class Email(object):
 
+	emailAccount = None
+
 	smtpServer = smtplib.SMTP
 	imapServer = imaplib.IMAP4_SSL
 
-	receptionBuffer = Queue.Queue()
+	receptionBuffer = Queue.PriorityQueue()
+	failedConnection = False
 	isActive = False
 
 	def __init__(self, _receptionBuffer):
@@ -58,7 +59,9 @@ class Email(object):
 		@param _receptionBuffer: Buffer para la recepción de datos
 		@type: list"""
 		self.receptionBuffer = _receptionBuffer
-		socket.setdefaulttimeout(TIMEOUT) # Establecemos tiempo maximo antes de reintentar lectura
+		self.emailAccount = JSON_CONFIG["EMAIL"]["ACCOUNT"]
+		# Establecemos tiempo maximo antes de reintentar lectura
+		socket.setdefaulttimeout(TIMEOUT)
 
 	def __del__(self):
 		"""Elminación de la instancia de esta clase, cerrando conexiones establecidas, para no dejar
@@ -81,110 +84,88 @@ class Email(object):
 			self.smtpServer.login(JSON_CONFIG["EMAIL"]["ACCOUNT"], JSON_CONFIG["EMAIL"]["PASSWORD"]) # Nos logueamos en el servidor SMTP
 			self.imapServer.login(JSON_CONFIG["EMAIL"]["ACCOUNT"], JSON_CONFIG["EMAIL"]["PASSWORD"])            # Nos logueamos en el servidor IMAP
 			self.imapServer.select('INBOX') # Seleccionamos la Bandeja de Entrada
-		except socket.error as emailError:
-			logger.write('ERROR','[EMAIL] %s.' % emailError)
+		except smtplib.SMTPException as smtpError:
+			logger.write('ERROR', '[EMAIL] Se produjo un error: %s' % smtpError)
+			self.failedConnection = True
+			raise
+		except IMAP4.error as imapError:
+			logger.write('ERROR', '[EMAIL] Se produjo un error: %s' % imapError)
+			self.failedConnection = True
+			raise
 
-	def send(self, emailDestination, emailSubject, message):
+	def send(self, message, emailDestination):
 		""" Envia un mensaje de correo electronico. Debe determinar el tipo de mensaje
-		para determinar si enviar o no un archivo adjunto
-		@param emailDestination: correo electronico del destinatario
-		@type emailDestination: str
-		@param emailSubject: asunto del mensaje
-		@type emailSubject: str
+		para determinar si enviar o no un archivo adjunto.
 		@param message: correo electronico a enviar
-		@type message: str """
-		if isinstance(message, messageClass.FileMessage) and message.sendInstance:
-			del message.sendInstance  # Se elimina el campo auxiliar, no es info útil
-			emailMessage = 'START_OF_FILE_INSTANCE ' + pickle.dumps(message)
-			message.sendInstance = True
-			return self.sendAttachment(emailDestination, message.fileName, emailMessage) 
-		elif isinstance(message, messageClass.FileMessage) and not message.sendInstance:
-			return self.sendAttachment(emailDestination, message.fileName, 'START_OF_FILE ' + message.fileName)
-		elif isinstance(message, messageClass.Message) and message.sendInstance:
-			del message.sendInstance  # Se elimina el campo auxiliar, no es info útil
-			emailMessage = 'START_OF_MESSAGE_INSTANCE ' + pickle.dumps(message)
-			message.sendInstance = True
-			return self.sendText(emailDestination, emailSubject, emailMessage) 
-		else: #isinstance(message, messageClass.Message) and not message.sendInstance:
-			emailMessage = message.textMessage 
-			return self.sendText(emailDestination, emailSubject, emailMessage) 
+		@type message: str
+		@param emailDestination: correo electronico del destinatario
+		@type emailDestination: str """
+		# Comprobación de envío de texto plano
+		if isinstance(message, messageClass.SimpleMessage) and not message.isInstance:
+			return self.sendMessage(message.plainText, emailDestination)
+		# Comprobación de envío de archivo
+		elif isinstance(message, messageClass.FileMessage) and not message.isInstance:
+			return self.sendAttachment(message.fileName, emailDestination)
+		# Entonces se trata de enviar una instancia de mensaje
+		else:
+			plainText = 'INSTANCE' + pickle.dumps(message)
+			return self.sendMessage(plainText, emailDestination)
 
-	def sendText(self, emailDestination, emailSubject, message):
+	def sendMessage(self, plainText, emailDestination):
 		try:
 			# Se construye un mensaje simple
-			mimeText = MIMEText(message)
-			mimeText['From'] = '%s <%s>' % (JSON_CONFIG["EMAIL"]["NAME"], JSON_CONFIG["EMAIL"]["ACCOUNT"])
+			mimeText = MIMEText(plainText)
+			mimeText['From'] = '%s <%s>' % (JSON_CONFIG["COMMUNICATOR"]["NAME"], JSON_CONFIG["EMAIL"]["ACCOUNT"])
 			mimeText['To'] = emailDestination
-			mimeText['Subject'] = emailSubject
+			mimeText['Subject'] = JSON_CONFIG["EMAIL"]["SUBJECT"]
 			self.smtpServer.sendmail(mimeText['From'], mimeText['To'], mimeText.as_string())
-			logger.write('INFO', '[EMAIL] Mensaje enviado correctamente a ' + emailDestination)
+			logger.write('INFO', '[EMAIL] Mensaje enviado a \'%s\'' % emailDestination)
 			return True
 		except Exception as errorMessage:
-			logger.write('WARNING', '[EMAIL] Mensaje no enviado, error: ' + str(errorMessage))
+			logger.write('WARNING', '[EMAIL] Mensaje no enviado: %s' % str(errorMessage))
 			return False
 
-	def sendAttachment(self, emailDestination, fileToSend, messageToSend = 'Este email tiene un archivo adjunto.'):
-		relativePath = fileToSend
-		absolutePath = os.path.abspath(relativePath)
-		if os.path.isfile(absolutePath):
-			try:
-				fileDirectory, fileName = os.path.split(absolutePath)
-				cType = mimetypes.guess_type(absolutePath)[0]
-				mainType, subType = cType.split('/', 1)
-				mimeMultipart = MIMEMultipart()
-				mimeMultipart['Subject'] = 'Contenido de %s' % fileDirectory
-				mimeMultipart['From'] = '%s <%s>' % (JSON_CONFIG["EMAIL"]["NAME"], JSON_CONFIG["EMAIL"]["ACCOUNT"])
-				mimeMultipart['To'] = emailDestination
-				if mainType == 'text':
-					fileObject = open(absolutePath)
-					# Note: we should handle calculating the charset
-					attachmentFile = MIMEText(fileObject.read(), _subtype = subType)
-					fileObject.close()
-				elif mainType == 'image':
-					fileObject = open(absolutePath, 'rb')
-					attachmentFile = MIMEImage(fileObject.read(), _subtype = subType)
-					fileObject.close()
-				elif mainType == 'audio':
-					fileObject = open(absolutePath, 'rb')
-					attachmentFile = MIMEAudio(fileObject.read(), _subtype = subType)
-					fileObject.close()
-				else:
-					fileObject = open(absolutePath, 'rb')
-					attachmentFile = MIMEBase(mainType, subType)
-					attachmentFile.set_payload(fileObject.read())
-					fileObject.close()
-					# Codificamos el payload (carga útil) usando Base64
-					encoders.encode_base64(attachmentFile)
-				# Agregamos una cabecera al email, de nombre 'Content-Disposition' y valor 'attachment' ('filename' es el parámetro)
-				attachmentFile.add_header('Content-Disposition', 'attachment', filename = fileName)
-				mimeText = MIMEText(messageToSend, _subtype = 'plain')
-				mimeMultipart.attach(attachmentFile)
-				mimeMultipart.attach(mimeText)
-				self.smtpServer.sendmail(mimeMultipart['From'], mimeMultipart['To'], mimeMultipart.as_string())
-				logger.write('INFO', '[EMAIL] Archivo ('+ fileName + ') enviado correctamente a ' + emailDestination)
-				return True
-			except Exception as errorMessage:
-				logger.write('WARNING', '[EMAIL] Archivo no enviado, error: ' + str(errorMessage))
-				return False
-		else:
-			print 'El archivo no existe!' # TODO borrar
+	def sendAttachment(self, fileName, emailDestination, messageToSend = 'Este email tiene un archivo adjunto.'):
+		try:
+			absoluteFilePath = os.path.abspath(fileName)
+			fileDirectory, fileName = os.path.split(absoluteFilePath)
+			cType = mimetypes.guess_type(absoluteFilePath)[0]
+			mainType, subType = cType.split('/', 1)
+			mimeMultipart = MIMEMultipart()
+			mimeMultipart['Subject'] = JSON_CONFIG["EMAIL"]["SUBJECT"]
+			mimeMultipart['From'] = '%s <%s>' % (JSON_CONFIG["COMMUNICATOR"]["NAME"], JSON_CONFIG["EMAIL"]["ACCOUNT"])
+			mimeMultipart['To'] = emailDestination
+			if mainType == 'text':
+				fileObject = open(absoluteFilePath)
+				# Note: we should handle calculating the charset
+				attachmentFile = MIMEText(fileObject.read(), _subtype = subType)
+				fileObject.close()
+			elif mainType == 'image':
+				fileObject = open(absoluteFilePath, 'rb')
+				attachmentFile = MIMEImage(fileObject.read(), _subtype = subType)
+				fileObject.close()
+			elif mainType == 'audio':
+				fileObject = open(absoluteFilePath, 'rb')
+				attachmentFile = MIMEAudio(fileObject.read(), _subtype = subType)
+				fileObject.close()
+			else:
+				fileObject = open(absoluteFilePath, 'rb')
+				attachmentFile = MIMEBase(mainType, subType)
+				attachmentFile.set_payload(fileObject.read())
+				fileObject.close()
+				# Codificamos el payload (carga útil) usando Base64
+				encoders.encode_base64(attachmentFile)
+			# Agregamos una cabecera al email, de nombre 'Content-Disposition' y valor 'attachment' ('filename' es el parámetro)
+			attachmentFile.add_header('Content-Disposition', 'attachment', filename = fileName)
+			mimeText = MIMEText(messageToSend, _subtype = 'plain')
+			mimeMultipart.attach(attachmentFile)
+			mimeMultipart.attach(mimeText)
+			self.smtpServer.sendmail(mimeMultipart['From'], mimeMultipart['To'], mimeMultipart.as_string())
+			logger.write('INFO', '[EMAIL] Archivo \'%s\' enviado correctamente!' % fileName)
+			return True
+		except Exception as errorMessage:
+			logger.write('WARNING', '[EMAIL] Archivo \'%s\' no enviado: %s' % (fileName, str(errorMessage)))
 			return False
-
-	def receiveAttachment(self, emailHeader):
-		currentDirectory = os.getcwd()                                   # Obtenemos el directorio actual de trabajo
-		fileName = emailHeader.get_filename()                            # Obtenemos el nombre del archivo adjunto
-		filePath = os.path.join(currentDirectory, ATTACHMENTS, fileName) # Obtenemos el path relativo del archivo a descargar
-		# Verificamos si el directorio 'ATTACHMENTS' no está creado en el directorio actual
-		if ATTACHMENTS not in os.listdir(currentDirectory):
-			os.mkdir(ATTACHMENTS)
-		# Verificamos si el archivo a descargar no existe en la carpeta 'ATTACHMENTS'
-		if not os.path.isfile(filePath):
-			fileObject = open(filePath, 'w+')
-			fileObject.write(emailHeader.get_payload(decode = True))
-			fileObject.close()
-			logger.write('INFO', '[EMAIL] Archivo adjunto \'%s\' descargado.' % fileName)
-		else:
-			logger.write('WARNING', '[EMAIL] El archivo \'%s\' ya existe! Imposible descargar.' % fileName)
 
 	def receive(self):
 		""" Funcion que se encarga de consultar el correo electronico asociado al modulo
@@ -193,6 +174,7 @@ class Email(object):
 		los almacenrá en el buffer, si el remitente del mensaje se encuentra registrado (en el 
 		archivo 'contactList.py') o en caso contrario, se enviara una notificacion al usuario 
  		informandole que no es posible realizar la operacion solicitada."""
+ 		self.isActive = True
 		while self.isActive:
 			emailIds = ['']
 			# Mientras no se haya recibido ningun correo electronico, el temporizador no haya expirado y no se haya detectado movimiento...
@@ -217,37 +199,50 @@ class Email(object):
 					sourceName = self.getSourceName(emailReceived)     # Almacenamos el nombre del remitente
 					sourceEmail = self.getSourceEmail(emailReceived)   # Almacenamos el correo del remitente
 					emailSubject = self.getEmailSubject(emailReceived) # Almacenamos el asunto correspondiente
-					logger.write('DEBUG', '[EMAIL] Procesando correo de ' + sourceName + ' - ' + sourceEmail)
-					# Comprobamos si el remitente del mensaje (un correo) esta registrado...
-					#self.sendOutput(sourceEmail, emailSubject, emailBody) # -----> SOLO PARA LA DEMO <-----
+					logger.write('DEBUG', '[EMAIL] Procesando correo de \'%s\'' % sourceEmail)
+					# Comprobamos si el remitente del mensaje (un correo) está registrado...
 					if sourceEmail in contactList.allowedEmails.values() or not JSON_CONFIG["COMMUNICATOR"]["RECEPTION_FILTER"]:
 						for emailHeader in emailReceived.walk():
 							if emailHeader.get('Content-Disposition') is not None:
 								self.receiveAttachment(emailHeader)
 						emailBody = self.getEmailBody(emailReceived) # Obtenemos el cuerpo del email
-						#self.sendOutput(sourceEmail, emailSubject, emailBody) # -----> SOLO PARA LA DEMO <-----
-						if emailBody.startswith('START_OF_FILE_INSTANCE '):
-							emailBody = emailBody[len('START_OF_FILE_INSTANCE '):]
-							message = pickle.loads(emailBody)
-							self.receptionBuffer.put((100 - message.priority, message))	
-						elif emailBody.startswith('START_OF_FILE '):
-							emailBody = emailBody[len('START_OF_FILE '):]
-							self.receptionBuffer.put((100 - JSON_CONFIG["COMMUNICATOR"]["FILE_PRIORITY"], 'ARCHIVO_RECIBIDO: ' + emailBody))
-						elif emailBody.startswith('START_OF_MESSAGE_INSTANCE '):
-							emailBody = emailBody[len('START_OF_MESSAGE_INSTANCE '):]
-							message = pickle.loads(emailBody)
-							self.receptionBuffer.put((100 - message.priority, message))	
-						elif emailBody != None:
-							emailBody = emailBody[:emailBody.rfind('\r\n')] # Elimina el salto de línea del final
-							self.receptionBuffer.put((100 - JSON_CONFIG["COMMUNICATOR"]["MESSAGE_PRIORITY"], emailBody))
+						if emailBody is not None:
+							#self.sendOutput(sourceEmail, emailSubject, emailBody) # -----> SOLO PARA LA DEMO <-----
+							if emailBody.startswith('INSTANCE'):
+								messageInstance = emailBody[len('INSTANCE'):]
+								messageInstance = pickle.loads(messageInstance)
+								self.receptionBuffer.put((100 - messageInstance.priority, messageInstance))
+								logger.write('INFO', '[EMAIL] Instancia de mensaje recibida correctamente!')
+							else:
+								emailBody = emailBody[:emailBody.rfind('\r\n')] # Elimina el salto de línea del final
+								self.receptionBuffer.put((10, emailBody))
+								logger.write('INFO', '[EMAIL] Mensaje de texto plano recibido correctamente!')
 					else:
 						logger.write('WARNING', '[EMAIL] Imposible procesar la solicitud. El correo no se encuentra registrado!')
 						messageToSend = 'Imposible procesar la solicitud. Usted no se encuentra registrado!'
-						self.sendText(sourceEmail, emailSubject, messageToSend)
+						self.sendMessage(messageToSend, sourceEmail)
 			# ... sino, dejamos de esperar mensajes
 			else:
 				break
-		logger.write('WARNING', '[EMAIL] Funcion \'%s\' terminada.' % inspect.stack()[0][3])
+		logger.write('WARNING', '[EMAIL] Función \'%s\' terminada.' % inspect.stack()[0][3])
+
+	def receiveAttachment(self, emailHeader):
+		currentDirectory = os.getcwd()                                   # Obtenemos el directorio actual de trabajo
+		fileName = emailHeader.get_filename()                            # Obtenemos el nombre del archivo adjunto
+		filePath = os.path.join(currentDirectory, ATTACHMENTS, fileName) # Obtenemos el path relativo del archivo a descargar
+		# Verificamos si el directorio 'ATTACHMENTS' no está creado en el directorio actual
+		if ATTACHMENTS not in os.listdir(currentDirectory):
+			os.mkdir(ATTACHMENTS)
+		# Verificamos si el archivo a descargar no existe en la carpeta 'ATTACHMENTS'
+		if not os.path.isfile(filePath):
+			fileObject = open(filePath, 'w+')
+			fileObject.write(emailHeader.get_payload(decode = True))
+			fileObject.close()
+			logger.write('INFO', '[EMAIL] Archivo adjunto \'%s\' descargado correctamente!' % fileName)
+			return True
+		else:
+			logger.write('WARNING', '[EMAIL] El archivo \'%s\' ya existe! Imposible descargar.' % fileName)
+			return False
 
 	def getSourceName(self, emailReceived):
 		sourceNameList = list()
@@ -263,7 +258,7 @@ class Email(object):
 		return sourceName
 
 	def getSourceEmail(self, emailReceived):
-		sourceEmail = ''
+		sourceEmail = None
 		decodedHeader = decode_header(emailReceived.get('From'))
 		senderInformation = unicode(make_header(decodedHeader)).encode('utf-8')
 		# Ejemplo de senderInformation: Mauricio Gonzalez <mauriciolg.90@gmail.com>
@@ -319,4 +314,4 @@ class Email(object):
 		except OSError as e: # El comando no fue encontrado (el ejecutable no existe)
 			emailBody = str(e)
 		finally:
-			self.sendText(sourceEmail, emailSubject, emailBody)
+			self.sendMessage(emailBody, sourceEmail)

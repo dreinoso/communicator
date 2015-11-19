@@ -17,54 +17,75 @@ import pickle
 import threading
 import subprocess
 
-sys.path.append(os.path.abspath('Network/'))
+currentDirectory = os.getcwd() 
+if not currentDirectory.endswith('Communicator'):
+	os.chdir(currentDirectory + '/Communicator')
+
 sys.path.append(os.path.abspath('Email/'))
 sys.path.append(os.path.abspath('Modem/'))
+sys.path.append(os.path.abspath('Network/'))
 sys.path.append(os.path.abspath('Bluetooth/'))
-#TODO el módulo se pueda importar desde otra carpeta y aún asi poder hacer los imports relativos al módulo
 
-import networkClass
-import modemClass
 import emailClass
+import modemClass
+import networkClass
 import bluetoothClass
 
-import messageClass
-import transmitterClass
 import logger
 import contactList
 import checkerClass
+import messageClass
+import transmitterClass
 
 JSON_FILE = 'config.json'
 JSON_CONFIG = json.load(open(JSON_FILE))
 
-receptionBuffer = Queue.PriorityQueue(JSON_CONFIG["COMMUNICATOR"]["RECEPTION_BUFFER"])
-transmissionBuffer = Queue.PriorityQueue(JSON_CONFIG["COMMUNICATOR"]["TRANSMISSION_BUFFER"])
-modemSemaphore = threading.Semaphore(value = 1)
+os.chdir(currentDirectory)
 
-# Creamos las instancias de los periféricos
-networkInstance = networkClass.Network(receptionBuffer)
-gprsInstance = modemClass.Gprs(modemSemaphore)
-emailInstance = emailClass.Email(receptionBuffer)
-smsInstance = modemClass.Sms(receptionBuffer, modemSemaphore)
-bluetoothInstance = bluetoothClass.Bluetooth(receptionBuffer)
+logger.set() # Solo se setea una vez, todos los objetos usan esta misma configuración
 
-# Creamos la instancia del checker y el hilo que va a verificar las conexiones
-checkerInstance = checkerClass.Checker(modemSemaphore, networkInstance, gprsInstance, emailInstance, smsInstance, bluetoothInstance)
+modemSemaphore = threading.Semaphore
+receptionBuffer = Queue.PriorityQueue
+transmissionBuffer = Queue.PriorityQueue
 
-# Se crea la instancia para la transmisión de paquetes
-transmitterInstance = transmitterClass.Transmitter(transmissionBuffer, networkInstance, bluetoothInstance, emailInstance, smsInstance, checkerInstance)
+smsInstance = modemClass.Sms
+gprsInstance = modemClass.Gprs
+emailInstance = emailClass.Email
+networkInstance = networkClass.Network
+bluetoothInstance = bluetoothClass.Bluetooth
+
+checkerInstance = checkerClass.Checker             # Instancia que va a verificar las conexiones
+transmitterInstance = transmitterClass.Transmitter # Instancia para la transmisión de paquetes
 
 def open():
 	"""Se realiza la apertura, inicialización de los componentes que se tengan disponibles
 	"""
+	global receptionBuffer, transmissionBuffer 
+	global modemSemaphore, networkInstance, gprsInstance, emailInstance, smsInstance, bluetoothInstance
 	global checkerInstance, transmitterInstance
 
-	logger.set() # Solo se setea una vez, todos los objetos usan esta misma configuración
-	checkerInstance.verifyNetworkConnection()
+	modemSemaphore = threading.Semaphore(value = 1)
+	receptionBuffer = Queue.PriorityQueue(JSON_CONFIG["COMMUNICATOR"]["RECEPTION_BUFFER"])
+	transmissionBuffer = Queue.PriorityQueue(JSON_CONFIG["COMMUNICATOR"]["TRANSMISSION_BUFFER"])
+
+	# Creamos las instancias de los periféricos
+	gprsInstance = modemClass.Gprs(modemSemaphore)
+	emailInstance = emailClass.Email(receptionBuffer)
+	networkInstance = networkClass.Network(receptionBuffer)
+	smsInstance = modemClass.Sms(receptionBuffer, modemSemaphore)
+	bluetoothInstance = bluetoothClass.Bluetooth(receptionBuffer)
+
+	# Creamos la instancia del checker y el hilo que va a verificar las conexiones
+	checkerInstance = checkerClass.Checker(modemSemaphore, networkInstance, gprsInstance, emailInstance, smsInstance, bluetoothInstance)
+
+	# Se crea la instancia para la transmisión de paquetes
+	transmitterInstance = transmitterClass.Transmitter(transmissionBuffer, networkInstance, bluetoothInstance, emailInstance, smsInstance, checkerInstance)
+
 	checkerInstance.verifySmsConnection()
 	checkerInstance.verifyEmailConnection()
+	checkerInstance.verifyNetworkConnection()
 	checkerInstance.verifyBluetoothConnection()
-	# Lanzamos el hilo que comprueba las conexiones
+
 	checkerInstance.start()
 	transmitterInstance.start()
 
@@ -77,69 +98,37 @@ def send(message, receiver = '', device = ''):
 	@param message: paquete a ser enviado, ya sea mensaje (o instancia) o un archivo (o instancia)
 	@param receiver: es el contacto al que se envia el mensaje
 	@param device: modo de envío preferente para ese mensaje en particular (puede no definirse)"""
-	global transmissionBuffer, messageClass
+	global transmissionBuffer
 
 	if not transmissionBuffer.full():
+		# Si el mensaje no es una instancia, la creamos para poder hacer el manejo de transmisión con prioridad
 		if not isinstance(message, messageClass.Message):
-			# Control sobre un mensaje simple
-			if not isinstance(message, str):
-				logger.write('WARNING', '[COMMUNICATOR] Mensaje descartado, porque no es texto simple ni subclase Mensaje')
-				return False
-			if receiver == '':
-				logger.write('WARNING', '[COMMUNICATOR] Mensaje descartado, no se especifico el receptor')
-				return False
-			# En caso de que se encuetre el archivo se crea una instancia de archivo
-			relativeFilePath = message
-			absoluteFilePath = os.path.abspath(relativeFilePath)
-			if os.path.isfile(absoluteFilePath): 
-				# Se determinan los parametros de la instancia archivo por configuración
-				sender = JSON_CONFIG["COMMUNICATOR"]["NAME"] 
-				priority = JSON_CONFIG["COMMUNICATOR"]["FILE_PRIORITY"]
-				timeOut = JSON_CONFIG["COMMUNICATOR"]["FILE_TIME_OUT"]
-				# El nombre o ruta del archivo corresponde al mensaje
-				message = messageClass.FileMessage(receiver, sender, priority, timeOut, device, message)
+			# Obtenemos el nombre del remitente para poder completar el campo del objeto
+			sender = JSON_CONFIG["COMMUNICATOR"]["NAME"]
+			# Si el mensaje es una ruta a un archivo, creamos la instancia de archivo correspondiente...
+			if os.path.isfile(message):
+				# 'message' puede ser un path relativo, o bien un path absoluto
+				message = messageClass.FileMessage(sender, receiver, message, device)
 			else:
-				# Se determinan los parametros de la instancia mensaje por configuración
-				sender = JSON_CONFIG["COMMUNICATOR"]["NAME"] 
-				priority = JSON_CONFIG["COMMUNICATOR"]["MESSAGE_PRIORITY"]
-				timeOut = JSON_CONFIG["COMMUNICATOR"]["MESSAGE_TIME_OUT"]
-				textMessageTemp = message # Para no perder el mensaje de texto
-				message = messageClass.Message(receiver, sender, priority, timeOut, device)
-				message.textMessage = textMessageTemp # Se añade un campo para almacenar el mensaje
-			# Se añade un campo para no enviar esta instancia, porque corresponden a mensajes simples
-			message.sendInstance = False  
-		else:
-			# Control de la existencia del archivo
-			if isinstance(message, messageClass.FileMessage):
-				relativeFilePath = message.fileName
-				absoluteFilePath = os.path.abspath(relativeFilePath)
-				if not os.path.isfile(absoluteFilePath): # En caso de que se encuetre el archivo lo envia
-					logger.write('WARNING', '[NETWORK] Envio cancelado, no se encuentra el archivo (' + message.fileName + ') para el envío.')
-					return False
-			message.sendInstance = True # Corresponde enviar la instancia  
-		# Se añade al mensaje un timestamp, lo mismo "sendInstance" solo sirven para
-		# el envio, se borran al dejar de ser necesarios => no transmitir datos innecesarios
-		message.timeStamp = time.time()
-		# Se añade el mensaje, la cola se encarga de la sincronización de la inserción
-		# la prioridad es una resta de 100 porque la priorityQueue saca primero la de prioridad
-		# de menor valor, que no va con la lógica de esta implementación. Entonces priority < 100
-		if message.priority > 100: 
-			message.priority = 99 # Se le da la máxima prioridad 
-			logger.write('WARNING', '[COMMUNICATOR] Se configuro una prioridad superior a las establecidas, se cambia por la máxima (99)')
-		wakeUpTransmitter = transmissionBuffer.empty()
-		# Se guarda también con el timeOut, entonces si la prioridad es la misma se
-		# decide por el segundo parametro, cual es menor.. Y si selecciona el timeOut
-		# determinara el mensaje más proximo a descartarse, que es el de mayor prioridad
-		transmissionBuffer.put((100 - message.priority, message.timeOut, message)) # Se almacena una Tupla
-		if wakeUpTransmitter:
-			# Se despierta al hilo transmisor porque estaba esperando un mensaje
-			transmitterInstance.notEmpty.acquire()
-			transmitterInstance.notEmpty.notify()
-			transmitterInstance.notEmpty.release()
-		logger.write('DEBUG', '[COMMUNICATOR] Paquete almacenado en transmisor')
+			# ... sino, creamos una instancia de mensaje simple.
+				message = messageClass.SimpleMessage(sender, receiver, message, device)
+			# Marcamos la instancia para saber que se trataba de un mensaje que no necesitaba ser instancia
+			message.isInstance = False
+		# Si el mensaje es una instancia de archivo, verificamos que la ruta hacia el mismo sea la correcta
+		elif isinstance(message, messageClass.FileMessage):
+			if not os.path.isfile(message.fileName):
+				logger.write('ERROR', '[COMMUNICATOR] La ruta hacia el archivo a enviar es incorrecta!')
+				return False
+		# Establecemos el tiempo que permanecerá el mensaje en el buffer antes de ser desechado en caso de no ser enviado
+		setattr(message, 'timeOut', 20)
+		# Indicamos con una marca de tiempo, la hora exacta en la que se almacenó el mensaje en el buffer de transmisión
+		setattr(message, 'timeStamp', time.time())
+		# Almacenamos el mensaje en el buffer de transmisión, con la prioridad correspondiente
+		transmissionBuffer.put((100 - message.priority, message))
+		logger.write('INFO', '[COMMUNICATOR] Mensaje almacenado en transmisor esperando ser enviado...')
 		return True
 	else:
-		logger.write('WARNING', '[COMMUNICATOR] El Buffer de transmisión esta lleno, no se puede enviar por el momento.')
+		logger.write('WARNING', '[COMMUNICATOR] El buffer de transmisión esta lleno, imposible enviar!')
 		return False
 
 def receive():
@@ -157,8 +146,10 @@ def lenght():
 	"""Devuelve el tamaño del buffer de recepción.
 	@return: Cantidad de elementos en el buffer
 	@rtype: int"""
-	if receptionBuffer.qsize() == None: return 0
-	else: return receptionBuffer.qsize()
+	if receptionBuffer.qsize() == None:
+		return 0
+	else:
+		return receptionBuffer.qsize()
 
 def connectGprs():
 	ttyUSBPattern = re.compile('ttyUSB[0-9]+')
@@ -201,17 +192,19 @@ def close():
 	"""Se cierran los componentes del sistema, unicamente los abiertos previamente"""
 	global receptionBuffer, transmissionBuffer, checkerInstance, transmitterInstance
 	global smsInstance, networkInstance, gprsInstance, bluetoothInstance, emailInstance
+
+	transmitterInstance.isActive = False
+	transmitterInstance.join()
+
 	checkerInstance.isActive = False
 	checkerInstance.join()
-	del checkerInstance
-	transmitterInstance.isActive = False
-	transmitterInstance.notEmpty.acquire() # Por si esta a la espera de mensajes
-	transmitterInstance.notEmpty.notify()
-	transmitterInstance.notEmpty.release()
-	transmitterInstance.join()
-	del transmitterInstance
+	
 	del smsInstance
-	del networkInstance
 	del gprsInstance
 	del emailInstance
+	del networkInstance
 	del bluetoothInstance
+
+	del transmitterInstance
+	del receptionBuffer
+	del checkerInstance

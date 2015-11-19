@@ -6,12 +6,12 @@
 	@organization: UNC - Fcefyn
 	@date: Lunes 16 de Mayo de 2015 """
 
-import inspect
-import json
-import pickle
-import Queue
-import threading
 import time
+import json
+import Queue
+import pickle
+import inspect
+import threading
 
 import logger
 import contactList
@@ -21,13 +21,14 @@ JSON_CONFIG = json.load(open(JSON_FILE))
 
 class Transmitter(threading.Thread):
 
-	transmissionBuffer = Queue.PriorityQueue()
-	isActive = False
-	networkPriority = 0
 	smsPriority = 0
 	emailPriority = 0
+	networkPriority = 0
 	bluetoothPriority = 0
+
+	isActive = False
 	contactExists = False
+	transmissionBuffer = Queue.PriorityQueue()
 
 	def __init__(self, _transmissionBuffer, _networkInstance, _bluetoothInstance, _emailInstance, _smsInstance, _checkerInstance):
 		"""Creación de la clase de transmisión de paquetes TCP.
@@ -39,51 +40,45 @@ class Transmitter(threading.Thread):
 		@type: string
 		@type: Message"""
 		threading.Thread.__init__(self, name = 'TransmitterThread')
-		self.transmissionBuffer = _transmissionBuffer
-		# Condición para la espera pasiva del transmisor, a que llegue un mensaje
-		self.notEmpty = threading.Condition() 
+		self.smsInstance = _smsInstance 
+		self.emailInstance = _emailInstance
 		self.networkInstance = _networkInstance
 		self.bluetoothInstance = _bluetoothInstance
-		self.emailInstance = _emailInstance
-		self.smsInstance = _smsInstance
+		# Instancias de checker y transmisor
 		self.checkerInstance = _checkerInstance
+		self.transmissionBuffer = _transmissionBuffer
 
 	def __del__(self):
 		logger.write('INFO', '[TRANSMITTER] Objeto destruido.')
-		#TODO: Determinar si hacer algo aca..
 
 	def run(self):
  		'''Toma del buffer una instancia mensaje (la de mayor prioridad) con parametros 
  		adicionales en la instancia para determinar si el mensaje es válido en relación 
  		al timeout. De ser posible'''
  		self.isActive = True
-		while self.isActive: 
-			while not self.transmissionBuffer.empty():
-				# Por ser una cola de prioridad, automaticamente entrega el elemeneto de mayor prioridad
-				message = self.transmissionBuffer.get_nowait()[2] # Devuelve una tupla, el tercer elemento es el mensaje 
-				elapsedTime = time.time() - message.timeStamp
-				message.timeOut = message.timeOut - elapsedTime
-				if message.timeOut > 0: # Todavia no vence el timeout y el mensaje es válido
-					transmitterThread = threading.Thread(target = self.expectTransmission, args=(message,), name = 'ExcpectThread')
+		while self.isActive:
+			try:
+				# El elemento 0 es la prioridad, por eso sacamos el 1 porque es el mensaje
+				messageInstance = self.transmissionBuffer.get(True, 1.5)[1]
+				# Calculamos el tiempo transcurrido desde que se insertó el mensaje en el buffer hasta ahora
+				elapsedTime = time.time() - messageInstance.timeStamp
+				# Actualizamos el tiempo de vida restante del mensaje que está almacenado en el buffer
+				messageInstance.timeOut = messageInstance.timeOut - elapsedTime
+				# Si todavía no vence el 'timeout', el mensaje es válido y debe ser enviado...
+				if messageInstance.timeOut > 0:
+					transmitterThread = threading.Thread(target = self.expectTransmission, args = (messageInstance,), name = 'ExpectThread')
 					transmitterThread.start()
-					# No se usa join porque cuando este hilo para, sus hijos deben
-					# terminar, de otro modo dejaria el programa en espera
-				else: # El tiempo expiro se debe descartar el mensaje
-					logger.write('WARNING', '[COMUNICADOR] Se descarta mensaje para el contacto "%s", expiro el tiempo .' % message.receiver)
-					del message # Como ya no esta en el buffer el mensaje se elimina
-				# Se espera 1 segundo porque asi se da tiempo a que se cargue el buffer
-				# de otro modo "nunca se llenaria" pero la memoria de la computadora
-				# estaria llenandose de mas del limite de mensajes para el buffer
-				time.sleep(1) 
-			
-			# Se espera una señal para continuar con la transmisión
-			self.notEmpty.acquire()
-			self.notEmpty.wait()
-			self.notEmpty.release()
-
+				# ... sino, el tiempo expiro y el mensaje debe ser descartado.
+				else:
+					logger.write('WARNING', '[COMUNICADOR] Mensaje para \'%s\' descartado (el tiempo expiró).' % messageInstance.receiver)
+					# Eliminamos la instancia de mensaje, dado que ya no está en el buffer de transmisión
+					del messageInstance
+			# Para que el bloque 'try' (en la funcion 'get') no se quede esperando indefinidamente
+			except Queue.Empty:
+				pass
 		logger.write('WARNING', '[TRANSMITTER] Funcion \'%s\' terminada.' % inspect.stack()[0][3])
 
-	def expectTransmission(self, message):
+	def expectTransmission(self, messageInstance):
 		'''Esta función es lanzada por un nuevo hilo, entonces puede quedarse esperando
 		el resultado del envio, sin generar una parada en el programa controlador.
 		En caso de que se reciva True no implica que el mensaje se ha enviado, solo 
@@ -91,26 +86,14 @@ class Transmitter(threading.Thread):
 		Si en cambio se recibe False el mensaje no se pudo enviar, pero el mensaje
 		es correcto entonces debe volverse a guardar en el buffer. Los controles sobre
 		el envio se hacen en cada uno de los modos, estos deciden y notifican'''
-		# Se almacenan los campos auxiliares en caso de que se borren y el mensaje no se envie
-		timeStampTemp = message.timeStamp
-		sendInstanceTemp = message.sendInstance
-		resultOk = self.send(message, message.receiver, message.device)
-		if resultOk:
-			del message # Mensaje enviado por lo que se elimina
-		else: # Se vuelve a colocar el mensaje en buffer para ser enviado nuevamente
-			message.timeStamp = timeStampTemp
-			message.sendInstance = sendInstanceTemp
+		resultOk = self.send(messageInstance, messageInstance.receiver, messageInstance.device)
+		# Se vuelve a colocar el mensaje en buffer para ser enviado nuevamente
+		if not resultOk:
 			time.sleep(JSON_CONFIG["COMMUNICATOR"]["RETRANSMISSION_TIME"]) # Intervalo de tiempo entre envios sucesivos del mismo paquete
-			while self.transmissionBuffer.full():
-				time.sleep(2) # Espera a que haya lugar
-			wakeUpTransmitter = self.transmissionBuffer.empty() # Para despertar al transmisor
-			self.transmissionBuffer.put((100 - message.priority, message.timeOut, message)) 
-			
-			# Se despierta al hilo transmisor porque estaba esperando un mensaje
-			if wakeUpTransmitter: 
-				self.notEmpty.acquire()
-				self.notEmpty.notify()
-				self.notEmpty.release()
+			self.transmissionBuffer.put((100 - messageInstance.priority, messageInstance), True)
+		# Mensaje enviado por lo que se elimina
+		else:
+			del messageInstance
 
 	def send(self, message, receiver, device = ''):
 		"""Se envia de modo inteligente un paquete de datos a un contacto previamente 
@@ -124,7 +107,6 @@ class Transmitter(threading.Thread):
 		@type device: str"""
 		# Determinamos si el contacto existe. Si no existe, no se intenta enviar por ningún medio.
 		if not self.contactExists:
-			del message.timeStamp # Se elimina el campo auxiliar
 			# Se resetean las prioridades
 			self.networkPriority = 0
 			self.bluetoothPriority = 0
@@ -192,7 +174,7 @@ class Transmitter(threading.Thread):
 		# Intentamos transmitir por EMAIL
 		elif self.emailPriority != 0 and self.emailPriority >= self.smsPriority:
 			destinationEmail = contactList.allowedEmails[receiver]
-			resultOk  = self.emailInstance.send(destinationEmail, JSON_CONFIG["EMAIL"]["SUBJECT"], message)
+			resultOk  = self.emailInstance.send(message, destinationEmail)
 			if resultOk:
 				self.contactExists = False
 				return True

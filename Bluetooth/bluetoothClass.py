@@ -1,18 +1,18 @@
 # coding=utf-8
 
+import json
+import Queue
+import inspect
+import threading
+import bluetooth
+
 import logger
 import contactList
 import bluetoothReceptor
 import bluetoothTransmitter
 
-import Queue
-import inspect
-import threading
-import bluetooth
-import json
-
-CONNECTIONS = 3
 TIMEOUT = 1.5
+CONNECTIONS = 3
 
 JSON_FILE = 'config.json'
 JSON_CONFIG = json.load(open(JSON_FILE))
@@ -68,22 +68,21 @@ class Bluetooth(object):
 	def send(self, destinationServiceName, destinationMAC, destinationUUID, messageToSend):
 		logger.write('DEBUG', '[BLUETOOTH] Buscando el servicio \'%s\'.' % destinationServiceName)
 		serviceMatches = bluetooth.find_service(uuid = destinationUUID, address = destinationMAC)
+		# Buscamos alguna coincidencia de servicios Bluetooth especificos
 		if len(serviceMatches) == 0:
 			logger.write('DEBUG', '[BLUETOOTH] No se pudo encontrar el servicio \'%s\'.' % destinationServiceName)
 			return False
 		else:
-			firstMatch = serviceMatches[0]
-			name = firstMatch['name']
-			host = firstMatch['host']
-			port = firstMatch['port']
 			try:
+				firstMatch = serviceMatches[0]
+				name = firstMatch['name']
+				host = firstMatch['host']
+				port = firstMatch['port']
 				# Crea un nuevo socket Bluetooth que usa el protocolo de transporte especificado
 				remoteSocket = bluetooth.BluetoothSocket(self.bluetoothProtocol)
 				# Conecta el socket con el dispositivo remoto (host) sobre el puerto (channel) especificado
 				remoteSocket.connect((host, port))
 				logger.write('DEBUG', '[BLUETOOTH] Conectado con la dirección \'%s\'.' % host)
-				# Lanzamos un hilo que se va a encargar de manejar la transmisión del mensaje
-				#threadName = 'Thread-%s' % JSON_CONFIG["BLUETOOTH"]["MAC"]
 				return self.bluetoothTransmitter.send(messageToSend, remoteSocket)
 			except bluetooth.btcommon.BluetoothError as bluetoothError:
 				# (11, 'Resource temporarily unavailable')
@@ -99,21 +98,31 @@ class Bluetooth(object):
 	def receiveRFCOMM(self):
 		while self.isActive:
 			try:
-				# Espera por una conexion entrante y devuelve un nuevo socket que representa la conexion, como asi tambien la direccion del cliente
+				# Espera por una conexión entrante y devuelve un nuevo socket que representa la conexión, como así también la dirección del cliente
 				remoteSocket, addr = self.localSocketRFCOMM.accept()
-				for valueList in contactList.allowedMacAddress.values():
-					if addr[0] in valueList or not JSON_CONFIG["COMMUNICATOR"]["RECEPTION_FILTER"]:
-						remoteSocket.settimeout(TIMEOUT)
-						logger.write('DEBUG', '[BLUETOOTH] Conexion desde \'%s\' aceptada.' % addr[0])
-						threadName = 'Thread-%s' % addr[0]
-						receptorThread = bluetoothReceptor.BluetoothReceptor(threadName, remoteSocket, self.receptionBuffer)
-						receptorThread.start()
-					else:
-						self.bluetoothTransmitter.sendMessage('Usted no pertenece a un contacto registrado.', remoteSocket)
+				macAddress = addr[0]
+				remoteSocket.settimeout(TIMEOUT)
+				threadName = 'Thread-%s' % macAddress
+				# Aplicamos el filtro de recepción en caso de estar activado...
+				if JSON_CONFIG["COMMUNICATOR"]["RECEPTION_FILTER"]:
+					macAddressFounded = False
+					for valueList in contactList.allowedMacAddress.values():
+						if macAddress in valueList:
+							logger.write('DEBUG', '[BLUETOOTH] Conexion desde \'%s\' aceptada.' % macAddress)
+							receptorThread = bluetoothReceptor.BluetoothReceptor(threadName, remoteSocket, self.receptionBuffer)
+							macAddressFounded = True
+							receptorThread.start()
+							break
+					if not macAddressFounded:
+						logger.write('WARNING', '[BLUETOOTH] Mensaje de \'%s\' rechazado!' % macAddress)
 						remoteSocket.close()
-						logger.write('WARNING', '[BLUETOOTH] Se rechazo un mensaje de emisor (' + addr[0] + ') no registrado.')
+				# ... sino, recibimos todos los mensajes independientemente del origen
+				else:
+					logger.write('DEBUG', '[BLUETOOTH] Conexion desde \'%s\' aceptada.' % macAddress)
+					receptorThread = bluetoothReceptor.BluetoothReceptor(threadName, remoteSocket, self.receptionBuffer)
+					receptorThread.start()
+			# Para que el bloque 'try' (en la funcion 'accept') no se quede esperando indefinidamente
 			except bluetooth.BluetoothError, msg:
-				# Para que el bloque 'try' (en la funcion 'accept') no se quede esperando indefinidamente
 				pass
 		self.localSocketRFCOMM.close()
 		logger.write('WARNING','[BLUETOOTH] Función \'%s\' terminada.' % inspect.stack()[0][3])

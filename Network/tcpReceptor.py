@@ -6,15 +6,16 @@
 	@organization: UNC - Fcefyn
 	@date: Lunes 16 de Mayo de 2015 """
 
-import json
 import os
-import pickle
+import json
+import time
 import Queue
+import pickle
 import socket
 import threading
 
-import messageClass
 import logger
+import messageClass
 
 JSON_FILE = 'config.json'
 JSON_CONFIG = json.load(open(JSON_FILE))
@@ -45,87 +46,18 @@ class TcpReceptor(threading.Thread):
 		recibir, de acuerdo a este contenido el comportamiento sera diferente.'''
 		try:
 			dataReceived = self.remoteSocket.recv(BUFFER_SIZE)
-			if dataReceived == 'START_OF_FILE_INSTANCE':
-				self.receiveFileInstance()
-			elif dataReceived == 'START_OF_MESSAGE_INSTANCE':
-				self.receiveMessageInstance()
-			elif dataReceived == 'START_OF_FILE':
+			if dataReceived == 'START_OF_FILE':
 				self.receiveFile()
-			else: # Se trata de un mensaje simple, solo se guarda 
-				self.receptionBuffer.put((100 - JSON_CONFIG["COMMUNICATOR"]["MESSAGE_PRIORITY"], dataReceived))
-		except socket.error as errorMessage:
-			logger.write('WARNING', '[NETWORK] Error al intentar descargar el archivo \'%s\'.' % fileName)
-		finally:
-			# Cierra la conexion del socket cliente
-			logger.write('DEBUG', '[NETWORK] \'%s\' terminado y cliente desconectado.' % self.getName())
-
-	def receiveFileInstance(self):
-		'''Primero se recive la instancia FileMessage propiamente dicha, para luego preprarse
-		para el envio del archivo en si en caso de que este no se encuentre ya en el receptor.
-		Es una combinación de los métodos de recepción de instancia mensaje y recepción de 
-		archivo, pero tiene un control adicional. En caso de que el archivo se reciba se indica
-		en uno de los campos de la instancia recibida.'''
-		try:
-			message = ''
-			self.remoteSocket.send('ACK')
-			inputData = self.remoteSocket.recv(BUFFER_SIZE)
-			while inputData != 'END_OF_FILE_INSTANCE':
-				serializedMessage = ''
-				serializedMessage = serializedMessage + inputData
-				self.remoteSocket.send('ACK')
-				inputData = self.remoteSocket.recv(BUFFER_SIZE)
-			message = pickle.loads(serializedMessage) # Deserialización de la instancia
-			# Se prosigue con la recepcion del archivo
-			currentDirectory = os.getcwd()                 # Obtenemos el directorio actual de trabajo
-			fileName = message.fileName # Obtenemos el nombre del archivo a recibir
-			relativeFilePath = os.path.join(currentDirectory, DOWNLOADS, fileName) # Obtenemos el path relativo del archivo a descargar
-			# Verificamos si el directorio 'DOWNLOADS' no está creado en el directorio actual
-			if DOWNLOADS not in os.listdir(currentDirectory):
-				os.mkdir(DOWNLOADS)
-			# Verificamos si el archivo a descargar no existe en la carpeta 'DOWNLOADS'
-			if not os.path.isfile(relativeFilePath):
-				fileObject = open(relativeFilePath, 'w+')
-				logger.write('DEBUG', '[NETWORK] Descargando archivo \'%s\'...' % fileName)
-				self.remoteSocket.send('READY')
-				while True:
-					inputData = self.remoteSocket.recv(BUFFER_SIZE)
-					if inputData != 'END_OF_FILE':
-						fileObject.write(inputData)
-						self.remoteSocket.send('ACK')
-					else: 
-						fileObject.close()
-						message.received = True
-						logger.write('DEBUG', '[NETWORK] Archivo \'%s\' descargado correctamente!' % fileName)
-						break
+			elif dataReceived == 'START_OF_INSTANCE':
+				self.receiveMessageInstance()
+			# Se trata de un texto plano, sólo se lo almacena 
 			else:
-				self.remoteSocket.send('FILE_EXISTS') # Comunicamos al transmisor que el archivo ya existe
-				logger.write('WARNING', '[NETWORK] El archivo \'%s\' ya existe! Imposible descargar.' % fileName)
+				self.receptionBuffer.put((10, dataReceived))
+				logger.write('DEBUG', '[NETWORK] Mensaje recibido correctamente!')
 		except socket.error as errorMessage:
-			logger.write('WARNING', '[NETWORK] Error al intentar recibir una instancia de mensaje.')
+			logger.write('WARNING', '[NETWORK] Error al intentar recibir un mensaje: \'%s\'.'% errorMessage )
 		finally:
-			if message != None:
-				self.receptionBuffer.put((100 - message.priority, message))
-			self.remoteSocket.close()
-
-	def receiveMessageInstance(self):
-		'''Por medio de una sincronización de mensajes se recibe la cadena de a partes
-		que corresponde a la instancia serializada, y se arma a medida que lleguen los 
-		caracteres, cuando se tiene la cadena completa se la deserializa para obtener 
-		la instancia y almacenarla en el buffer.'''
-		try:
-			self.remoteSocket.send('ACK')
-			inputData = self.remoteSocket.recv(BUFFER_SIZE)
-			while inputData != 'END_OF_MESSAGE_INSTANCE':
-				serializedMessage = ''
-				serializedMessage = serializedMessage + inputData
-				self.remoteSocket.send('ACK')
-				inputData = self.remoteSocket.recv(BUFFER_SIZE)
-			message = pickle.loads(serializedMessage) # Deserialización de la instancia
-			self.receptionBuffer.put((100 - message.priority, message))
-		except socket.error as errorMessage:
-			logger.write('WARNING', '[NETWORK] Error al intentar recibir una instancia de mensaje.')
-		finally:
-			self.remoteSocket.close() # Cierra la conexion del socket cliente
+			logger.write('DEBUG', '[NETWORK] \'%s\' terminado y cliente desconectado.' % self.getName())
 
 	def receiveFile(self):
 		'''Para la recepción del archivo, primero se verifica que le archivo no 
@@ -137,7 +69,8 @@ class TcpReceptor(threading.Thread):
 			self.remoteSocket.send('ACK')
 			currentDirectory = os.getcwd()                 # Obtenemos el directorio actual de trabajo
 			fileName = self.remoteSocket.recv(BUFFER_SIZE) # Obtenemos el nombre del archivo a recibir
-			relativeFilePath = os.path.join(currentDirectory, DOWNLOADS, fileName) # Obtenemos el path relativo del archivo a descargar
+			# Obtenemos el path relativo del archivo a descargar
+			relativeFilePath = os.path.join(currentDirectory, DOWNLOADS, fileName)
 			# Verificamos si el directorio 'DOWNLOADS' no está creado en el directorio actual
 			if DOWNLOADS not in os.listdir(currentDirectory):
 				os.mkdir(DOWNLOADS)
@@ -146,22 +79,57 @@ class TcpReceptor(threading.Thread):
 				fileObject = open(relativeFilePath, 'w+')
 				logger.write('DEBUG', '[NETWORK] Descargando archivo \'%s\'...' % fileName)
 				self.remoteSocket.send('READY')
+				# Comenzamos a descargar el archivo
 				while True:
 					inputData = self.remoteSocket.recv(BUFFER_SIZE)
-					if inputData != 'END_OF_FILE':
+					if inputData != 'EOF':
 						fileObject.write(inputData)
 						self.remoteSocket.send('ACK')
 					else: 
 						fileObject.close()
-						self.receptionBuffer.put((100 - JSON_CONFIG["COMMUNICATOR"]["FILE_PRIORITY"], 'ARCHIVO_RECIBIDO: ' + fileName))
-						logger.write('DEBUG', '[NETWORK] Archivo \'%s\' descargado correctamente!' % fileName)
+						logger.write('INFO', '[NETWORK] Archivo \'%s\' descargado correctamente!' % fileName)
 						break
+				return True
 			else:
+				# Comunicamos al transmisor que el archivo ya existe
 				self.remoteSocket.send('FILE_EXISTS') # Comunicamos al transmisor que el archivo ya existe
 				logger.write('WARNING', '[NETWORK] El archivo \'%s\' ya existe! Imposible descargar.' % fileName)
+				return False
 		except socket.error as errorMessage:
-			logger.write('WARNING', '[NETWORK] Error al intentar descargar el archivo \'%s\'.' % fileName)
+			logger.write('WARNING', '[NETWORK] Error al intentar descargar el archivo \'%s\': %s' % (fileName, str(errorMessage)))
+			return False
 		finally:
 			# Cierra la conexion del socket cliente
 			self.remoteSocket.close()
 
+	def receiveMessageInstance(self):
+		'''Por medio de una sincronización de mensajes se recibe la cadena de a partes
+		que corresponde a la instancia serializada, y se arma a medida que lleguen los 
+		caracteres, cuando se tiene la cadena completa se la deserializa para obtener 
+		la instancia y almacenarla en el buffer.'''
+		try:
+			serializedMessage = ''
+			self.remoteSocket.send('ACK')
+			while True:
+				inputData = self.remoteSocket.recv(BUFFER_SIZE)
+				if inputData != 'END_OF_INSTANCE':
+					serializedMessage = serializedMessage + inputData
+					self.remoteSocket.send('ACK')
+				else:
+					# Deserialización de la instancia
+					message = pickle.loads(serializedMessage)
+					break
+			###########################################################
+			if isinstance(message, messageClass.FileMessage):
+				self.remoteSocket.recv(BUFFER_SIZE) # START_OF_FILE
+				if self.receiveFile():
+					self.receptionBuffer.put((100 - message.priority, message))
+			else:
+				self.receptionBuffer.put((100 - message.priority, message))
+				logger.write('DEBUG', '[NETWORK] Ha llegado una nueva instancia de mensaje!')
+			###########################################################
+		except socket.error as errorMessage:
+			logger.write('WARNING', '[NETWORK] Error al intentar recibir una instancia de mensaje ' + str(errorMessage))
+		finally:
+			# Cierra la conexion del socket cliente
+			self.remoteSocket.close()

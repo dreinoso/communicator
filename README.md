@@ -1,5 +1,5 @@
 #Módulo de Comunicación Inteligente
-Corresponde a un módulo de comunicación inteligente para comunicación punto a punto. Las comunicaciones que se pretenden son SMS, Email, Red, Wifi y Bluetooth.
+Corresponde a un módulo de comunicación inteligente para comunicación punto a punto. Las comunicaciones que se pretenden son SMS, Email, TCP/IP y Bluetooth.
 
 ##Requisitos del módulo
 	-Python 2.7
@@ -12,7 +12,7 @@ Corresponde a un módulo de comunicación inteligente para comunicación punto a
 
 ##Requisitos de Configuración
 	-Establecer en la lista de contactos (contactList.py) los contactos con los que se planea la comunicación, en los dispositivos que se tengan disponibles.
-	-Determinar las configuraciones que deseen para el funcionamiento del módulo en el archivo de configuración (config.sjon). Los campos de las mismas se explican a continuación. Se debe tener en cuenta que para las opciones con Habilitación/Deshabilitación se determinan con 0 deshabilitar, 1 para habilitar.
+	-Determinar las configuraciones que deseen para el funcionamiento del módulo en el archivo de configuración (config.json). Los campos de las mismas se explican a continuación. Se debe tener en cuenta que para las opciones con Habilitación/Deshabilitación se determinan con 0 deshabilitar, 1 para habilitar.
 	
 	{
 	# --------- CONFIGURACIÓN NETWORK ---------
@@ -22,19 +22,14 @@ Corresponde a un módulo de comunicación inteligente para comunicación punto a
 		"RECEPTION_FILTER"		: 1,				# (0/1) Habilitado: Filtra los mensajes que no sean de contactos registrados
 		"TRANSMISSION_BUFFER" 	: 10,				# Máxima cantidad de elementos para el buffer de transmissión
 		"RECEPTION_BUFFER" 		: 10,				# Máxima cantidad de elementos para el buffer de recepción
-		"FILE_PRIORITY"			: 20,				# Prioridad fija para archivos simples
-		"FILE_TIME_OUT"			: 300,				# Tiempo (en Segundos) para descarte de arcvhivo simple
-		"MESSAGE_PRIORITY"		: 30,				# Prioridad fija para mensajes simples
-		"MESSAGE_TIME_OUT"		: 400				# Tiempo (en Segundos) para descarte de mensaje simple
+		"RETRANSMISSION_TIME" 	: 5					# Tiempo (en Segundos) para descarte de mensaje
 		},
 	"NETWORK":
 		{
 		"LOCAL_ADDRESS" : "localhost", 	# (192.168.0.15) Dirección de Ip del Comunicador
-		"SET_IP" 	: 1,				# (0/1) Habilitado: Configura la dirección IP de manera automática, en base a la interfaz que se tenga disponible
 		"PROTOCOL"      : "UDP",		# (UDP/TCP) Determinar el Protocolo a utilizar
 		"TCP_PORT"      : 5000,			# (1024 - 65635) Selección del puerto TCP para recepción de mensajes TCP
-		"UDP_PORT"      : 5010,			# (1024 - 65635) Selección del puerto UDP para recepción de mensajes UDP. No puede ser el mismo que el puerto TCP
-		"CLOSE_PORT"	: 1				# (0/1) Habilitado: Cierra los puertos TCP / UDP en caso de estar siendo ocupados por otro proceso
+		"UDP_PORT"      : 5010			# (1024 - 65635) Selección del puerto UDP para recepción de mensajes UDP. No puede ser el mismo que el puerto TCP
 	 	},
 	# ------- CONFIGURACIÓN BLUETOOTH -------
 		# PROTOCOL
@@ -93,28 +88,23 @@ Corresponde a un módulo de comunicación inteligente para comunicación punto a
 }
 
 ##Ejecución del Módulo
-En su aplicación se debe tener importado el modulo "import communicator.py" (su programa debe estar en la misma carpeta del comunicador). En caso de usar el módem se requiere correr la aplicación como root. El uso del comunicador se basa en el llamado de las siguientes funciones:
+En su aplicación se debe tener importado el modulo "import communicator.py" (su programa debe estar en la misma carpeta del comunicador). En caso de usar el módem se requiere correr la aplicación como root. 
+Si se ejecuta la aplicación en una carpeta superior al Communicator se deben añadir las siguientes lineas para que se encuentre el módulo de no estar añadido en las carpetas de librerias de Python
+	import sys
+	sys.path.append(os.path.abspath('Communicator/'))
+El uso del comunicador se basa en el llamado de las siguientes funciones:
 ###communicator.open()
 	Se realiza la apertura, inicialización de los componentes que se tengan disponibles	.
 ###communicator.send()
 	Se envia de modo inteligente un paquete de datos a un contacto previamente registrado el mensaje se envia por el medio mas óptimo encontrado. Se tienen 4 formas de envio
-	Envio de mensaje simple: **communicator.send(mensajeComoCadena, contactoRegistrado, dispositivoPreferenteDeEnvio)**
+	Envio de mensaje simple/archivo: **communicator.send(mensaje/path, contactoRegistrado, dispositivoPreferidoDeEnvio)**
 		Este ultimo campo puede obviarse, es decir communicator.send(mensajeComoCadena, contactoRegistrado)
 	Envio de instancia mensaje: **communicator.send(instanciaDeMensaje)**
-		Puede ser una instancia de la clase definida Message (en messageClass.py) o una subclase de esta, requiere valores inciados.
-	Envio de archivo simple: **communicator.send(nombreDeArchivo, contactoRegistrado, dispositivoPreferenteDeEnvio)**
-		Este ultimo campo puede obviarse, es decir communicator.send(nombreDeArchivo, contactoRegistrado)
-		Si el archivo no esta en la carpeta, se debe establecer tmb la ruta: nombreDeArchivo = ruta/nombreDeArchivo
-	Envio de instancia archivo: **communicator.send(instanciaDeArchivo)**
-		Puede ser una instancia de la clase definida FileMessage (en messageClass.py) o una subclase de esta, requiere valores inciados. 
-		Con esta calse se cuenta con campos adicionales. FileName para el nombre del archivo y received que indica si la recepción fue exitosa. 
-		El Comunicador se encarga de modificarlo, el usuario solo debe verificarlo.
-
-	NT: La comunicación por isntancia de clases solo esta habilitada para NETWORK con TCP y UDP. Pero se añadirá para Email y Bluetooth.
+		Deberia ser una instancia de la clase definida Message (en messageClass.py).
 ###communicator.recieve()
-	Se obtiene de un buffer circular el mensaje recibido mas antiguo, sea este instancia o texto (se debe hacer una comprobación puede ver el ejemplo en example.py)
+	Se obtiene de un buffer el mensaje con mayor prioridad, sea este instancia o texto.
 ###communicator.close()
-	Se cierran los componentes del sistema, unicamente los abiertos previamente.
+	Se cierran los periféricos del sistema, únicamente los abiertos previamente.
 ###communicator.lenght()
 	Devuelve la cantidad de elementos recibidos que todavía no se han sacado del buffer.
 ###communicator.connectGPRS()
@@ -126,4 +116,3 @@ Para mayor entenimiento del módulo se recomienda analizar el archivo de ejemplo
 
 ##ISSUES
 	-En caso de excpeción y el programa no finalize correctamente se debe eliminar un archivo temporal de manera manual: sudo rm /tmp/activeInterfaces 
-	-No funciona el modo Bluetooth
