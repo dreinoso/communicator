@@ -96,11 +96,14 @@ El uso del comunicador se basa en el llamado de las siguientes funciones:
 ###communicator.open()
 	Se realiza la apertura, inicialización de los componentes que se tengan disponibles	.
 ###communicator.send()
-	Se envia de modo inteligente un paquete de datos a un contacto previamente registrado el mensaje se envia por el medio mas óptimo encontrado. Se tienen 4 formas de envio
-	Envio de mensaje simple/archivo: **communicator.send(mensaje/path, contactoRegistrado, dispositivoPreferidoDeEnvio)**
-		Este ultimo campo puede obviarse, es decir communicator.send(mensajeComoCadena, contactoRegistrado)
+	Se envia de modo inteligente un paquete de datos a un contacto previamente registrado.
+	El mensaje se envia por el medio mas óptimo encontrado.
+
+	Envio de textoPlano/archivo: **communicator.send(textoPlano/filePath, contactoRegistrado, dispositivoPreferidoDeEnvio)**
+		Este último campo puede obviarse y el comunicador será el que decida por donde deberá transmitir, es decir communicator.send(mensajeComoCadena, contactoRegistrado)
+
 	Envio de instancia mensaje: **communicator.send(instanciaDeMensaje)**
-		Deberia ser una instancia de la clase definida Message (en messageClass.py).
+		Deberia ser una instancia de la clase definida como Message (en messageClass.py).
 ###communicator.recieve()
 	Se obtiene de un buffer el mensaje con mayor prioridad, sea este instancia o texto.
 ###communicator.close()
