@@ -181,7 +181,7 @@ class Sms(Modem):
 					# Ejemplo smsHeader: +CMGL: 0,"REC UNREAD","+5493512560536",,"14/10/26,17:12:04-12"\r\n
 					# Ejemplo smsBody  : primero\r\n
 					self.telephoneNumber = self.getTelephoneNumber(self.smsHeader) # Obtenemos el numero de telefono
-					logger.write('DEBUG','[SMS] Procesando mensaje de ' + str(self.telephoneNumber))
+					logger.write('INFO','[SMS] Procesando mensaje de ' + str(self.telephoneNumber))
 					# Comprobamos si el remitente del mensaje (un teléfono) está registrado...
 					if self.telephoneNumber in contactList.allowedNumbers.values() or not JSON_CONFIG["COMMUNICATOR"]["RECEPTION_FILTER"]:
 						self.smsMessage = self.getSmsBody(self.smsBody) # Obtenemos el mensaje de texto
@@ -194,11 +194,11 @@ class Sms(Modem):
 						else: 
 							self.receptionBuffer.put((10, self.smsMessage))
 						#self.sendOutput(self.telephoneNumber, self.smsMessage) # -----> SOLO PARA LA DEMO <-----
-						logger.write('DEBUG','[SMS] Mensaje procesado correctamente!')
+						logger.write('INFO','[SMS] Mensaje procesado correctamente!')
 					else:
 						# ... caso contrario, verificamos si el mensaje proviene de la pagina web de CLARO...
 						if self.telephoneNumber == JSON_CONFIG["SMS"]["CLARO_WEB_PAGE"]:
-							logger.write('DEBUG','[SMS] No es posible procesar mensajes enviados desde la pagina web!')
+							logger.write('WARNING','[SMS] No es posible procesar mensajes enviados desde la pagina web!')
 						# ... sino, comunicamos al usuario que no se encuentra registrado.
 						else:
 							logger.write('WARNING','[SMS] Imposible procesar una solicitud. El número no se encuentra registrado!')
@@ -214,7 +214,7 @@ class Sms(Modem):
 				break
 		logger.write('WARNING', '[SMS] Función \'%s\' terminada.' % inspect.stack()[0][3])
 
-	def send(self, telephoneNumber, messageToSend):
+	def send(self, messageToSend, telephoneNumber):
 		""" Envia el comando AT correspondiente para enviar un mensaje de texto.
 			@param telephoneNumber: numero de telefono del destinatario
 			@type telephoneNumber: int

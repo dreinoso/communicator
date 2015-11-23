@@ -32,7 +32,6 @@ import networkClass
 import bluetoothClass
 
 import logger
-import contactList
 import checkerClass
 import messageClass
 import transmitterClass
@@ -89,7 +88,7 @@ def open():
 	checkerInstance.start()
 	transmitterInstance.start()
 
-def send(message, receiver = '', device = ''):
+def send(message, receiver = None, device = None):
 	"""Se almacena en el buffer de transmisión el paquete a ser enviado, se guardara
 	en caso de que se hayan establecido parametros correctos. En caso de tratarse 
 	de un mensaje simple o archivo simple, se los convierte en Instancias para simplificar

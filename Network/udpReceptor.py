@@ -93,7 +93,7 @@ class UdpReceptor(threading.Thread):
 						self.transmissionSocket.sendto('ACK', (self.remoteAddress, self.remotePort))
 					else: 
 						fileObject.close()
-						logger.write('DEBUG', '[NETWORK] Archivo \'%s\' descargado correctamente!' % fileName)
+						logger.write('INFO', '[NETWORK] Archivo \'%s\' descargado correctamente!' % fileName)
 						break
 				return True
 			else:
@@ -134,7 +134,7 @@ class UdpReceptor(threading.Thread):
 					self.receptionBuffer.put((100 - message.priority, message))
 			else:
 				self.receptionBuffer.put((100 - message.priority, message))
-				logger.write('DEBUG', '[NETWORK] Ha llegado una nueva instancia de mensaje!')
+				logger.write('INFO', '[NETWORK] Ha llegado una nueva instancia de mensaje!')
 			###########################################################
 		except socket.error as errorMessage:
 			logger.write('WARNING', '[NETWORK] Error al intentar recibir una instancia de mensaje ' + str(errorMessage))

@@ -38,7 +38,7 @@ class TcpTransmitter():
 		'''Envío de mensaje simple'''
 		try:
 			remoteSocket.send(plainText)
-			logger.write('DEBUG', '[NETWORK] Mensaje enviado correctamente!')
+			logger.write('INFO', '[NETWORK] Mensaje enviado correctamente!')
 			return True
 		except Exception as errorMessage:
 			logger.write('WARNING', '[NETWORK] Mensaje no enviado: %s' % str(errorMessage))
@@ -112,7 +112,7 @@ class TcpTransmitter():
 			if isinstance(message, messageClass.FileMessage):
 				return self.sendFile(message.fileName, remoteSocket)
 			else:
-				logger.write('DEBUG', '[NETWORK] Instancia de mensaje enviada correctamente!')
+				logger.write('INFO', '[NETWORK] Instancia de mensaje enviada correctamente!')
 				return True
 			################################################################################
 		except Exception as errorMessage:

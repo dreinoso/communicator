@@ -27,7 +27,6 @@ class Transmitter(threading.Thread):
 	bluetoothPriority = 0
 
 	isActive = False
-	contactExists = False
 	transmissionBuffer = Queue.PriorityQueue()
 
 	def __init__(self, _transmissionBuffer, _networkInstance, _bluetoothInstance, _emailInstance, _smsInstance, _checkerInstance):
@@ -60,18 +59,24 @@ class Transmitter(threading.Thread):
 			try:
 				# El elemento 0 es la prioridad, por eso sacamos el 1 porque es el mensaje
 				messageInstance = self.transmissionBuffer.get(True, 1.5)[1]
-				# Calculamos el tiempo transcurrido desde que se insertó el mensaje en el buffer hasta ahora
-				elapsedTime = time.time() - messageInstance.timeStamp
-				# Actualizamos el tiempo de vida restante del mensaje que está almacenado en el buffer
-				messageInstance.timeOut = messageInstance.timeOut - elapsedTime
-				# Si todavía no vence el 'timeout', el mensaje es válido y debe ser enviado...
-				if messageInstance.timeOut > 0:
-					transmitterThread = threading.Thread(target = self.expectTransmission, args = (messageInstance,), name = 'ExpectThread')
-					transmitterThread.start()
-				# ... sino, el tiempo expiro y el mensaje debe ser descartado.
+				# Comprobamos si el contacto éxiste (para ver si se desecha el mensaje o no)
+				if self.contactExists(messageInstance.receiver):
+					# Calculamos el tiempo transcurrido desde que se insertó el mensaje en el buffer hasta ahora
+					elapsedTime = time.time() - messageInstance.timeStamp
+					# Actualizamos el tiempo de vida restante del mensaje que está almacenado en el buffer
+					messageInstance.timeOut = messageInstance.timeOut - elapsedTime
+					# Si todavía no vence el 'timeout', el mensaje es válido y debe ser enviado...
+					if messageInstance.timeOut > 0:
+						transmitterThread = threading.Thread(target = self.expectTransmission, args = (messageInstance,), name = 'ExpectThread')
+						transmitterThread.start()
+					# ... sino, el tiempo expiro y el mensaje debe ser descartado.
+					else:
+						logger.write('WARNING', '[COMUNICADOR] Mensaje para \'%s\' descartado (el tiempo expiró).' % messageInstance.receiver)
+						# Eliminamos la instancia de mensaje, dado que ya no está en el buffer de transmisión
+						del messageInstance
 				else:
-					logger.write('WARNING', '[COMUNICADOR] Mensaje para \'%s\' descartado (el tiempo expiró).' % messageInstance.receiver)
-					# Eliminamos la instancia de mensaje, dado que ya no está en el buffer de transmisión
+					logger.write('WARNING', '[COMUNICADOR] El contacto \'%s\' no se encuentra registrado!' % messageInstance.receiver)
+					# Eliminamos la instancia de mensaje, dado que el destino es incorrecto
 					del messageInstance
 			# Para que el bloque 'try' (en la funcion 'get') no se quede esperando indefinidamente
 			except Queue.Empty:
@@ -86,116 +91,106 @@ class Transmitter(threading.Thread):
 		Si en cambio se recibe False el mensaje no se pudo enviar, pero el mensaje
 		es correcto entonces debe volverse a guardar en el buffer. Los controles sobre
 		el envio se hacen en cada uno de los modos, estos deciden y notifican'''
-		resultOk = self.send(messageInstance, messageInstance.receiver, messageInstance.device)
+		self.setPriorities(messageInstance.receiver, messageInstance.device)
 		# Se vuelve a colocar el mensaje en buffer para ser enviado nuevamente
-		if not resultOk:
+		if not self.send(messageInstance):
 			time.sleep(JSON_CONFIG["COMMUNICATOR"]["RETRANSMISSION_TIME"]) # Intervalo de tiempo entre envios sucesivos del mismo paquete
 			self.transmissionBuffer.put((100 - messageInstance.priority, messageInstance), True)
 		# Mensaje enviado por lo que se elimina
 		else:
 			del messageInstance
 
-	def send(self, message, receiver, device = ''):
+	def contactExists(self, receiver):
+		# Creamos una lista de claves (clientes registrados en los diccionarios)
+		keysList = list() + contactList.allowedIpAddress.keys()
+		keysList += contactList.allowedMacAddress.keys()
+		keysList += contactList.allowedEmails.keys()
+		keysList += contactList.allowedNumbers.keys()
+		# Buscamos por lo menos una coincidencia, para luego intentar hacer el envío
+		for keys in keysList:
+			if receiver in keys:
+				# El cliente fue encontrado como entrada de un diccionario
+				return True
+		# Si no hubo coincidencia en algún diccionario, entonces el contacto no existe
+		return False
+
+	def setPriorities(self, receiver, device):
+		self.smsPriority = 0
+		self.emailPriority = 0
+		self.networkPriority = 0
+		self.bluetoothPriority = 0
+		# Para SMS
+		if contactList.allowedNumbers.has_key(receiver) and self.checkerInstance.availableSms:
+			# En caso de preferencia se da máxima prioridad
+			if device == 'SMS':
+				self.smsPriority = 10
+			else:
+				self.smsPriority = JSON_CONFIG["PRIORITY_LEVELS"]["SMS"]
+		# Para EMAIL
+		if contactList.allowedEmails.has_key(receiver) and self.checkerInstance.availableEmail:
+			# En caso de preferencia se da máxima prioridad
+			if device == 'EMAIL':
+				self.emailPriority = 10
+			else:
+				self.emailPriority = JSON_CONFIG["PRIORITY_LEVELS"]["EMAIL"]
+		# Para NETWORK
+		if contactList.allowedIpAddress.has_key(receiver) and self.checkerInstance.availableNetwork:
+			# En caso de preferencia se da máxima prioridad
+			if device == 'NETWORK':
+				self.networkPriority = 10
+			else:
+				self.networkPriority = JSON_CONFIG["PRIORITY_LEVELS"]["NETWORK"]
+		# Para BLUETOOTH
+		if contactList.allowedMacAddress.has_key(receiver) and self.checkerInstance.availableBluetooth:
+			# En caso de preferencia se da máxima prioridad
+			if device == 'BLUETOOTH':
+				self.bluetoothPriority = 10
+			else:
+				self.bluetoothPriority = JSON_CONFIG["PRIORITY_LEVELS"]["BLUETOOTH"]
+
+	def send(self, messageInstance):
 		"""Se envia de modo inteligente un paquete de datos a un contacto previamente 
 		registrado el mensaje se envia por el medio mas óptimo encontrado o por la
 		selección preferente del usuario para el mensaje de se posible.
-		@param message: Mensaje a ser enviado
-		@type message: str
-		@param receiver: Nombre de contacto previamente registrado
-		@type receiver: str
-		@param device: Dispositivo de envio preferente
-		@type device: str"""
-		# Determinamos si el contacto existe. Si no existe, no se intenta enviar por ningún medio.
-		if not self.contactExists:
-			# Se resetean las prioridades
-			self.networkPriority = 0
-			self.bluetoothPriority = 0
-			self.emailPriority = 0
-			self.smsPriority = 0
-			if contactList.allowedIpAddress.has_key(receiver) and self.checkerInstance.availableNetwork:
-				self.networkPriority = JSON_CONFIG["PRIORITY_LEVELS"]["NETWORK"]
-				if device == 'Network':		# En caso de preferencia de Red se da máxima prioridad
-					self.networkPriority = 10 
-				self.contactExists = True
-			if contactList.allowedMacAddress.has_key(receiver) and self.checkerInstance.availableBluetooth:
-				self.bluetoothPriority = JSON_CONFIG["PRIORITY_LEVELS"]["BLUETOOTH"]
-				if device == 'Bluetooth':
-					self.bluetoothPriority = 10
-				self.contactExists = True
-			if contactList.allowedEmails.has_key(receiver) and self.checkerInstance.availableEmail:
-				self.emailPriority = JSON_CONFIG["PRIORITY_LEVELS"]["EMAIL"]
-				if device == 'Email':
-					self.emailPriority = 10
-				self.contactExists = True
-			if contactList.allowedNumbers.has_key(receiver) and self.checkerInstance.availableSms and not isinstance(message, messageClass.FileMessage): 
-				# Solo se habilita SMS si no es un archivo, o si la cantidad de caracteres 
-				# a enviar no supera el limite (que depende si es instancia o mensaje simple)
-				if message.sendInstance:
-					messageLength = len(pickle.dumps(message))
-				else:
-					messageLength = len(message.textMessage)
-				if messageLength < JSON_CONFIG["SMS"]["CHARACTER_LIMIT"]:
-					self.smsPriority = JSON_CONFIG["PRIORITY_LEVELS"]["SMS"]
-					if device == 'SMS':
-						self.smsPriority = 10
-					self.contactExists = True
-			if not self.contactExists:
-				logger.write('WARNING', '[COMUNICADOR] El contacto \'%s\' no se encuentra registrado.' % receiver)
-				return True # Para eliminar el mensaje y no seguir intentando
-		# Intentamos transmitir por NETWORK
-		if self.networkPriority != 0 and self.networkPriority >= self.bluetoothPriority and self.networkPriority >= self.emailPriority and self.networkPriority >= self.smsPriority:
-			destinationIp = contactList.allowedIpAddress[receiver][0]
-			destinationTcpPort = contactList.allowedIpAddress[receiver][1]
-			destinationUdpPort = contactList.allowedIpAddress[receiver][2]
-			resultOk = self.networkInstance.send(message, destinationIp, destinationTcpPort, destinationUdpPort)
-			if resultOk: 
-				# Aunque la respuesta sea True no significa que el mensaje fue enviado
-				# significa que el mensaje se debe eliminar porque fue enviado o porque
-				# no era corecto, cada módo se encarga de comunicar el envio.
-				self.contactExists = False
-				return True
-			else:
-				logger.write('DEBUG', '[NETWORK] Envio fallido. Reintentando con otro periférico.')
-				self.networkPriority = 0   # Entonces se descarta para la proxima selección
-				self.send(message, receiver, device) # Se reintenta con otros perifericos, el device no importa porque solo se usa en la primer llamada
-		# Intentamos transmitir por BLUETOOTH
-		elif self.bluetoothPriority != 0 and self.bluetoothPriority >= self.emailPriority and self.bluetoothPriority >= self.smsPriority:
-			destinationServiceName = contactList.allowedMacAddress[receiver][0]
-			destinationMAC = contactList.allowedMacAddress[receiver][1]
-			destinationUUID = contactList.allowedMacAddress[receiver][2]
-			resultOk = self.bluetoothInstance.send(destinationServiceName, destinationMAC, destinationUUID, message)
-			if resultOk:
-				self.contactExists = False
-				return True
-			else:
-				logger.write('DEBUG', '[BLUETOOTH] Envio fallido. Reintentando con otro periférico.')
-				self.bluetoothPriority = 0  # Entonces se descarta para la proxima selección
-				self.send(message, receiver) # Se reintenta con otros perifericos, el device no importa porque solo se usa en la primer llamada
-		# Intentamos transmitir por EMAIL
-		elif self.emailPriority != 0 and self.emailPriority >= self.smsPriority:
-			destinationEmail = contactList.allowedEmails[receiver]
-			resultOk  = self.emailInstance.send(message, destinationEmail)
-			if resultOk:
-				self.contactExists = False
-				return True
-			else:
-				logger.write('DEBUG', '[EMAIL] Envio fallido. Reintentando con otro periférico.')
-				self.emailPriority = 0      # Entonces se descarta para la proxima selección
-				self.send(message, receiver) # Se reintenta con otros perifericos
+		@param messageInstance: Mensaje a ser enviado
+		@type messageInstance: str"""
 		# Intentamos transmitir por SMS
-		elif self.smsPriority != 0:
-			destinationNumber = contactList.allowedNumbers[receiver]
-			resultOk = self.smsInstance.send(destinationNumber, message)
-			if resultOk:
-				self.contactExists = False
-				return True
-			else:
+		if all(self.smsPriority != 0 and self.smsPriority >= x for x in(self.emailPriority, self.networkPriority, self.bluetoothPriority)):
+			destinationNumber = contactList.allowedNumbers[messageInstance.receiver]
+			if not self.smsInstance.send(messageInstance, destinationNumber):
 				logger.write('DEBUG', '[SMS] Envio fallido. Reintentando con otro periférico.')
-				self.smsPriority = 0 # Entonces se descarta para la proxima selección
-				self.send(message, receiver)
+				self.smsPriority = 0              # Se descarta para la próxima selección
+				return self.send(messageInstance) # Se reintenta con otros periféricos
+			else:
+				return True
+		# Intentamos transmitir por EMAIL
+		elif all(self.emailPriority != 0 and self.emailPriority >= x for x in(self.networkPriority, self.bluetoothPriority)):
+			destinationEmail = contactList.allowedEmails[messageInstance.receiver]
+			if not self.emailInstance.send(messageInstance, destinationEmail):
+				logger.write('DEBUG', '[EMAIL] Envio fallido. Reintentando con otro periférico.')
+				self.emailPriority = 0            # Se descarta para la próxima selección
+				return self.send(messageInstance) # Se reintenta con otros periféricos
+			else:
+				return True
+		# Intentamos transmitir por NETWORK
+		elif self.networkPriority != 0 and self.networkPriority >= self.bluetoothPriority:
+			destinationIp, destinationTcpPort, destinationUdpPort = contactList.allowedIpAddress[messageInstance.receiver]
+			if not self.networkInstance.send(messageInstance, destinationIp, destinationTcpPort, destinationUdpPort):
+				logger.write('DEBUG', '[NETWORK] Envio fallido. Reintentando con otro periférico.')
+				self.networkPriority = 0          # Se descarta para la próxima selección
+				return self.send(messageInstance) # Se reintenta con otros periféricos
+			else:
+				return True
+		# Intentamos transmitir por BLUETOOTH
+		elif self.bluetoothPriority != 0:
+			destinationServiceName, destinationMAC, destinationUUID = contactList.allowedMacAddress[messageInstance.receiver]
+			if not self.bluetoothInstance.send(messageInstance, destinationServiceName, destinationMAC, destinationUUID):
+				logger.write('DEBUG', '[BLUETOOTH] Envio fallido. Reintentando con otro periférico.')
+				self.bluetoothPriority = 0        # Entonces se descarta para la proxima selección
+				return self.send(messageInstance) # Se reintenta con otros periféricos
+			else:
+				return True
 		# No fue posible transmitir por ningún medio
 		else:
-			logger.write('WARNING', '[COMUNICADOR] No hay módulos para el envío de mensajes a \'%s\'.' % receiver)
-			self.contactExists = False
+			logger.write('WARNING', '[COMUNICADOR] No hay módulos para el envío de mensajes a \'%s\'.' % messageInstance.receiver)
 			return False
-

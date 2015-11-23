@@ -57,7 +57,7 @@ def main():
 				messageReceived = communicator.receive()
 				if messageReceived != None:
 					if isinstance(messageReceived, messageClass.Message):
-						print 'Instancia de mensaje recibido: ' + str(messageReceived)
+						print 'Instancia de mensaje recibida: ' + str(messageReceived)
 						print '\tEmisor: ' + messageReceived.sender
 						print '\tPrioridad: ' + str(messageReceived.priority)
 						if isinstance(messageReceived, messageClass.SimpleMessage):
@@ -74,7 +74,7 @@ def main():
 				communicator.disconnectGprs()
 			# Opcion 5 - Instancia de mensaje de prueba
 			elif optionSelected is '5':
-				simpleMessage = messageClass.SimpleMessage('Datalogger01', 'client02', 'Este es un mensaje de prueba.')
+				simpleMessage = messageClass.SimpleMessage('Datalogger01', 'client02', 'Este es un mensaje de prueba.', 'NETWORK')
 				communicator.send(simpleMessage)
 			# Opción 6 - Instancia de archivo de prueba
 			elif optionSelected is '6':

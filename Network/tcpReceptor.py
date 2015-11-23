@@ -53,7 +53,7 @@ class TcpReceptor(threading.Thread):
 			# Se trata de un texto plano, sólo se lo almacena 
 			else:
 				self.receptionBuffer.put((10, dataReceived))
-				logger.write('DEBUG', '[NETWORK] Mensaje recibido correctamente!')
+				logger.write('INFO', '[NETWORK] Mensaje recibido correctamente!')
 		except socket.error as errorMessage:
 			logger.write('WARNING', '[NETWORK] Error al intentar recibir un mensaje: \'%s\'.'% errorMessage )
 		finally:
@@ -126,7 +126,7 @@ class TcpReceptor(threading.Thread):
 					self.receptionBuffer.put((100 - message.priority, message))
 			else:
 				self.receptionBuffer.put((100 - message.priority, message))
-				logger.write('DEBUG', '[NETWORK] Ha llegado una nueva instancia de mensaje!')
+				logger.write('INFO', '[NETWORK] Ha llegado una nueva instancia de mensaje!')
 			###########################################################
 		except socket.error as errorMessage:
 			logger.write('WARNING', '[NETWORK] Error al intentar recibir una instancia de mensaje ' + str(errorMessage))

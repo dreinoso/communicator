@@ -32,7 +32,7 @@ class BluetoothTransmitter():
 		'''Envío de mensaje simple'''
 		try:
 			remoteSocket.send(plainText)
-			logger.write('DEBUG', '[BLUETOOTH] Mensaje enviado correctamente!')
+			logger.write('INFO', '[BLUETOOTH] Mensaje enviado correctamente!')
 			return True
 		except Exception as errorMessage:
 			logger.write('WARNING', '[BLUETOOTH] Mensaje no enviado: %s' % str(errorMessage))
@@ -75,7 +75,7 @@ class BluetoothTransmitter():
 				fileObject.close()
 				remoteSocket.send('EOF')
 				remoteSocket.recv(BUFFER_SIZE) # IMPORTANTE ACK, no borrar.
-				logger.write('DEBUG', '[BLUETOOTH] Archivo \'%s\' enviado correctamente!' % fileName)
+				logger.write('INFO', '[BLUETOOTH] Archivo \'%s\' enviado correctamente!' % fileName)
 				return True
 			# Recibe 'FILE_EXISTS'
 			else:
@@ -106,7 +106,7 @@ class BluetoothTransmitter():
 				self.sendFile(message.fileName, remoteSocket)
 				return True
 			else:
-				logger.write('DEBUG', '[BLUETOOTH] Instancia de mensaje enviado correctamente!')
+				logger.write('INFO', '[BLUETOOTH] Instancia de mensaje enviado correctamente!')
 				return True
 			################################################################################
 		except Exception as errorMessage:

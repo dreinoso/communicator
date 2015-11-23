@@ -62,7 +62,7 @@ class UdpTransmitter(object):
 		try:
 			transmissionSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)			
 			transmissionSocket.sendto(plainText, (destinationIp, destinationPort))
-			logger.write('DEBUG', '[NETWORK] Mensaje enviado correctamente!')
+			logger.write('INFO', '[NETWORK] Mensaje enviado correctamente!')
 			return True
 		except Exception as errorMessage:
 			logger.write('WARNING', '[NETWORK] Mensaje no enviado: %s' % str(errorMessage))
@@ -110,7 +110,7 @@ class UdpTransmitter(object):
 					receivedData, addr = receptionSocket.recvfrom(BUFFER_SIZE) # ACK
 				fileObject.close()
 				transmissionSocket.sendto('EOF', (destinationIp, destinationPort))
-				logger.write('DEBUG', '[NETWORK] Archivo \'%s\' enviado correctamente!' % fileName)
+				logger.write('INFO', '[NETWORK] Archivo \'%s\' enviado correctamente!' % fileName)
 				return True
 			# Recibe 'FILE_EXISTS'
 			else:
@@ -148,7 +148,7 @@ class UdpTransmitter(object):
 			if isinstance(message, messageClass.FileMessage):
 				return self.sendFile(message.fileName, destinationIp, destinationPort)
 			else:
-				logger.write('DEBUG', '[NETWORK] Instancia de mensaje enviada correctamente!')
+				logger.write('INFO', '[NETWORK] Instancia de mensaje enviada correctamente!')
 				return True
 			##################################################################################	
 		except Exception as errorMessage:

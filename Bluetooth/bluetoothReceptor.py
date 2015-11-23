@@ -37,7 +37,7 @@ class BluetoothReceptor(threading.Thread):
 			# Se trata de un texto plano, sólo se lo almacena 
 			else:
 				self.receptionBuffer.put((10, dataReceived))
-				logger.write('DEBUG', '[BLUETOOTH] Mensaje recibido correctamente!')
+				logger.write('INFO', '[BLUETOOTH] Ha llegado un nuevo mensaje!')
 		except bluetooth.BluetoothError as errorMessage:
 			logger.write('WARNING', '[BLUETOOTH] Error al intentar recibir un mensaje: \'%s\'.'% errorMessage )
 		finally:
@@ -71,7 +71,7 @@ class BluetoothReceptor(threading.Thread):
 						self.remoteSocket.send('ACK')
 					else: 
 						fileObject.close()
-						logger.write('DEBUG', '[BLUETOOTH] Archivo \'%s\' descargado correctamente!' % fileName)
+						logger.write('INFO', '[BLUETOOTH] Archivo \'%s\' descargado correctamente!' % fileName)
 						break
 				self.remoteSocket.send('ACK') # IMPORTANTE, no borrar.
 				return True
@@ -110,7 +110,7 @@ class BluetoothReceptor(threading.Thread):
 					self.receptionBuffer.put((100 - message.priority, message))
 			else:
 				self.receptionBuffer.put((100 - message.priority, message))
-				logger.write('DEBUG', '[BLUETOOTH] Instancia de mensaje recibido correctamente!')
+				logger.write('INFO', '[BLUETOOTH] Instancia de mensaje recibido correctamente!')
 			###########################################################
 		except bluetooth.BluetoothError as errorMessage:
 			logger.write('WARNING', '[BLUETOOTH] Error al intentar recibir una instancia de mensaje ' + str(errorMessage))

@@ -65,7 +65,7 @@ class Bluetooth(object):
 		'VOLVER A CREAR EL SOCKET RFCOMM'
 		pass #TODO
 
-	def send(self, destinationServiceName, destinationMAC, destinationUUID, messageToSend):
+	def send(self, messageToSend, destinationServiceName, destinationMAC, destinationUUID):
 		logger.write('DEBUG', '[BLUETOOTH] Buscando el servicio \'%s\'.' % destinationServiceName)
 		serviceMatches = bluetooth.find_service(uuid = destinationUUID, address = destinationMAC)
 		# Buscamos alguna coincidencia de servicios Bluetooth especificos
