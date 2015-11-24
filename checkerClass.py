@@ -39,10 +39,10 @@ class Checker(threading.Thread):
 	def __init__(self, _modemSemaphore, _networkInstance, _gprsInstance, _emailInstance, _smsInstance, _bluetoothInstance):
 		threading.Thread.__init__(self, name = 'CheckerThread')
 		self.modemSemaphore = _modemSemaphore
-		self.networkInstance = _networkInstance
 		self.smsInstance = _smsInstance
 		self.gprsInstance = _gprsInstance
 		self.emailInstance = _emailInstance
+		self.networkInstance = _networkInstance
 		self.bluetoothInstance = _bluetoothInstance
 
 	def __del__(self):
@@ -111,6 +111,7 @@ class Checker(threading.Thread):
 		@return: Se determina si la comunicación por este medio se puede realizar.
 		@rtype: bool"""
 		interfacesPattern = re.compile('wlan[0-9]+' '|' 'eth[0-9]+') # Se buscan interfaces de 0 a 100
+		activeInterfacesFile = open('/tmp/activeInterfaces', 'a+')
 		networkInterfaces = os.popen('ip link show').readlines()
 		patternMatched = None
 		stateUP = False
@@ -118,7 +119,6 @@ class Checker(threading.Thread):
 			# Buscamos a lo largo de la cadena si hay alguna coincidencia de una RE
 			patternMatched = interfacesPattern.search(interface)
 			if patternMatched is not None and interface.find("state UP") > 0:
-				activeInterfacesFile = open('/tmp/activeInterfaces', 'a+')
 				stateUP = True
 				# 'patternMatched.group()' devuelve la cadena (interfaz) que coincide con la RE
 				if (patternMatched.group() + '\n') not in activeInterfacesFile.read():
@@ -140,11 +140,10 @@ class Checker(threading.Thread):
 		# Si ya no se encontró ninguna interfaz UP y ya estabamos escuchando, dejamos de hacerlo
 		if stateUP is False and self.networkInstance.isActive:
 			self.networkInstance.isActive = False
-			# Eliminamos del archivo la interfaz usada en esta misma instancia
-			activeInterfacesFile = open('/tmp/activeInterfaces').read()
-			deletedActiveInterface = activeInterfacesFile.replace(self.networkInstance.localInterface + '\n', '')
+			# Eliminamos del archivo la interfaz de red usada
+			dataToWrite = open('/tmp/activeInterfaces').read().replace(self.localInterface + '\n', '')
 			activeInterfacesFile = open('/tmp/activeInterfaces', 'w')
-			activeInterfacesFile.write(deletedActiveInterface)
+			activeInterfacesFile.write(dataToWrite)
 			activeInterfacesFile.close()
 			return False
 
@@ -184,19 +183,44 @@ class Checker(threading.Thread):
 		"""Se determina la disponibilidad de la comunicación por medio de comunicación Bluetooth.
 		@return: Se determina si la comunicación por este medio se puede realizar.
 		@rtype: bool"""
+		activeInterfacesFile = open('/tmp/activeInterfaces', 'a+')
 		# Ejemplo de bluetoothDevices: ['Devices:\n', '\thci0\t00:24:7E:64:7B:4A\n']
 		bluetoothDevices = os.popen('hcitool dev').readlines()
 		# Sacamos el primer elemento por izquierda ('Devices:\n')
 		bluetoothDevices.pop(0)
 		if len(bluetoothDevices) > 0:
-			if not self.bluetoothInstance.isActive:
-				self.bluetoothInstance.connect()
-				self.bluetoothInstance.isActive = True
-				bluetoothThread = threading.Thread(target = self.bluetoothInstance.receive, name = self.bluetoothThreadName)
-				bluetoothThread.start()
-				logger.write('INFO', '[BLUETOOTH] Listo para usarse.')
-			return True
+			btDeviceList = list()
+			for btDevice in bluetoothDevices:
+				btDevice = btDevice.split('\t')[2].replace('\n', '')
+				btDeviceList.append(btDevice)
+				if btDevice not in activeInterfacesFile.read():
+					# Como la MAC encontrada no está siendo usada, la ponemos a escuchar si no está activa
+					if not self.bluetoothInstance.isActive:
+						# Escribimos en nuestro archivo la MAC a usar, para indicar que está ocupada
+						activeInterfacesFile.write(btDevice + '\n')
+						self.bluetoothInstance.connect(btDevice)
+						bluetoothThread = threading.Thread(target = self.bluetoothInstance.receive, name = self.bluetoothThreadName)
+						bluetoothThread.start()
+						logger.write('INFO', '[BLUETOOTH] Listo para usarse (' + btDevice + ').')
+						return True
+			# Si llegamos acá, es porque el archivo contiene una MAC que quizás fue desconectada y debemos borrarla
+			if self.bluetoothInstance.isActive and self.bluetoothInstance.localMACAddress not in btDeviceList:
+				self.bluetoothInstance.isActive = False
+				# Eliminamos del archivo la MAC usada
+				dataToWrite = open('/tmp/activeInterfaces').read().replace(self.bluetoothInstance.localMACAddress + '\n', '')
+				activeInterfacesFile = open('/tmp/activeInterfaces', 'w')
+				activeInterfacesFile.write(dataToWrite)
+				activeInterfacesFile.close()
+				return False
+			# Si la MAC ya está en modo activo (funcionando), devolvemos 'True'
+			else:
+				return True
 		else:
 			if self.bluetoothInstance.isActive:
 				self.bluetoothInstance.isActive = False
+				# Eliminamos del archivo la MAC usada
+				dataToWrite = open('/tmp/activeInterfaces').read().replace(self.bluetoothInstance.localMACAddress + '\n', '')
+				activeInterfacesFile = open('/tmp/activeInterfaces', 'w')
+				activeInterfacesFile.write(dataToWrite)
+				activeInterfacesFile.close()
 			return False

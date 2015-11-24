@@ -22,10 +22,10 @@ class Bluetooth(object):
 	bluetoothProtocol = JSON_CONFIG["BLUETOOTH"]["PROTOCOL"]
 	localServiceName = JSON_CONFIG["BLUETOOTH"]["SERVICE"]
 	localUUID = JSON_CONFIG["BLUETOOTH"]["UUID"]
+
 	localSocketRFCOMM = bluetooth.BluetoothSocket()
-	localSocketL2CAP = bluetooth.BluetoothSocket()
-	localPortRFCOMM = 0
-	localPortL2CAP = 0
+	localPortRFCOMM = None
+	localMACAddress = None
 
 	bluetoothTransmitter = bluetoothTransmitter.BluetoothTransmitter()
 
@@ -34,36 +34,37 @@ class Bluetooth(object):
 
 	def __init__(self, _receptionBuffer):
 		self.receptionBuffer = _receptionBuffer
+
+	def __del__(self):
+		try:
+			# Eliminamos del archivo la MAC usada en esta misma instancia
+			dataToWrite = open('/tmp/activeInterfaces').read().replace(self.localMACAddress + '\n', '')
+			activeInterfacesFile = open('/tmp/activeInterfaces', 'w')
+			activeInterfacesFile.write(dataToWrite)
+			activeInterfacesFile.close()
+		except Exception as errorMessage:
+			pass
+		finally:
+			logger.write('INFO', '[BLUETOOTH] Objeto destruido.')
+
+	# La función 'receiveRFCOMM' cierra el socket al finalizar, por eso hay que hacer esto de nuevo
+	def connect(self, activeMACAddress):
+		self.localMACAddress = activeMACAddress
 		# Creamos un nuevo socket Bluetooth que usa el protocolo de transporte especificado
 		self.localSocketRFCOMM = bluetooth.BluetoothSocket(bluetooth.RFCOMM)
-		self.localSocketL2CAP = bluetooth.BluetoothSocket(bluetooth.L2CAP)
 		# Enlazamos al adaptador local algun puerto disponible usando SDP (Service Discovery Protocol)
-		self.localSocketRFCOMM.bind(('', bluetooth.PORT_ANY))
-		self.localSocketL2CAP.bind(('', bluetooth.PORT_ANY))
+		self.localSocketRFCOMM.bind((self.localMACAddress, bluetooth.PORT_ANY))
 		# Especificamos el numero de conexiones permitidas (todavia sin aceptar) antes de rechazar las nuevas entrantes
 		self.localSocketRFCOMM.listen(CONNECTIONS)
-		self.localSocketL2CAP.listen(CONNECTIONS)
 		# Especificamos el tiempo de espera de conexiones (funcion 'accept')
 		self.localSocketRFCOMM.settimeout(TIMEOUT)
-		self.localSocketL2CAP.settimeout(TIMEOUT)
 		# Especificamos el anuncio de nuestro servicio
 		bluetooth.advertise_service(self.localSocketRFCOMM, self.localServiceName,
 									service_id = self.localUUID,
 									service_classes = [self.localUUID, bluetooth.SERIAL_PORT_CLASS],
 									profiles = [bluetooth.SERIAL_PORT_PROFILE])
-		bluetooth.advertise_service(self.localSocketL2CAP, self.localServiceName,
-									service_id = self.localUUID,
-									service_classes = [self.localUUID])
 		# Almacenamos el puerto asignado por el 'bind'
 		self.localPortRFCOMM = self.localSocketRFCOMM.getsockname()[1]
-		self.localPortL2CAP = self.localSocketL2CAP.getsockname()[1]
-
-	def __del__(self):
-		logger.write('INFO', '[BLUETOOTH] Objeto destruido.')
-
-	def connect(self):
-		'VOLVER A CREAR EL SOCKET RFCOMM'
-		pass #TODO
 
 	def send(self, messageToSend, destinationServiceName, destinationMAC, destinationUUID):
 		logger.write('DEBUG', '[BLUETOOTH] Buscando el servicio \'%s\'.' % destinationServiceName)
@@ -96,6 +97,7 @@ class Bluetooth(object):
 		rfcommThread.join()
 
 	def receiveRFCOMM(self):
+		self.isActive = True
 		while self.isActive:
 			try:
 				# Espera por una conexión entrante y devuelve un nuevo socket que representa la conexión, como así también la dirección del cliente

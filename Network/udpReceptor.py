@@ -60,7 +60,7 @@ class UdpReceptor(threading.Thread):
 			self.receiveFile()
 		elif self.name == 'Thread-MessageInstance':
 			self.receiveMessageInstance()
-		logger.write('DEBUG', '[NETWORK] \'%s\' terminado y cliente desconectado.' % self.getName())
+		logger.write('DEBUG', '[NETWORK-UDP] \'%s\' terminado y cliente desconectado.' % self.getName())
 
 	def receiveFile(self):
 		'''Para la recepción del archivo, primero se verifica que le archivo no 
@@ -83,7 +83,7 @@ class UdpReceptor(threading.Thread):
 			# Verificamos si el archivo a descargar no existe en la carpeta 'DOWNLOADS'
 			if not os.path.isfile(relativeFilePath):
 				fileObject = open(relativeFilePath, 'w+')
-				logger.write('DEBUG', '[NETWORK] Descargando archivo \'%s\'...' % fileName)
+				logger.write('DEBUG', '[NETWORK-UDP] Descargando archivo \'%s\'...' % fileName)
 				self.transmissionSocket.sendto('READY', (self.remoteAddress, self.remotePort))
 				# Comenzamos a descargar el archivo
 				while True:
@@ -93,16 +93,16 @@ class UdpReceptor(threading.Thread):
 						self.transmissionSocket.sendto('ACK', (self.remoteAddress, self.remotePort))
 					else: 
 						fileObject.close()
-						logger.write('INFO', '[NETWORK] Archivo \'%s\' descargado correctamente!' % fileName)
+						logger.write('INFO', '[NETWORK-UDP] Archivo \'%s\' descargado correctamente!' % fileName)
 						break
 				return True
 			else:
 				# Comunicamos al transmisor que el archivo ya existe
 				self.transmissionSocket.sendto('FILE_EXISTS', (self.remoteAddress, self.remotePort))
-				logger.write('WARNING', '[NETWORK] El archivo \'%s\' ya existe! Imposible descargar.' % fileName)
+				logger.write('WARNING', '[NETWORK-UDP] El archivo \'%s\' ya existe! Imposible descargar.' % fileName)
 				return False
 		except socket.error as errorMessage:
-			logger.write('WARNING', '[NETWORK] Error al intentar descargar el archivo \'%s\': %s' % (fileName, str(errorMessage)))
+			logger.write('WARNING', '[NETWORK-UDP] Error al intentar descargar el archivo \'%s\': %s' % (fileName, str(errorMessage)))
 		finally:
 			# Cerramos los sockets que permitieron la conexión con el cliente
 			self.receptionSocket.close()
@@ -134,10 +134,10 @@ class UdpReceptor(threading.Thread):
 					self.receptionBuffer.put((100 - message.priority, message))
 			else:
 				self.receptionBuffer.put((100 - message.priority, message))
-				logger.write('INFO', '[NETWORK] Ha llegado una nueva instancia de mensaje!')
+				logger.write('INFO', '[NETWORK-UDP] Ha llegado una nueva instancia de mensaje!')
 			###########################################################
 		except socket.error as errorMessage:
-			logger.write('WARNING', '[NETWORK] Error al intentar recibir una instancia de mensaje ' + str(errorMessage))
+			logger.write('WARNING', '[NETWORK-UDP] Error al intentar recibir una instancia de mensaje ' + str(errorMessage))
 		finally:
 			# Cerramos los sockets que permitieron la conexión con el cliente
 			self.receptionSocket.close()

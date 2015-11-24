@@ -53,11 +53,11 @@ class TcpReceptor(threading.Thread):
 			# Se trata de un texto plano, sólo se lo almacena 
 			else:
 				self.receptionBuffer.put((10, dataReceived))
-				logger.write('INFO', '[NETWORK] Mensaje recibido correctamente!')
+				logger.write('INFO', '[NETWORK-TCP] Mensaje recibido correctamente!')
 		except socket.error as errorMessage:
-			logger.write('WARNING', '[NETWORK] Error al intentar recibir un mensaje: \'%s\'.'% errorMessage )
+			logger.write('WARNING', '[NETWORK-TCP] Error al intentar recibir un mensaje: \'%s\'.'% errorMessage )
 		finally:
-			logger.write('DEBUG', '[NETWORK] \'%s\' terminado y cliente desconectado.' % self.getName())
+			logger.write('DEBUG', '[NETWORK-TCP] \'%s\' terminado y cliente desconectado.' % self.getName())
 
 	def receiveFile(self):
 		'''Para la recepción del archivo, primero se verifica que le archivo no 
@@ -77,7 +77,7 @@ class TcpReceptor(threading.Thread):
 			# Verificamos si el archivo a descargar no existe en la carpeta 'DOWNLOADS'
 			if not os.path.isfile(relativeFilePath):
 				fileObject = open(relativeFilePath, 'w+')
-				logger.write('DEBUG', '[NETWORK] Descargando archivo \'%s\'...' % fileName)
+				logger.write('DEBUG', '[NETWORK-TCP] Descargando archivo \'%s\'...' % fileName)
 				self.remoteSocket.send('READY')
 				# Comenzamos a descargar el archivo
 				while True:
@@ -87,16 +87,16 @@ class TcpReceptor(threading.Thread):
 						self.remoteSocket.send('ACK')
 					else: 
 						fileObject.close()
-						logger.write('INFO', '[NETWORK] Archivo \'%s\' descargado correctamente!' % fileName)
+						logger.write('INFO', '[NETWORK-TCP] Archivo \'%s\' descargado correctamente!' % fileName)
 						break
 				return True
 			else:
 				# Comunicamos al transmisor que el archivo ya existe
 				self.remoteSocket.send('FILE_EXISTS') # Comunicamos al transmisor que el archivo ya existe
-				logger.write('WARNING', '[NETWORK] El archivo \'%s\' ya existe! Imposible descargar.' % fileName)
+				logger.write('WARNING', '[NETWORK-TCP] El archivo \'%s\' ya existe! Imposible descargar.' % fileName)
 				return False
 		except socket.error as errorMessage:
-			logger.write('WARNING', '[NETWORK] Error al intentar descargar el archivo \'%s\': %s' % (fileName, str(errorMessage)))
+			logger.write('WARNING', '[NETWORK-TCP] Error al intentar descargar el archivo \'%s\': %s' % (fileName, str(errorMessage)))
 			return False
 		finally:
 			# Cierra la conexion del socket cliente
@@ -126,10 +126,10 @@ class TcpReceptor(threading.Thread):
 					self.receptionBuffer.put((100 - message.priority, message))
 			else:
 				self.receptionBuffer.put((100 - message.priority, message))
-				logger.write('INFO', '[NETWORK] Ha llegado una nueva instancia de mensaje!')
+				logger.write('INFO', '[NETWORK-TCP] Ha llegado una nueva instancia de mensaje!')
 			###########################################################
 		except socket.error as errorMessage:
-			logger.write('WARNING', '[NETWORK] Error al intentar recibir una instancia de mensaje ' + str(errorMessage))
+			logger.write('WARNING', '[NETWORK-TCP] Error al intentar recibir una instancia de mensaje ' + str(errorMessage))
 		finally:
 			# Cierra la conexion del socket cliente
 			self.remoteSocket.close()

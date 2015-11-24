@@ -62,10 +62,10 @@ class UdpTransmitter(object):
 		try:
 			transmissionSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)			
 			transmissionSocket.sendto(plainText, (destinationIp, destinationPort))
-			logger.write('INFO', '[NETWORK] Mensaje enviado correctamente!')
+			logger.write('INFO', '[NETWORK-UDP] Mensaje enviado correctamente!')
 			return True
 		except Exception as errorMessage:
-			logger.write('WARNING', '[NETWORK] Mensaje no enviado: %s' % str(errorMessage))
+			logger.write('WARNING', '[NETWORK-UDP] Mensaje no enviado: %s' % str(errorMessage))
 			return False
 		finally:
 			# Cierra la conexion del socket cliente
@@ -102,7 +102,7 @@ class UdpTransmitter(object):
 				fileObject.seek(fileBeginning, os.SEEK_SET)
 				# Envio del contenido del archivo
 				bytesSent = 0
-				logger.write('DEBUG', '[NETWORK] Transfiriendo archivo \'%s\'...' % fileName)
+				logger.write('DEBUG', '[NETWORK-UDP] Transfiriendo archivo \'%s\'...' % fileName)
 				while bytesSent < fileSize:
 					outputData = fileObject.read(BUFFER_SIZE)
 					transmissionSocket.sendto(outputData, (destinationIp, destinationPort))
@@ -110,15 +110,15 @@ class UdpTransmitter(object):
 					receivedData, addr = receptionSocket.recvfrom(BUFFER_SIZE) # ACK
 				fileObject.close()
 				transmissionSocket.sendto('EOF', (destinationIp, destinationPort))
-				logger.write('INFO', '[NETWORK] Archivo \'%s\' enviado correctamente!' % fileName)
+				logger.write('INFO', '[NETWORK-UDP] Archivo \'%s\' enviado correctamente!' % fileName)
 				return True
 			# Recibe 'FILE_EXISTS'
 			else:
-				logger.write('WARNING', '[NETWORK] El archivo \'%s\' ya existe, fue rechazado!' % fileName)
+				logger.write('WARNING', '[NETWORK-UDP] El archivo \'%s\' ya existe, fue rechazado!' % fileName)
 				# Devolvemos 'True' para que no intente reenviar el archivo
 				return True
 		except Exception as errorMessage:
-			logger.write('WARNING', '[NETWORK] Archivo \'%s\' no enviado: %s' % (fileName, str(errorMessage)))
+			logger.write('WARNING', '[NETWORK-UDP] Archivo \'%s\' no enviado: %s' % (fileName, str(errorMessage)))
 			return False
 		finally:
 			# Cerramos los sockets que permitieron la conexión con el cliente
@@ -148,11 +148,11 @@ class UdpTransmitter(object):
 			if isinstance(message, messageClass.FileMessage):
 				return self.sendFile(message.fileName, destinationIp, destinationPort)
 			else:
-				logger.write('INFO', '[NETWORK] Instancia de mensaje enviada correctamente!')
+				logger.write('INFO', '[NETWORK-UDP] Instancia de mensaje enviada correctamente!')
 				return True
 			##################################################################################	
 		except Exception as errorMessage:
-			logger.write('WARNING', '[NETWORK] Instancia de mensaje no enviado: %s' % str(errorMessage))
+			logger.write('WARNING', '[NETWORK-UDP] Instancia de mensaje no enviado: %s' % str(errorMessage))
 			return False
 		finally:
 			# Cerramos los sockets que permitieron la conexión con el cliente

@@ -38,10 +38,10 @@ class TcpTransmitter():
 		'''Envío de mensaje simple'''
 		try:
 			remoteSocket.send(plainText)
-			logger.write('INFO', '[NETWORK] Mensaje enviado correctamente!')
+			logger.write('INFO', '[NETWORK-TCP] Mensaje enviado correctamente!')
 			return True
 		except Exception as errorMessage:
-			logger.write('WARNING', '[NETWORK] Mensaje no enviado: %s' % str(errorMessage))
+			logger.write('WARNING', '[NETWORK-TCP] Mensaje no enviado: %s' % str(errorMessage))
 			return False
 		finally:
 			# Cierra la conexion del socket cliente
@@ -72,7 +72,7 @@ class TcpTransmitter():
 				fileObject.seek(fileBeginning, os.SEEK_SET)
 				# Envio del contenido del archivo
 				bytesSent = 0
-				logger.write('DEBUG', '[NETWORK] Transfiriendo archivo \'%s\'...' % fileName)
+				logger.write('DEBUG', '[NETWORK-TCP] Transfiriendo archivo \'%s\'...' % fileName)
 				while bytesSent < fileSize:
 					outputData = fileObject.read(BUFFER_SIZE)
 					remoteSocket.send(outputData)
@@ -80,15 +80,15 @@ class TcpTransmitter():
 					remoteSocket.recv(BUFFER_SIZE) # ACK
 				fileObject.close()
 				remoteSocket.send('EOF')
-				logger.write('INFO', '[NETWORK] Archivo \'%s\' enviado correctamente!' % fileName)
+				logger.write('INFO', '[NETWORK-TCP] Archivo \'%s\' enviado correctamente!' % fileName)
 				return True
 			# Recibe 'FILE_EXISTS'
 			else:
-				logger.write('WARNING', '[NETWORK] El archivo \'%s\' ya existe, fue rechazado!' % fileName)
+				logger.write('WARNING', '[NETWORK-TCP] El archivo \'%s\' ya existe, fue rechazado!' % fileName)
 				# Devolvemos 'True' para que no intente reenviar el archivo
 				return True
 		except Exception as errorMessage:
-			logger.write('WARNING', '[NETWORK] Archivo \'%s\' no enviado: %s' % (fileName, str(errorMessage)))
+			logger.write('WARNING', '[NETWORK-TCP] Archivo \'%s\' no enviado: %s' % (fileName, str(errorMessage)))
 			return False
 		finally:
 			remoteSocket.close() # Cierra la conexion del socket cliente
@@ -112,11 +112,11 @@ class TcpTransmitter():
 			if isinstance(message, messageClass.FileMessage):
 				return self.sendFile(message.fileName, remoteSocket)
 			else:
-				logger.write('INFO', '[NETWORK] Instancia de mensaje enviada correctamente!')
+				logger.write('INFO', '[NETWORK-TCP] Instancia de mensaje enviada correctamente!')
 				return True
 			################################################################################
 		except Exception as errorMessage:
-			logger.write('WARNING', '[NETWORK] Instancia de mensaje no enviado: %s' % str(errorMessage))
+			logger.write('WARNING', '[NETWORK-TCP] Instancia de mensaje no enviado: %s' % str(errorMessage))
 			return False
 		finally:
 			# Cierra la conexion del socket cliente

@@ -52,10 +52,9 @@ class Network(object):
 		puertos ocupados en el Host"""
 		try:
 			# Eliminamos del archivo la interfaz usada en esta misma instancia
-			activeInterfacesFile = open('/tmp/activeInterfaces').read()
-			deletedActiveInterface = activeInterfacesFile.replace(self.localInterface + '\n', '')
+			dataToWrite = open('/tmp/activeInterfaces').read().replace(self.localInterface + '\n', '')
 			activeInterfacesFile = open('/tmp/activeInterfaces', 'w')
-			activeInterfacesFile.write(deletedActiveInterface)
+			activeInterfacesFile.write(dataToWrite)
 			activeInterfacesFile.close()
 			self.udpReceptionSocket.close()
 			self.tcpReceptionSocket.close()
@@ -64,10 +63,10 @@ class Network(object):
 		finally:
 			logger.write('INFO', '[NETWORK] Objeto destruido.')
 
-	def connect(self, _activeInterface):
+	def connect(self, activeInterface):
 		'''Se realizan las conexiones de los protocolos UDP y TCP para la comunicación
 		por medio de NETWORK.'''
-		self.localInterface = _activeInterface
+		self.localInterface = activeInterface
 		commandToExecute = 'ip addr show ' + self.localInterface + ' | grep inet'
 		# Obtenemos la dirección IP local asignada por DHCP
 		self.localAddress = os.popen(commandToExecute).readline().split()[1].split('/')[0]
@@ -82,7 +81,7 @@ class Network(object):
 			self.udpTransmitter = udpTransmitter.UdpTransmitter(self.localAddress)
 			#####################################################################
 		except socket.error as errorMessage:
-			logger.write('WARNING', '[NETWORK] Excepción en "' + str(inspect.stack()[0][3]) + ' para UDP " (' +str(errorMessage) + ')')
+			logger.write('WARNING', '[NETWORK-UDP] Excepción en "' + str(inspect.stack()[0][3]) + ' para UDP " (' +str(errorMessage) + ')')
 		try: # Intenta conexión TCP
 			self.tcpReceptionSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 			self.tcpReceptionSocket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -96,7 +95,7 @@ class Network(object):
 			self.tcpTransmitter = tcpTransmitter.TcpTransmitter()
 			####################################################
 		except socket.error as errorMessage:
-			logger.write('WARNING', '[NETWORK] Excepción en "' + str(inspect.stack()[0][3]) + ' para TCP " (' +str(errorMessage) + ')')
+			logger.write('WARNING', '[NETWORK-TCP] Excepción en "' + str(inspect.stack()[0][3]) + ' para TCP " (' +str(errorMessage) + ')')
 
 	
 	def send(self, message, destinationIp, destinationTcpPort, destinationUdpPort):
@@ -115,12 +114,12 @@ class Network(object):
 				remoteSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 				# Conecta el socket con el dispositivo remoto sobre el puerto especificado
 				remoteSocket.connect((destinationIp, destinationTcpPort))
-				logger.write('DEBUG', '[NETWORK] Conectado con la dirección \'%s\'.' % destinationIp)
+				logger.write('DEBUG', '[NETWORK-TCP] Conectado con la dirección \'%s\'.' % destinationIp)
 				return self.tcpTransmitter.send(message, remoteSocket)
 			else:
 				return self.udpTransmitter.send(message, destinationIp, destinationUdpPort)
 		except socket.error as errorMessage:
-			logger.write('WARNING','[NETWORK] %s.' % errorMessage)
+			logger.write('WARNING','[NETWORK-UDP] %s.' % errorMessage)
 			return False
 	
 	def receive(self):
@@ -149,24 +148,24 @@ class Network(object):
 					ipAddressFounded = False
 					for valueList in contactList.allowedIpAddress.values():
 						if ipAddress in valueList:
-							logger.write('DEBUG', '[NETWORK] Conexion desde \'%s\' aceptada.' % ipAddress)
+							logger.write('DEBUG', '[NETWORK-TCP] Conexion desde \'%s\' aceptada.' % ipAddress)
 							receptorThread = tcpReceptor.TcpReceptor(threadName, remoteSocket, self.receptionBuffer)
 							ipAddressFounded = True
 							receptorThread.start()
 							break
 					if not ipAddressFounded:
-						logger.write('WARNING', '[NETWORK] Mensaje de \'%s\' rechazado!' % ipAddress)
+						logger.write('WARNING', '[NETWORK-TCP] Mensaje de \'%s\' rechazado!' % ipAddress)
 						remoteSocket.close()
 				# ... sino, recibimos todos los mensajes independientemente del origen
 				else:
-					logger.write('DEBUG', '[NETWORK] Conexion desde \'%s\' aceptada.' % ipAddress)
+					logger.write('DEBUG', '[NETWORK-TCP] Conexion desde \'%s\' aceptada.' % ipAddress)
 					receptorThread = tcpReceptor.TcpReceptor(threadName, remoteSocket, self.receptionBuffer)
 					receptorThread.start()
 			# Para que no se quede esperando indefinidamente en el'accept'
 			except socket.timeout as errorMessage:
 				pass
 		self.tcpReceptionSocket.close()
-		logger.write('WARNING','[NETWORK] Función \'%s\' terminada.' % inspect.stack()[0][3])
+		logger.write('WARNING','[NETWORK-TCP] Función \'%s\' terminada.' % inspect.stack()[0][3])
 
 	def receiveUdp(self):
 		""" Esta función es ejecutada en un hilo, se queda esperando los paquetes
@@ -190,9 +189,9 @@ class Network(object):
 					receptorThread.start()
 				else:
 					self.receptionBuffer.put((10, dataReceived))
-					logger.write('DEBUG', '[NETWORK] Ha llegado un nuevo mensaje!')
+					logger.write('DEBUG', '[NETWORK-UDP] Ha llegado un nuevo mensaje!')
 			# Esta excepción es parte de la ejecución, no implica un error
 			except socket.timeout, errorMessage:
 				pass
 		self.udpReceptionSocket.close()
-		logger.write('WARNING', '[NETWORK] Funcion \'%s\' terminada.' % inspect.stack()[0][3])
+		logger.write('WARNING', '[NETWORK-UDP] Funcion \'%s\' terminada.' % inspect.stack()[0][3])
