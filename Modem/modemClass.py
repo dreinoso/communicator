@@ -55,7 +55,7 @@ class Modem(object):
 			@rtype: list """
 		try:
 			self.atError = False
-			self.modemSemaphore.acquire()
+			#self.modemSemaphore.acquire()
 			self.modemInstance.write(atCommand)				  # Envio el comando AT al modem
 			self.modemOutput = self.modemInstance.readlines() # Espero la respuesta
 		except serial.serialutil.SerialException:
@@ -68,19 +68,16 @@ class Modem(object):
 				for i, outputElement in enumerate(self.modemOutput):
 					if outputElement.startswith('+CME ERROR'):
 						errorCode = int(outputElement.replace('+CME ERROR: ', ''))
-						logger.write('WARNING','[SMS] ' + atCommand + ' - ' + errorList.CME_ERRORS[errorCode] + '.')
+						logger.write('ERROR','[SMS] ' + atCommand + ' - ' + errorList.CME_ERRORS[errorCode] + '.')
 						raise
 					elif outputElement.startswith('+CMS ERROR'):
 						errorCode = int(outputElement.replace('+CMS ERROR: ', ''))
-						logger.write('WARNING','[SMS] ' + atCommand + ' - ' + errorList.CMS_ERRORS[errorCode] + '.')
+						logger.write('ERROR','[SMS] ' + atCommand + ' - ' + errorList.CMS_ERRORS[errorCode] + '.')
 						raise
-					elif outputElement.startswith('NO CARRIER'):
-						logger.write('WARNING','[SMS] ' + atCommand + ' - ' + errorList.NO_CARRIER + '.')
+					elif outputElement.startswith('NO CARRIER') or outputElement.startswith('ERROR'):
+						logger.write('ERROR','[SMS] ' + atCommand + ' - ' + errorList.NO_CARRIER + '.')
 						raise
-					elif outputElement.startswith('ERROR'):
-						logger.write('WARNING','[SMS] ' + atCommand + ' - ' + errorList.NO_CARRIER + '.')
-						raise
-			self.modemSemaphore.release()
+			#self.modemSemaphore.release()
 			return self.modemOutput
 
 	def closePort(self):
@@ -95,8 +92,7 @@ class Sms(Modem):
 	smsBody = None
 	smsHeader = None
 	smsMessage = None
-
-	telephoneNumber = JSON_CONFIG["SMS"]["CLARO_TELEPHONE_NUMBER"]
+	telephoneNumber = None
 
 	smsBodyList = list()
 	receptionList = list()
@@ -129,7 +125,7 @@ class Sms(Modem):
 			self.sendAT('AT+CMGF=1\r')				# Modo para Sms
 			self.sendAT('AT+CPMS="ME","ME","ME"\r') # Lugar de almacenamiento de los mensajes (memoria del dispositivo)
 			self.sendAT('AT+CNMI=1,1,0,0,0\r')		# Habilito notificacion de mensaje entrante
-			self.sendAT('AT+CSCA="+' + str(JSON_CONFIG["SMS"]["CLARO_MESSAGES_CENTER"]) + '"\r') # Centro de mensajes CLARO
+			self.sendAT('AT+CSCA="+' + str(JSON_CONFIG["SMS"]["MESSAGES_CENTER"]) + '"\r') # Centro de mensajes CLARO
 			return True
 		except:
 			return False
@@ -144,6 +140,7 @@ class Sms(Modem):
 			Tambien cada un cierto tiempo dado por el intervalo de temporizacion, envia a un numero
 			de telefono dado por 'DESTINATION_NUMBER' un mensaje de actualizacion, que por el momento
 			estara compuesto de un 'TimeStamp'. """
+		self.isActive = True
 		while self.isActive:
 			# Mientras no se haya recibido ningun mensaje de texto y el temporizador no haya expirado...
 			while self.smsAmount == 0 and self.isActive:

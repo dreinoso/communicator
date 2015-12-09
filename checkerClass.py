@@ -87,11 +87,9 @@ class Checker(threading.Thread):
 					gsmSerialPort = modemsList[1].replace('<Info>','')
 					# Si no se produjo ningún error durante la configuración, ponemos al módem a recibir SMS
 					if self.smsInstance.connect(gsmSerialPort):
-						self.smsInstance.isActive = True
 						smsThread = threading.Thread(target = self.smsInstance.receive, name = self.smsThreadName)
 						smsThread.start()
-						smsInfo = gsmSerialPort + ' - ' + str(self.smsInstance.telephoneNumber)
-						logger.write('INFO', '[SMS] Listo para usarse (' + smsInfo + ').')
+						logger.write('INFO', '[SMS] Listo para usarse (' + gsmSerialPort + ').')
 						return True
 					else:
 						self.smsInstance.closePort()
@@ -99,11 +97,14 @@ class Checker(threading.Thread):
 			# Si el módem ya está en modo activo (funcionando), devolvemos 'True'
 			elif self.smsInstance.isActive:
 				return True
+			# Llegamos acá si se produjo un error en el 'connect' del módem (y todavía está conectado)
+			else:
+				return False
 		else:
 			if self.smsInstance.isActive:
 				self.smsInstance.closePort()
 				self.smsInstance.isActive = False
-				self.smsInstance.serialPort = None
+			self.smsInstance.serialPort = None
 			return False
 
 	def verifyNetworkConnection(self):
