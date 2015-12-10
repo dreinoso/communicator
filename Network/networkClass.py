@@ -126,6 +126,7 @@ class Network(object):
 		"""Comienza la recepción de datos por medio de los protocolos TCP y UDP
 		para esto requiere la inciación de hilos que esperen los datos en paralelo
 		a la ejecución del programa."""
+		self.isActive = True
 		receiveUdpThread = threading.Thread(target = self.receiveUdp, name = 'udpReceptor')
 		receiveTcpThread = threading.Thread(target = self.receiveTcp, name = 'tcpReceptor')
 		receiveUdpThread.start()

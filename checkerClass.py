@@ -123,12 +123,11 @@ class Checker(threading.Thread):
 				stateUP = True
 				# 'patternMatched.group()' devuelve la cadena (interfaz) que coincide con la RE
 				if (patternMatched.group() + '\n') not in activeInterfacesFile.read():
-					# Como la interfaz encontrada no está siendo usada, la ponemos a escuchar si no está activa
+					# Como la interfazlocalInterface encontrada no está siendo usada, la ponemos a escuchar si no está activa
 					if not self.networkInstance.isActive:
 						# Escribimos en nuestro archivo la interfaz a usar, para indicar que está ocupada
 						activeInterfacesFile.write(patternMatched.group() + '\n')
 						self.networkInstance.connect(patternMatched.group())
-						self.networkInstance.isActive = True
 						activeInterfacesFile.close()
 						networkThread = threading.Thread(target = self.networkInstance.receive, name = self.networkThreadName)
 						networkThread.start()
@@ -142,7 +141,7 @@ class Checker(threading.Thread):
 		if stateUP is False and self.networkInstance.isActive:
 			self.networkInstance.isActive = False
 			# Eliminamos del archivo la interfaz de red usada
-			dataToWrite = open('/tmp/activeInterfaces').read().replace(self.localInterface + '\n', '')
+			dataToWrite = open('/tmp/activeInterfaces').read().replace(self.networkInstance.localInterface + '\n', '')
 			activeInterfacesFile = open('/tmp/activeInterfaces', 'w')
 			activeInterfacesFile.write(dataToWrite)
 			activeInterfacesFile.close()
