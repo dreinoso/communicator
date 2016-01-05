@@ -1,11 +1,11 @@
 {
 "COMMUNICATOR":
 	{
-	"NAME"					: "Datalogger_1",
-	"RECEPTION_FILTER"		: 0,
-	"TRANSMISSION_BUFFER" 	: 10,
-	"RECEPTION_BUFFER" 		: 10,
-	"RETRANSMISSION_TIME" 	: 5
+	"NAME"                : "Datalogger_1",
+	"RECEPTION_FILTER"    : 0,
+	"TRANSMISSION_BUFFER" : 10,
+	"RECEPTION_BUFFER"    : 10,
+	"RETRANSMISSION_TIME" : 5
 	},
 "NETWORK":
 	{
@@ -16,16 +16,15 @@
  	},
 "BLUETOOTH":
 	{
-	"PROTOCOL"     : 3,
-	"MAC"          : "00:24:7E:64:7B:4A",
-	"SERVICE"      : "BLUETOOTH-Client01",
-	"UUID"         : "94f39d29-7d6d-437d-973b-fba39e49d4ee"
+	"PROTOCOL" : 3,
+	"SERVICE"  : "BLUETOOTH-Client01",
+	"UUID"     : "94f39d29-7d6d-437d-973b-fba39e49d4ee"
 	},
 "EMAIL":
 	{
 	"ACCOUNT"     : "client01.datalogger@gmail.com",
 	"PASSWORD"    : "client01dl",
-	"SUBJECT"	  : "Comunicador Inteligente",
+	"SUBJECT"     : "Comunicador Inteligente",
 	"SMTP_SERVER" : "smtp.gmail.com",
 	"IMAP_SERVER" : "imap.gmail.com",
 	"SMTP_PORT"   : 587,
@@ -33,9 +32,8 @@
 	},
 "SMS":
 	{
-	"CHACACTER_LIMIT"		 : 120,
-	"MESSAGES_CENTER"		 : 541151740055,
-	"CLARO_WEB_PAGE"         : 876966
+	"CHACACTER_LIMIT" : 120,
+	"MESSAGES_CENTER" : 541151740055
 	},
 "PRIORITY_LEVELS":
 	{

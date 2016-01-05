@@ -63,8 +63,8 @@ class Modem(object):
 			#logger.write('ERROR', '[SMS] Error al intentar escribir %s sobre el dispositivo módem.' % atCommand)
 		finally:
 			# Verificamos si se produjo algún tipo de error relacionado con el comando AT
-			atCommand = atCommand.replace('\r','')
 			if self.modemOutput is not None:
+				atCommand = atCommand.replace('\r','')
 				for i, outputElement in enumerate(self.modemOutput):
 					if outputElement.startswith('+CME ERROR'):
 						errorCode = int(outputElement.replace('+CME ERROR: ', ''))
@@ -86,17 +86,6 @@ class Modem(object):
 class Sms(Modem):
 	""" Subclase de 'Modem' correspondiente al modo de operacion con el que se va
 		a trabajar. """
-	smsIndex = 0
-	smsAmount = 0
-
-	smsBody = None
-	smsHeader = None
-	smsMessage = None
-	telephoneNumber = None
-
-	smsBodyList = list()
-	receptionList = list()
-	smsHeaderList = list()
 
 	isActive = False
 
@@ -123,9 +112,8 @@ class Sms(Modem):
 			time.sleep(1.5)
 			self.sendAT('ATE1\r')					# Habilitamos el echo
 			self.sendAT('AT+CMGF=1\r')				# Modo para Sms
-			self.sendAT('AT+CPMS="ME","ME","ME"\r') # Lugar de almacenamiento de los mensajes (memoria del dispositivo)
-			self.sendAT('AT+CNMI=1,1,0,0,0\r')		# Habilito notificacion de mensaje entrante
-			self.sendAT('AT+CSCA="+' + str(JSON_CONFIG["SMS"]["MESSAGES_CENTER"]) + '"\r') # Centro de mensajes CLARO
+			self.sendAT('AT+CNMI=1,2,0,0,0\r')		# Habilito notificacion de mensaje entrante
+			#self.sendAT('AT+CSCA="+' + str(JSON_CONFIG["SMS"]["MESSAGES_CENTER"]) + '"\r') # Centro de mensajes CLARO
 			return True
 		except:
 			return False
@@ -140,75 +128,84 @@ class Sms(Modem):
 			Tambien cada un cierto tiempo dado por el intervalo de temporizacion, envia a un numero
 			de telefono dado por 'DESTINATION_NUMBER' un mensaje de actualizacion, que por el momento
 			estara compuesto de un 'TimeStamp'. """
+		smsAmount = 0
+		smsBodyList = list()
+		smsHeaderList = list()
+		unreadList = self.sendAT('AT+CMGL="REC UNREAD"\r')
+		if unreadList is not None: # CREO QUE EL NONE ES CUANDO NO TIENE EL ATE1
+			# Ejemplo de unreadList[0]: AT+CMGL="REC UNREAD"\r\r\n
+			# Ejemplo de unreadList[1]: +CMGL: 0,"REC UNREAD","+5493512560536",,"14/10/26,17:12:04-12"\r\n
+			# Ejemplo de unreadList[2]: Primer mensaje.\r\n
+			# Ejemplo de unreadList[3]: +CMGL: 1,"REC UNREAD","+5493512560536",,"14/10/26,17:15:10-12"\r\n
+			# Ejemplo de unreadList[4]: Segundo mensaje.\r\n
+			# Ejemplo de unreadList[5]: \r\n
+			# Ejemplo de unreadList[6]: OK\r\n
+			for unreadIndex, unreadData in enumerate(unreadList):
+				if unreadData.startswith('+CMGL'):
+					smsHeaderList.append(unreadList[unreadIndex])
+					smsBodyList.append(unreadList[unreadIndex + 1])
+					smsAmount += 1
+				elif unreadData.startswith('OK'):
+					break
+			# Ejemplo de smsHeaderList[0]: +CMGL: 0,"REC UNREAD","+5493512560536",,"14/10/26,17:12:04-12"\r\n
+			# Ejemplo de smsBodyList[0]  : Primer mensaje.\r\n
+			# Ejemplo de smsHeaderList[1]: +CMGL: 1,"REC UNREAD","+5493512560536",,"14/10/26,17:15:10-12"\r\n
+			# Ejemplo de smsBodyList[1]  : Segundo mensaje.\r\n
 		self.isActive = True
 		while self.isActive:
-			# Mientras no se haya recibido ningun mensaje de texto y el temporizador no haya expirado...
-			while self.smsAmount == 0 and self.isActive:
-				# ... sigo esperando hasta que llegue algun mensaje de texto o vensa el timer.
-				try:
-					self.receptionList = self.sendAT('AT+CMGL="REC UNREAD"\r')
-					time.sleep(3)
-				except:
-					pass
-				# Ejemplo de receptionList[0]: AT+CMGL="REC UNREAD"\r\r\n
-				# Ejemplo de receptionList[1]: +CMGL: 0,"REC UNREAD","+5493512560536",,"14/10/26,17:12:04-12"\r\n
-				# Ejemplo de receptionList[2]: primero\r\n
-				# Ejemplo de receptionList[3]: +CMGL: 1,"REC UNREAD","+5493512560536",,"14/10/26,17:15:10-12"\r\n
-				# Ejemplo de receptionList[4]: segundo\r\n
-				# Ejemplo de receptionList[5]: \r\n
-				# Ejemplo de receptionList[6]: OK\r\n
-				if self.receptionList is not None:
-					for receptionIndex, receptionElement in enumerate(self.receptionList):
-						if receptionElement.startswith('+CMGL'):
-							self.smsHeader = self.receptionList[receptionIndex]
-							self.smsHeaderList.append(self.smsHeader)
-							self.smsBody = self.receptionList[receptionIndex + 1]
-							self.smsBodyList.append(self.smsBody)
-							self.smsAmount += 1
-						elif receptionElement.startswith('OK'):
-							break
-					# Ejemplo de smsHeaderList[0]: +CMGL: 0,"REC UNREAD","+5493512560536",,"14/10/26,17:12:04-12"\r\n
-					# Ejemplo de smsBodyList[0]  : primero\r\n
-					# Ejemplo de smsHeaderList[1]: +CMGL: 1,"REC UNREAD","+5493512560536",,"14/10/26,17:15:10-12"\r\n
-					# Ejemplo de smsBodyList[1]  : segundo\r\n
 			# Leemos los mensajes de texto recibidos...
-			if self.isActive:
-				logger.write('DEBUG', '[SMS] Ha(n) llegado ' + str(self.smsAmount) + ' nuevo(s) mensaje(s) de texto!')
-				for self.smsHeader, self.smsBody in zip(self.smsHeaderList, self.smsBodyList):
+			if smsAmount is not 0:
+				logger.write('DEBUG', '[SMS] Ha(n) llegado ' + str(smsAmount) + ' nuevo(s) mensaje(s) de texto!')
+				for smsHeader, smsBody in zip(smsHeaderList, smsBodyList):
 					# Ejemplo smsHeader: +CMGL: 0,"REC UNREAD","+5493512560536",,"14/10/26,17:12:04-12"\r\n
-					# Ejemplo smsBody  : primero\r\n
-					self.telephoneNumber = self.getTelephoneNumber(self.smsHeader) # Obtenemos el numero de telefono
-					logger.write('INFO','[SMS] Procesando mensaje de ' + str(self.telephoneNumber))
+					# Ejemplo smsBody  : Primer mensaje.\r\n
+					# Ejemplo smsHeader: +CMT: "+543512641040",,"15/12/29,11:19:38-12"\r\n
+					# Ejemplo smsBody  : Nuevo SMS.\r\n
+					telephoneNumber = self.getTelephoneNumber(smsHeader) # Obtenemos el numero de telefono
 					# Comprobamos si el remitente del mensaje (un teléfono) está registrado...
-					if self.telephoneNumber in contactList.allowedNumbers.values() or not JSON_CONFIG["COMMUNICATOR"]["RECEPTION_FILTER"]:
-						self.smsMessage = self.getSmsBody(self.smsBody) # Obtenemos el mensaje de texto
-						if self.smsMessage.startswith('INSTANCE'):
+					if telephoneNumber in contactList.allowedNumbers.values() or not JSON_CONFIG["COMMUNICATOR"]["RECEPTION_FILTER"]:
+						# Quitamos el '\r\n' del final y obtenemos el mensaje de texto
+						smsMessage = smsBody.replace('\r\n', '')
+						if smsMessage.startswith('INSTANCE'):
 							# Quitamos la 'etiqueta' que hace refencia a una instancia de mensaje
-							messageInstance = self.smsMessage[len('INSTANCE'):]
+							messageInstance = smsMessage[len('INSTANCE'):]
 							# 'Deserializamos' la instancia de mensaje para obtener el objeto en sí
 							messageInstance = pickle.loads(messageInstance)
 							self.receptionBuffer.put((100 - messageInstance.priority, messageInstance))
 						else: 
-							self.receptionBuffer.put((10, self.smsMessage))
-						#self.sendOutput(self.telephoneNumber, self.smsMessage) # -----> SOLO PARA LA DEMO <-----
-						logger.write('INFO','[SMS] Mensaje procesado correctamente!')
+							self.receptionBuffer.put((10, smsMessage))
+						#self.sendOutput(telephoneNumber, smsMessage) # -----> SOLO PARA LA DEMO <-----
+						logger.write('INFO', '[SMS] Mensaje de ' + str(telephoneNumber) + ' recibido correctamente!')
 					else:
-						# ... caso contrario, verificamos si el mensaje proviene de la pagina web de CLARO...
-						if self.telephoneNumber == JSON_CONFIG["SMS"]["CLARO_WEB_PAGE"]:
-							logger.write('WARNING','[SMS] No es posible procesar mensajes enviados desde la pagina web!')
+						# ... caso contrario, verificamos si el mensaje proviene de la pagina web de CLARO o PERSONAL...
+						if telephoneNumber == 876966:
+							logger.write('WARNING', '[SMS] No es posible procesar mensajes enviados desde la página web!')
 						# ... sino, comunicamos al usuario que no se encuentra registrado.
 						else:
-							logger.write('WARNING','[SMS] Imposible procesar una solicitud. El número no se encuentra registrado!')
-							self.smsMessage = 'Imposible procesar la solicitud. Usted no se encuentra registrado!'
-							#self.send(self.telephoneNumber, self.smsMessage)
-					self.smsIndex = self.getSmsIndex(self.smsHeader.split(',')[0]) # Obtenemos el índice del mensaje en memoria
-					self.removeSms(self.smsIndex) # Eliminamos el mensaje porque ya fue leído
-					self.smsAmount -= 1 # Decrementamos la cantidad de mensajes a procesar
-				self.smsHeaderList = []
-				self.smsBodyList = []
-			# ... sino, dejamos de leer los SMS
+							logger.write('WARNING', '[SMS] Imposible procesar una solicitud. El número no se encuentra registrado!')
+							smsMessage = 'Imposible procesar la solicitud. Usted no se encuentra registrado!'
+							#self.send(telephoneNumber, smsMessage)
+					# Si el mensaje fue leído desde la memoria, entonces lo borramos
+					if smsHeader.startswith('+CMGL'):
+						# Obtenemos el índice del mensaje en memoria
+						smsIndex = self.getSmsIndex(smsHeader.split(',')[0])
+						# Eliminamos el mensaje porque ya fue leído
+						self.removeSms(smsIndex)
+					smsAmount -= 1 # Decrementamos la cantidad de mensajes a procesar
+				# VER SI MAS ARRIBA SE PUEDE IR ELIMINANDO ELEMENTOS DE LA LISTA MEDIANTE LOS INDICES
+				smsHeaderList = []
+				smsBodyList = []
+			elif self.modemInstance.inWaiting() is not 0:
+				receptionList = self.modemInstance.readlines()
+				# Ejemplo receptionList: ['\r\n', '+CMT: "+543512641040",,"15/12/29,11:19:38-12"\r\n', 'Nuevo SMS.\r\n']
+				for receptionIndex, receptionData in enumerate(receptionList):
+					if receptionData.startswith('+CMT'):
+						smsHeaderList.append(receptionList[receptionIndex])
+						smsBodyList.append(receptionList[receptionIndex + 1])
+						self.sendAT('AT+CNMA\r') # Enviamos el ACK
+						smsAmount += 1
 			else:
-				break
+				time.sleep(1)
 		logger.write('WARNING', '[SMS] Función \'%s\' terminada.' % inspect.stack()[0][3])
 
 	def send(self, messageToSend, telephoneNumber):
@@ -234,8 +231,8 @@ class Sms(Modem):
 			# Borramos el mensaje enviado, porque queda almacenado en la memoria y no lo necesitamos
 			for i, resultElement in enumerate(atResult02):
 				if resultElement.startswith('+CMGS'):
-					#self.smsIndex = self.getSmsIndex(atResult02[i].replace('\r\n', ''))
-					#self.removeSms(self.smsIndex)
+					#smsIndex = self.getSmsIndex(atResult02[i].replace('\r\n', ''))
+					#self.removeSms(smsIndex)
 					self.removeAllSms()
 					break
 			logger.write('INFO','[SMS] El mensaje de texto fue enviado con éxito!')
@@ -254,16 +251,16 @@ class Sms(Modem):
 		self.sendAT('AT+CMGD=' + str(smsIndex) + '\r') # Elimina el mensaje especificado
 
 	def removeAllSms(self):
-		self.sendAT('AT+CMGD=1,2\r') # Elimina todos los mensajes leidos y enviados
+		self.sendAT('AT+CMGD=1,2\r') # Elimina todos los mensajes leidos y enviados (1,4 es TODO)
 
 	def getSmsIndex(self, atOutput):
-		# Ejemplo de 'atOutput' (para un mensaje recibido): +CMGL: 2
 		# Ejemplo de 'atOutput' (para un mensaje enviado) : +CMGS: 17
+		# Ejemplo de 'atOutput' (para un mensaje recibido): +CMGL: 2
 		# Quitamos el comando AT, dejando solamente el índice del mensaje en memoria
-		if atOutput.startswith('+CMGL'):
-			atOutput = atOutput.replace('+CMGL: ', '')
-		elif atOutput.startswith('+CMGS'):
+		if atOutput.startswith('+CMGS'):
 			atOutput = atOutput.replace('+CMGS: ', '')
+		elif atOutput.startswith('+CMGL'):
+			atOutput = atOutput.replace('+CMGL: ', '')
 		smsIndex = int(atOutput)
 		return smsIndex
 
@@ -271,30 +268,26 @@ class Sms(Modem):
 		""" Procesa la cabecera del SMS.
 			@return: numero de telefono del remitente
 			@rtype: int """
+		# Ejemplo de smsHeader recibido de un movil: +CMT: "+543512641040",,"15/12/29,11:41:23-12"\r\n
 		# Ejemplo de smsHeader recibido de un movil: +CMGL: 0,"REC UNREAD","+5493512560536",,"14/10/26,17:12:04-12"\r\n
-		# Ejemplo de smsHeader recibido de la web  : +CMGL: 2,"REC UNREAD","876966",,"14/10/26,19:36:42-12"\r\n'
+		# Ejemplo de smsHeader recibido de la web  : +CMGL: 2,"REC UNREAD","876966",,"14/10/26,19:36:42-12"\r\n
 		smsHeader = smsHeader.replace('\r\n', '') # Quitamos el '\r\n' del final
-		headerList = smsHeader.split(',')		  # Separamos la smsHeader por comas
-		# Ejemplo de headerList[2]: "+5493512560536" | "876966"
-		# Ejemplo de headerList[4]: "14/10/26 | "14/10/26
-		# Ejemplo de headerList[5]: 17:12:04-12" | 19:36:42-12"
-		headerList[2] = headerList[2].replace('"', '') # Quitamos las comillas
-		# Ejemplo de headerList[2]: +5493512560536 | 876966
-		# Nos fijamos si el origen del Sms es un telefono (podria haber venido desde la pagina web de CLARO)...
-		if headerList[2].startswith('+549'):
-			headerList[2] = headerList[2].replace('+549', '') # Quitamos el codigo de pais
-			# Ejemplo de headerList[2]: 3512560536
-		telephoneNumber = int(headerList[2])
-		return telephoneNumber
-
-	def getSmsBody(self, smsBody):
-		""" Procesa el cuerpo del SMS.
-			@return: salida del procesamiento (de acuerdo al contenido del cuerpo del mensaje)
-			@rtype: list """
-		# Ejemplo de smsBody: ls -l -a\r\n
-		smsBody = smsBody.lower().replace('\r\n', '') # Ponemos todo en minusculas y quitamos el '\r\n' del final
-		# Ejemplo de smsBody: ls -l -a
-		return smsBody
+		headerList = smsHeader.split(',')		  # Separamos smsHeader por comas
+		telephoneNumber = None
+		if headerList[0].startswith('+CMT'):
+			# Ejemplo de headerList[0]: +CMT: "+543512641040"
+			telephoneNumber = headerList[0].split()[1].replace('"', '') # Quitamos las comillas
+		elif headerList[0].startswith('+CMGL'):
+			# Ejemplo de headerList[2]: "+5493512560536" | "876966"
+			telephoneNumber = headerList[2].replace('"', '') # Quitamos las comillas
+		# Ejemplo de telephoneNumber: +543512641040 | +5493512560536 | 876966
+		if telephoneNumber.startswith('+549'):
+			telephoneNumber = telephoneNumber.replace('+549', '') # Quitamos el codigo de pais
+			# Ejemplo de telephoneNumber: 3512560536
+		elif telephoneNumber.startswith('+54'):
+			telephoneNumber = telephoneNumber.replace('+54', '') # Quitamos el codigo de pais
+			# Ejemplo de telephoneNumber: 3512641040
+		return int(telephoneNumber)
 
 	def sendCall(self, telephoneNumber):
 		self.sendAT('ATD' + str(telephoneNumber) + '\r') # Numero al cual efectuar la llamada
