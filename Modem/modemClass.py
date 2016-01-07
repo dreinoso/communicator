@@ -22,6 +22,7 @@ import subprocess
 import logger
 import errorList
 import contactList
+import messageClass
 
 from curses import ascii # Para enviar el Ctrl-Z
 
@@ -30,21 +31,18 @@ JSON_CONFIG = json.load(open(JSON_FILE))
 
 class Modem(object):
 	""" Clase 'Modem'. Permite la creacion de una instancia del dispositivo. """
-	atError = False
 	serialPort = None
-	modemOutput = None
 
-	def __init__(self, _modemSemaphore):
+	def __init__(self):
 		""" Constructor de la clase 'Modem'. Utiliza la API 'pySerial' de
 			Python para establecer un medio de comunicacion entre el usuario
 			y el puerto donde se encuentra conectado el modem. Establece un
 			'baudrate' y un 'timeout', donde este ultimo indica el intervalo
 			de tiempo en segundos con el cual se hacen lecturas sobre el
 			dispositivo. """
-		self.modemSemaphore = _modemSemaphore
 		self.modemInstance = serial.Serial()
-		self.modemInstance.baudrate = 115200
-		self.modemInstance.timeout = 5
+		self.modemInstance.timeout = JSON_CONFIG["SMS"]["TIME_OUT"]
+		self.modemInstance.baudrate = JSON_CONFIG["SMS"]["BAUD_RATE"]
 
 	def sendAT(self, atCommand):
 		""" Se encarga de enviarle un comando AT el modem. Espera la respuesta
@@ -53,32 +51,22 @@ class Modem(object):
 			@type atCommand: str
 			@return: respuesta del modem, al comando AT ingresado
 			@rtype: list """
-		try:
-			self.atError = False
-			#self.modemSemaphore.acquire()
-			self.modemInstance.write(atCommand)				  # Envio el comando AT al modem
-			self.modemOutput = self.modemInstance.readlines() # Espero la respuesta
-		except serial.serialutil.SerialException:
-			self.atError = True
-			#logger.write('ERROR', '[SMS] Error al intentar escribir %s sobre el dispositivo módem.' % atCommand)
-		finally:
-			# Verificamos si se produjo algún tipo de error relacionado con el comando AT
-			if self.modemOutput is not None:
-				atCommand = atCommand.replace('\r','')
-				for i, outputElement in enumerate(self.modemOutput):
-					if outputElement.startswith('+CME ERROR'):
-						errorCode = int(outputElement.replace('+CME ERROR: ', ''))
-						logger.write('ERROR','[SMS] ' + atCommand + ' - ' + errorList.CME_ERRORS[errorCode] + '.')
-						raise
-					elif outputElement.startswith('+CMS ERROR'):
-						errorCode = int(outputElement.replace('+CMS ERROR: ', ''))
-						logger.write('ERROR','[SMS] ' + atCommand + ' - ' + errorList.CMS_ERRORS[errorCode] + '.')
-						raise
-					elif outputElement.startswith('NO CARRIER') or outputElement.startswith('ERROR'):
-						logger.write('ERROR','[SMS] ' + atCommand + ' - ' + errorList.NO_CARRIER + '.')
-						raise
-			#self.modemSemaphore.release()
-			return self.modemOutput
+		self.modemInstance.write(atCommand + '\r')	 # Envio el comando AT al modem
+		modemOutput = self.modemInstance.readlines() # Espero la respuesta
+		# Verificamos si se produjo algún tipo de error relacionado con el comando AT
+		for i, outputElement in enumerate(modemOutput):
+			if outputElement.startswith('+CME ERROR'):
+				errorCode = int(outputElement.replace('+CME ERROR: ', ''))
+				logger.write('ERROR','[SMS] ' + atCommand + ' - ' + errorList.CME_ERRORS[errorCode] + '.')
+				raise
+			elif outputElement.startswith('+CMS ERROR'):
+				errorCode = int(outputElement.replace('+CMS ERROR: ', ''))
+				logger.write('ERROR','[SMS] ' + atCommand + ' - ' + errorList.CMS_ERRORS[errorCode] + '.')
+				raise
+			elif outputElement.startswith('NO CARRIER') or outputElement.startswith('ERROR'):
+				logger.write('ERROR','[SMS] ' + atCommand + ' - ' + errorList.NO_CARRIER + '.')
+				raise
+		return modemOutput
 
 	def closePort(self):
 		self.modemInstance.close()
@@ -86,16 +74,16 @@ class Modem(object):
 class Sms(Modem):
 	""" Subclase de 'Modem' correspondiente al modo de operacion con el que se va
 		a trabajar. """
-
+	sentMessage = None
 	isActive = False
 
-	def __init__(self, _receptionBuffer, _modemSemaphore):
+	def __init__(self, _receptionBuffer):
 		""" Constructor de la clase 'Sms'. Configura el modem para operar en modo mensajes
 			de texto, indica el sitio donde se van a almacenar los mensajes recibidos,
 			habilita notificacion para los SMS entrantes y establece el numero del centro
 			de mensajes CLARO para poder enviar mensajes de texto (este campo puede variar
 			dependiendo de la compania de telefonia de la tarjeta SIM). """
-		Modem.__init__(self, _modemSemaphore)
+		Modem.__init__(self)
 		self.receptionBuffer = _receptionBuffer
 
 	def __del__(self):
@@ -110,10 +98,10 @@ class Sms(Modem):
 			self.modemInstance.port = '/dev/' + _gsmSerialPort
 			self.modemInstance.open()
 			time.sleep(1.5)
-			self.sendAT('ATE1\r')					# Habilitamos el echo
-			self.sendAT('AT+CMGF=1\r')				# Modo para Sms
-			self.sendAT('AT+CNMI=1,2,0,0,0\r')		# Habilito notificacion de mensaje entrante
-			#self.sendAT('AT+CSCA="+' + str(JSON_CONFIG["SMS"]["MESSAGES_CENTER"]) + '"\r') # Centro de mensajes CLARO
+			self.sendAT('ATE1')				 # Habilitamos el echo
+			self.sendAT('AT+CMGF=1')		 # Modo para Sms
+			self.sendAT('AT+CNMI=1,2,0,0,0') # Habilito notificacion de mensaje entrante
+			#self.sendAT('AT+CSCA="+' + str(JSON_CONFIG["SMS"]["MESSAGES_CENTER"]) + '"') # Centro de mensajes CLARO
 			return True
 		except:
 			return False
@@ -131,26 +119,25 @@ class Sms(Modem):
 		smsAmount = 0
 		smsBodyList = list()
 		smsHeaderList = list()
-		unreadList = self.sendAT('AT+CMGL="REC UNREAD"\r')
-		if unreadList is not None: # CREO QUE EL NONE ES CUANDO NO TIENE EL ATE1
-			# Ejemplo de unreadList[0]: AT+CMGL="REC UNREAD"\r\r\n
-			# Ejemplo de unreadList[1]: +CMGL: 0,"REC UNREAD","+5493512560536",,"14/10/26,17:12:04-12"\r\n
-			# Ejemplo de unreadList[2]: Primer mensaje.\r\n
-			# Ejemplo de unreadList[3]: +CMGL: 1,"REC UNREAD","+5493512560536",,"14/10/26,17:15:10-12"\r\n
-			# Ejemplo de unreadList[4]: Segundo mensaje.\r\n
-			# Ejemplo de unreadList[5]: \r\n
-			# Ejemplo de unreadList[6]: OK\r\n
-			for unreadIndex, unreadData in enumerate(unreadList):
-				if unreadData.startswith('+CMGL'):
-					smsHeaderList.append(unreadList[unreadIndex])
-					smsBodyList.append(unreadList[unreadIndex + 1])
-					smsAmount += 1
-				elif unreadData.startswith('OK'):
-					break
-			# Ejemplo de smsHeaderList[0]: +CMGL: 0,"REC UNREAD","+5493512560536",,"14/10/26,17:12:04-12"\r\n
-			# Ejemplo de smsBodyList[0]  : Primer mensaje.\r\n
-			# Ejemplo de smsHeaderList[1]: +CMGL: 1,"REC UNREAD","+5493512560536",,"14/10/26,17:15:10-12"\r\n
-			# Ejemplo de smsBodyList[1]  : Segundo mensaje.\r\n
+		unreadList = self.sendAT('AT+CMGL="REC UNREAD"')
+		# Ejemplo de unreadList[0]: AT+CMGL="REC UNREAD"\r\r\n
+		# Ejemplo de unreadList[1]: +CMGL: 0,"REC UNREAD","+5493512560536",,"14/10/26,17:12:04-12"\r\n
+		# Ejemplo de unreadList[2]: Primer mensaje.\r\n
+		# Ejemplo de unreadList[3]: +CMGL: 1,"REC UNREAD","+5493512560536",,"14/10/26,17:15:10-12"\r\n
+		# Ejemplo de unreadList[4]: Segundo mensaje.\r\n
+		# Ejemplo de unreadList[5]: \r\n
+		# Ejemplo de unreadList[6]: OK\r\n
+		for unreadIndex, unreadData in enumerate(unreadList):
+			if unreadData.startswith('+CMGL'):
+				smsHeaderList.append(unreadList[unreadIndex])
+				smsBodyList.append(unreadList[unreadIndex + 1])
+				smsAmount += 1
+			elif unreadData.startswith('OK'):
+				break
+		# Ejemplo de smsHeaderList[0]: +CMGL: 0,"REC UNREAD","+5493512560536",,"14/10/26,17:12:04-12"\r\n
+		# Ejemplo de smsBodyList[0]  : Primer mensaje.\r\n
+		# Ejemplo de smsHeaderList[1]: +CMGL: 1,"REC UNREAD","+5493512560536",,"14/10/26,17:15:10-12"\r\n
+		# Ejemplo de smsBodyList[1]  : Segundo mensaje.\r\n
 		self.isActive = True
 		while self.isActive:
 			# Leemos los mensajes de texto recibidos...
@@ -178,7 +165,7 @@ class Sms(Modem):
 						logger.write('INFO', '[SMS] Mensaje de ' + str(telephoneNumber) + ' recibido correctamente!')
 					else:
 						# ... caso contrario, verificamos si el mensaje proviene de la pagina web de CLARO o PERSONAL...
-						if telephoneNumber == 876966:
+						if telephoneNumber == 876966 or telephoneNumber == 8235079297:
 							logger.write('WARNING', '[SMS] No es posible procesar mensajes enviados desde la página web!')
 						# ... sino, comunicamos al usuario que no se encuentra registrado.
 						else:
@@ -189,12 +176,13 @@ class Sms(Modem):
 					if smsHeader.startswith('+CMGL'):
 						# Obtenemos el índice del mensaje en memoria
 						smsIndex = self.getSmsIndex(smsHeader.split(',')[0])
-						# Eliminamos el mensaje porque ya fue leído
+						# Eliminamos el mensaje desde la memoria porque ya fue leído
 						self.removeSms(smsIndex)
-					smsAmount -= 1 # Decrementamos la cantidad de mensajes a procesar
-				# VER SI MAS ARRIBA SE PUEDE IR ELIMINANDO ELEMENTOS DE LA LISTA MEDIANTE LOS INDICES
-				smsHeaderList = []
-				smsBodyList = []
+					# Eliminamos la cabecera y el cuerpo del mensaje de las listas correspondientes
+					smsHeaderList.remove(smsHeader)
+					smsBodyList.remove(smsBody)
+					# Decrementamos la cantidad de mensajes a procesar
+					smsAmount -= 1
 			elif self.modemInstance.inWaiting() is not 0:
 				receptionList = self.modemInstance.readlines()
 				# Ejemplo receptionList: ['\r\n', '+CMT: "+543512641040",,"15/12/29,11:19:38-12"\r\n', 'Nuevo SMS.\r\n']
@@ -202,8 +190,17 @@ class Sms(Modem):
 					if receptionData.startswith('+CMT'):
 						smsHeaderList.append(receptionList[receptionIndex])
 						smsBodyList.append(receptionList[receptionIndex + 1])
-						self.sendAT('AT+CNMA\r') # Enviamos el ACK
+						self.sendAT('AT+CNMA') # Enviamos el ACK
 						smsAmount += 1
+					elif receptionData.startswith('+CMS ERROR'):
+						# ['\r\n', '+CMS ERROR: 500\r\n']
+						self.sentMessage = False
+					elif receptionData.startswith('+CMGS'):
+						# ----- Caso de envío EXITOSO -----
+						# Ejemplo de atResult02[0]: Mensaje enviado desde el Modem.\x1a\r\n
+						# Ejemplo de atResult02[1]: +CMGS: 17\r\n
+						# Ejemplo de atResult02[3]: OK\r\n
+						self.sentMessage = True
 			else:
 				time.sleep(1)
 		logger.write('WARNING', '[SMS] Función \'%s\' terminada.' % inspect.stack()[0][3])
@@ -214,32 +211,31 @@ class Sms(Modem):
 			@type telephoneNumber: int
 			@param messageToSend: mensaje de texto a enviar
 			@type messageToSend: str """
-		# Comprobación de envío de texto plano
-		if isinstance(messageToSend, messageClass.SimpleMessage) and not messageToSend.isInstance:
-			smsMessage = messageToSend.plainText
-		# Entonces se trata de enviar una instancia de mensaje
-		else:
-			smsMessage = 'INSTANCE' + pickle.dumps(messageToSend)
-		# Enviamos los comandos AT correspondientes para efectuar el envío el mensaje de texto
-		atResult01 = self.sendAT('AT+CMGS="' + str(telephoneNumber) + '"\r') # Numero al cual enviar el Sms
-		atResult02 = self.sendAT(smsMessage + ascii.ctrl('z')) 				 # Mensaje de texto terminado en Ctrl+Z
-		# --------------------- Caso de envío EXITOSO ---------------------
-		# Ejemplo de atResult02[0]: Mensaje enviado desde el Modem.\x1a\r\n
-		# Ejemplo de atResult02[1]: +CMGS: 17\r\n
-		# Ejemplo de atResult02[3]: OK\r\n
-		if not self.atError:
-			# Borramos el mensaje enviado, porque queda almacenado en la memoria y no lo necesitamos
-			for i, resultElement in enumerate(atResult02):
-				if resultElement.startswith('+CMGS'):
-					#smsIndex = self.getSmsIndex(atResult02[i].replace('\r\n', ''))
-					#self.removeSms(smsIndex)
-					self.removeAllSms()
-					break
-			logger.write('INFO','[SMS] El mensaje de texto fue enviado con éxito!')
-			return True
-		else:
-			logger.write('WARNING','[SMS] Ocurrió un problema al enviar el mensaje de texto.')
-			return False
+		try:
+			# Comprobación de envío de texto plano
+			if isinstance(messageToSend, messageClass.SimpleMessage) and not messageToSend.isInstance:
+				smsMessage = messageToSend.plainText
+			# Entonces se trata de enviar una instancia de mensaje
+			else:
+				smsMessage = 'INSTANCE' + pickle.dumps(messageToSend)
+			# Enviamos los comandos AT correspondientes para efectuar el envío el mensaje de texto
+			atResult01 = self.sendAT('AT+CMGS="' + str(telephoneNumber) + '"') # Numero al cual enviar el Sms
+			atResult02 = self.sendAT(smsMessage + ascii.ctrl('z')) 				 # Mensaje de texto terminado en Ctrl+Z
+			# Esperamos confirmación de la red GSM
+			while self.sentMessage is None:
+				pass
+			if self.sentMessage:
+				logger.write('INFO', '[SMS] Mensaje de texto enviado a \'%s\'.' % str(telephoneNumber))
+				self.removeAllSms() # Borramos el mensaje enviado almacenado en la memoria
+				return True
+			else:
+				logger.write('WARNING','[SMS] Error al enviar el mensaje de texto a \'%s\'.' % str(telephoneNumber))
+				return False
+		except:
+			logger.write('ERROR', '[SMS] Dispositivo ocupado! Imposible enviar mensaje a \'%s\'.' % str(telephoneNumber))
+		finally:
+			self.sentMessage = None
+
 
 	def removeSms(self, smsIndex):
 		""" Envia el comando AT correspondiente para elimiar todos los mensajes del dispositivo.
@@ -248,10 +244,10 @@ class Sms(Modem):
 			que elimine los mensajes leidos y los mensajes enviados, ya que fueron procesados
 			y no los requerimos mas (ademas necesitamos ahorrar memoria, debido a que la misma
 			es muy limitada). """
-		self.sendAT('AT+CMGD=' + str(smsIndex) + '\r') # Elimina el mensaje especificado
+		self.sendAT('AT+CMGD=' + str(smsIndex)) # Elimina el mensaje especificado
 
 	def removeAllSms(self):
-		self.sendAT('AT+CMGD=1,2\r') # Elimina todos los mensajes leidos y enviados (1,4 es TODO)
+		self.sendAT('AT+CMGD=1,2') # Elimina todos los mensajes leidos y enviados (1,4 es TODO)
 
 	def getSmsIndex(self, atOutput):
 		# Ejemplo de 'atOutput' (para un mensaje enviado) : +CMGS: 17
@@ -290,7 +286,7 @@ class Sms(Modem):
 		return int(telephoneNumber)
 
 	def sendCall(self, telephoneNumber):
-		self.sendAT('ATD' + str(telephoneNumber) + '\r') # Numero al cual efectuar la llamada
+		self.sendAT('ATD' + str(telephoneNumber)) # Numero al cual efectuar la llamada
 
 	def sendOutput(self, telephoneNumber, smsMessage):
 		try:
@@ -315,8 +311,8 @@ class Gprs(Modem):
 
 	isActive = False
 
-	def __init__(self, _modemSemaphore): 
-		Modem.__init__(self, _modemSemaphore)
+	def __init__(self): 
+		Modem.__init__(self)
 
 	def __del__(self):
 		""" Destructor de la clase 'Modem'. Cierra la conexion establecida
@@ -329,7 +325,7 @@ class Gprs(Modem):
 			self.serialPort = _gprsSerialPort
 			self.modemInstance.port = '/dev/' + _gprsSerialPort
 			self.modemInstance.open()
-			self.sendAT('AT+CGDCONT=1,"IP","gprs.claro.com.ar"\r') # Contexto, protocolo y APN
+			self.sendAT('AT+CGDCONT=1,"IP","gprs.claro.com.ar"') # Contexto, protocolo y APN
 			self.wvdialProcess = subprocess.Popen(['wvdial'], preexec_fn = os.setsid, stderr = subprocess.PIPE)
 			# Leemos el proceso a medida que se va ejecutando (mientras sigua vivo)
 			while self.wvdialProcess.poll() is None:

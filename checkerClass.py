@@ -36,9 +36,8 @@ class Checker(threading.Thread):
 
 	isActive = False
 
-	def __init__(self, _modemSemaphore, _networkInstance, _gprsInstance, _emailInstance, _smsInstance, _bluetoothInstance):
+	def __init__(self, _networkInstance, _gprsInstance, _emailInstance, _smsInstance, _bluetoothInstance):
 		threading.Thread.__init__(self, name = 'CheckerThread')
-		self.modemSemaphore = _modemSemaphore
 		self.smsInstance = _smsInstance
 		self.gprsInstance = _gprsInstance
 		self.emailInstance = _emailInstance

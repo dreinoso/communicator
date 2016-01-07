@@ -25,4 +25,4 @@ allowedEmails = {'client02' : 'client02.datalogger@gmail.com',
 # Numeros de teléfono permitidos
 allowedNumbers = dict()
 allowedNumbers = {'client02' : 3512560536,
-				  'client03' : 123456789}
+				  'client03' : 3512641040}
