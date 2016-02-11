@@ -99,6 +99,7 @@ En caso de usar el módem se requiere correr la aplicación como root.
 
 Si se ejecuta la aplicación en una carpeta superior al Communicator se deben añadir las siguientes lineas para que se encuentre el módulo
 de no estar añadido en las carpetas de librerias de Python:
+
 	import sys
 	sys.path.append(os.path.abspath('Communicator/'))
 
