@@ -7,6 +7,7 @@
 	@date: Lunes 16 de Mayo de 2015 """
 
 import os
+import copy
 import pickle
 import socket
 
@@ -55,7 +56,11 @@ class UdpTransmitter(object):
 			return self.sendFile(message.fileName, destinationIp, destinationPort)
 		# Comprobación de envío de instancia de mensaje
 		else:
-			return self.sendMessageInstance(message, destinationIp, destinationPort)
+			# Copiamos el objeto antes de borrar el campo 'isInstance', por un posible fallo de envío
+			tmpMessage = copy.copy(message)
+			# Eliminamos el último campo del objeto, ya que el receptor no lo necesita
+			delattr(tmpMessage, 'isInstance')
+			return self.sendMessageInstance(tmpMessage, destinationIp, destinationPort)
 
 	def sendMessage(self, plainText, destinationIp, destinationPort):
 		'''Envío de mensaje simple'''

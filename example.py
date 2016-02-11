@@ -15,17 +15,15 @@ def main():
 
 	print '----------- MODULO DE COMUNICACION -----------\n'
 	print '\t\t1 - Enviar mensaje/archivo'
-	print '\t\t2 - Leer'
-	print '\t\t3 - Conectar GPRS'
-	print '\t\t4 - Desconectar GPRS'
-	print '\t\t5 - Enviar instancia mensaje preestablecido'
-	print '\t\t6 - Enviar instancia archivo preestablecido'
-	print '\t\t7 - Salir'
+	print '\t\t2 - Enviar instancia de mensaje'
+	print '\t\t3 - Enviar instancia de archivo'
+	print '\t\t4 - Leer un mensaje'
+	print '\t\t5 - Conectar GPRS'
+	print '\t\t6 - Desconectar GPRS'
 	print '\t\tc - DEBUG: Cerrar Comunicador'
-	print '\t\ta - DEBUG: Abrir Comunicador\n'
+	print '\t\to - DEBUG: Abrir Comunicador'
+	print '\t\tq - Salir\n'
 
-
-	print 'Configurando el módulo de comunicación...'
 	communicator.open() # Se abre el comunicador para detectar medios
 	print 'El módulo de comunicación está listo para usarse!'
 
@@ -35,58 +33,107 @@ def main():
 			optionSelected = raw_input()
 			# Opcion 1 - Enviar mensaje
 			if optionSelected is '1':
-				showClients = raw_input('¿Desea enviar un mensaje a un cliente registrado? [S/n] ')
-				if showClients is 'S' or showClients is 's' or len(showClients) is 0:
-					print contactList.allowedNumbers.keys()
-					receiver = raw_input('Nombre del cliente: ')
-					if contactList.allowedNumbers.has_key(receiver):
-						messageToSend = raw_input('Mensaje/archivo a enviar: ')
-					else:
-						print 'El cliente no existe. Operación abortada.'
-						continue
-				elif showClients is 'N' or showClients is 'n':
-					receiver = raw_input('Cliente a enviar: ')
-					messageToSend = raw_input('Mensaje/archivo a enviar: ')
+				# Preguntamos si se desea ver una lista con los clientes registrados
+				selectClient = askClients()
+				if selectClient is None:
+					print 'Abortado.'
+					continue
+				# Indicamos el cliente al cual se va a enviar el mensaje
+				receiver = raw_input('Cliente a enviar: ')
+				# Indicamos el mensaje que se desea enviar
+				messageToSend = raw_input('Mensaje a enviar: ')
+				# Preguntamos si hay alguna preferencia en relación a los medios de comunicación
+				selectDevice = askDevices()
+				if selectDevice is True:
+					# El medio preferido está dado por 'device'
+					device = raw_input('Medio de comunicación preferido: ')
+					communicator.send(messageToSend, receiver, device) # <----- IMPORTANTE
+				elif selectDevice is False:
+					# El medio se elige automáticamente
+					communicator.send(messageToSend, receiver) # <----- IMPORTANTE
 				else:
 					print 'Abortado.'
 					continue
-				# Los 'continue' anteriores se pusieron para que no realice el envio, en caso de error
-				communicator.send(messageToSend, receiver) # Envío de mensaje simple
-			# Opcion 2 - Leer
+			# Opcion 2 - Enviar instancia de mensaje
 			elif optionSelected is '2':
+				# Establecemos el campo 'sender'
+				sender = raw_input('Nombre del emisor: ')
+				# Preguntamos si se desea ver una lista con los clientes registrados
+				selectClient = askClients()
+				if selectClient is None:
+					print 'Abortado.'
+					continue
+				# Establecemos el campo 'receiver'
+				receiver = raw_input('Cliente a enviar: ')
+				# Establecemos el campo 'plainText'
+				plainText = raw_input('Mensaje a enviar: ')
+				# Creamos la instancia de mensaje
+				simpleMessage = messageClass.SimpleMessage(sender, receiver, plainText)
+				# Preguntamos si hay alguna preferencia en relación a los medios de comunicación
+				selectDevice = askDevices()
+				if selectDevice is True:
+					# El medio preferido está dado por 'device'
+					device = raw_input('Medio de comunicación preferido: ')
+					communicator.send(simpleMessage, device = device) # <----- IMPORTANTE
+				elif selectDevice is False:
+					# El medio se elige automáticamente
+					communicator.send(simpleMessage) # <----- IMPORTANTE
+				else:
+					print 'Abortado.'
+					continue
+			# Opción 3 - Enviar instancia de archivo
+			elif optionSelected is '3':
+				# Establecemos el campo 'sender'
+				sender = raw_input('Nombre del emisor: ')
+				# Preguntamos si se desea ver una lista con los clientes registrados
+				selectClient = askClients()
+				if selectClient is None:
+					print 'Abortado.'
+					continue
+				# Establecemos el campo 'receiver'
+				receiver = raw_input('Cliente a enviar: ')
+				# Establecemos el campo 'fileName'
+				fileName = raw_input('Archivo a enviar: ')
+				# Creamos la instancia de mensaje
+				fileInstance = messageClass.FileMessage(sender, receiver, fileName)
+				# Preguntamos si hay alguna preferencia en relación a los medios de comunicación
+				selectDevice = askDevices()
+				if selectDevice is True:
+					# El medio preferido está dado por 'device'
+					device = raw_input('Medio de comunicación preferido: ')
+					communicator.send(fileInstance, device = device) # <----- IMPORTANTE
+				elif selectDevice is False:
+					# El medio se elige automáticamente
+					communicator.send(fileInstance) # <----- IMPORTANTE
+				else:
+					print 'Abortado.'
+					continue
+			# Opcion 4 - Leer un mensaje
+			elif optionSelected is '4':
 				messageReceived = communicator.receive()
-				if messageReceived != None:
+				if messageReceived is not None:
 					if isinstance(messageReceived, messageClass.Message):
 						print 'Instancia de mensaje recibida: ' + str(messageReceived)
-						print '\tEmisor: ' + messageReceived.sender
 						print '\tPrioridad: ' + str(messageReceived.priority)
+						print '\tEmisor: ' + messageReceived.sender
 						if isinstance(messageReceived, messageClass.SimpleMessage):
 							print '\tMensaje de texto: ' + str(messageReceived.plainText)
 						elif isinstance(messageReceived, messageClass.FileMessage):
 							print '\tNombre del archivo: ' + messageReceived.fileName
 					else:
 						print 'Mensaje recibido: %s' % messageReceived
-			# Opcion 3 - Conectar GPRS
-			elif optionSelected is '3':
-				communicator.connectGprs()
-			# Opcion 4 - Desconectar GPRS
-			elif optionSelected is '4':
-				communicator.disconnectGprs()
-			# Opcion 5 - Instancia de mensaje de prueba
+			# Opcion 5 - Conectar GPRS
 			elif optionSelected is '5':
-				simpleMessage = messageClass.SimpleMessage('Datalogger01', 'client02', 'Este es un mensaje de prueba.', 'NETWORK')
-				communicator.send(simpleMessage)
-			# Opción 6 - Instancia de archivo de prueba
+				communicator.connectGprs()
+			# Opcion 6 - Desconectar GPRS
 			elif optionSelected is '6':
-				fileInstance = messageClass.FileMessage('Datalogger01', 'client02', 'ASD.pdf')
-				communicator.send(fileInstance)
-			# Opcion 7 - Salir
-			elif optionSelected is '7':
-				endMain = True
+				communicator.disconnectGprs()
 			elif optionSelected is 'c':
 				communicator.close()
-			elif optionSelected is 'a':
+			elif optionSelected is 'o':
 				communicator.open()
+			elif optionSelected is 'q':
+				endMain = True
 			# Opcion inválida
 			else:
 				print 'Opción inválida!'
@@ -97,6 +144,33 @@ def main():
 	communicator.close() # Se cierran las conexiones
 	print '\n---------------- UNC - Fcefyn ----------------'
 	print '---------- Ingeniería en Computación ---------'
+
+def askClients():
+	showClients = raw_input('¿Desea ver los clientes registrados? [S/n] ')
+	if showClients is 'S' or showClients is 's' or len(showClients) is 0:
+		# Creamos una lista de claves (clientes registrados en los diccionarios)
+		clientList = list() + contactList.allowedIpAddress.keys()
+		clientList += contactList.allowedMacAddress.keys()
+		clientList += contactList.allowedEmails.keys()
+		clientList += contactList.allowedNumbers.keys()
+		# Quitamos los clientes repetidos
+		clientList = list(set(clientList))
+		print clientList
+		return True
+	elif showClients is 'N' or showClients is 'n':
+		return False
+	else:
+		return None
+
+def askDevices():
+	selectDevice = raw_input('¿Desea elegir un medio de comunicación preferido? [S/n] ')
+	if selectDevice is 'S' or selectDevice is 's' or len(selectDevice) is 0:
+		print 'Lista de medios: NETWORK, BLUETOOTH, EMAIL, SMS.'
+		return True
+	elif selectDevice is 'N' or selectDevice is 'n':
+		return False
+	else:
+		return None
 
 if __name__ == '__main__':
 	main() 

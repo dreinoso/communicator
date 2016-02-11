@@ -1,6 +1,7 @@
 # coding=utf-8
 
 import os
+import copy
 import pickle
 import bluetooth
 
@@ -24,9 +25,13 @@ class BluetoothTransmitter():
 		# Comprobación de envío de archivo
 		elif isinstance(message, messageClass.FileMessage) and not message.isInstance:
 			return self.sendFile(message.fileName, remoteSocket)
-		# Comprobación de envío de instancia de mensaje
+		# Entonces se trata de enviar una instancia de mensaje
 		else:
-			return self.sendMessageInstance(message, remoteSocket)
+			# Copiamos el objeto antes de borrar el campo 'isInstance', por un posible fallo de envío
+			tmpMessage = copy.copy(message)
+			# Eliminamos el último campo del objeto, ya que el receptor no lo necesita
+			delattr(tmpMessage, 'isInstance')
+			return self.sendMessageInstance(tmpMessage, remoteSocket)
 
 	def sendMessage(self, plainText, remoteSocket):
 		'''Envío de mensaje simple'''
@@ -103,8 +108,7 @@ class BluetoothTransmitter():
 			remoteSocket.send('END_OF_INSTANCE')
 			################################################################################
 			if isinstance(message, messageClass.FileMessage):
-				self.sendFile(message.fileName, remoteSocket)
-				return True
+				return self.sendFile(message.fileName, remoteSocket)
 			else:
 				logger.write('INFO', '[BLUETOOTH] Instancia de mensaje enviado correctamente!')
 				return True

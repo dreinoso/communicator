@@ -23,13 +23,13 @@ class Bluetooth(object):
 	localServiceName = JSON_CONFIG["BLUETOOTH"]["SERVICE"]
 	localUUID = JSON_CONFIG["BLUETOOTH"]["UUID"]
 
-	localSocketRFCOMM = bluetooth.BluetoothSocket()
-	localPortRFCOMM = None
 	localMACAddress = None
+	localPortRFCOMM = None
+	localSocketRFCOMM = bluetooth.BluetoothSocket()
 
 	bluetoothTransmitter = bluetoothTransmitter.BluetoothTransmitter()
-
 	receptionBuffer = Queue.PriorityQueue()
+	successfulConnection = None
 	isActive = False
 
 	def __init__(self, _receptionBuffer):
@@ -48,23 +48,30 @@ class Bluetooth(object):
 			logger.write('INFO', '[BLUETOOTH] Objeto destruido.')
 
 	# La función 'receiveRFCOMM' cierra el socket al finalizar, por eso hay que hacer esto de nuevo
-	def connect(self, activeMACAddress):
-		self.localMACAddress = activeMACAddress
-		# Creamos un nuevo socket Bluetooth que usa el protocolo de transporte especificado
-		self.localSocketRFCOMM = bluetooth.BluetoothSocket(bluetooth.RFCOMM)
-		# Enlazamos al adaptador local algun puerto disponible usando SDP (Service Discovery Protocol)
-		self.localSocketRFCOMM.bind((self.localMACAddress, bluetooth.PORT_ANY))
-		# Especificamos el numero de conexiones permitidas (todavia sin aceptar) antes de rechazar las nuevas entrantes
-		self.localSocketRFCOMM.listen(CONNECTIONS)
-		# Especificamos el tiempo de espera de conexiones (funcion 'accept')
-		self.localSocketRFCOMM.settimeout(TIMEOUT)
-		# Especificamos el anuncio de nuestro servicio
-		bluetooth.advertise_service(self.localSocketRFCOMM, self.localServiceName,
-									service_id = self.localUUID,
-									service_classes = [self.localUUID, bluetooth.SERIAL_PORT_CLASS],
-									profiles = [bluetooth.SERIAL_PORT_PROFILE])
-		# Almacenamos el puerto asignado por el 'bind'
-		self.localPortRFCOMM = self.localSocketRFCOMM.getsockname()[1]
+	def connect(self, _localMACAddress):
+		self.localMACAddress = _localMACAddress
+		try:
+			# Creamos un nuevo socket Bluetooth que usa el protocolo de transporte especificado
+			self.localSocketRFCOMM = bluetooth.BluetoothSocket(bluetooth.RFCOMM)
+			# Enlazamos al adaptador local algun puerto disponible usando SDP (Service Discovery Protocol)
+			self.localSocketRFCOMM.bind((self.localMACAddress, bluetooth.PORT_ANY))
+			# Especificamos el numero de conexiones permitidas (todavia sin aceptar) antes de rechazar las nuevas entrantes
+			self.localSocketRFCOMM.listen(CONNECTIONS)
+			# Especificamos el tiempo de espera de conexiones (funcion 'accept')
+			self.localSocketRFCOMM.settimeout(TIMEOUT)
+			# Especificamos el anuncio de nuestro servicio
+			bluetooth.advertise_service(self.localSocketRFCOMM, self.localServiceName,
+										service_id = self.localUUID,
+										service_classes = [self.localUUID, bluetooth.SERIAL_PORT_CLASS],
+										profiles = [bluetooth.SERIAL_PORT_PROFILE])
+			# Almacenamos el puerto asignado por el 'bind'
+			self.localPortRFCOMM = self.localSocketRFCOMM.getsockname()[1]
+			self.successfulConnection = True
+			return True
+		except bluetooth._bluetooth.error as bluetoothError:
+			logger.write('ERROR', '[BLUETOOTH] Código de error %s - %s.' % (bluetoothError[0], bluetoothError[1]))
+			self.successfulConnection = False
+			return False
 
 	def send(self, messageToSend, destinationServiceName, destinationMAC, destinationUUID):
 		logger.write('DEBUG', '[BLUETOOTH] Buscando el servicio \'%s\'.' % destinationServiceName)

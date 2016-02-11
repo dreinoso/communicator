@@ -16,10 +16,10 @@ import threading
 
 import logger
 import contactList
-import udpReceptor
 import tcpReceptor
-import udpTransmitter
+import udpReceptor
 import tcpTransmitter
+import udpTransmitter
 
 TIMEOUT = 1.5
 BUFFER_SIZE = 1024
@@ -30,14 +30,15 @@ JSON_CONFIG = json.load(open(JSON_FILE))
 
 class Network(object):
 
-	localAddress = JSON_CONFIG["NETWORK"]["LOCAL_ADDRESS"]
-	lanProtocol = JSON_CONFIG["NETWORK"]["PROTOCOL"]
+	localAddress = None
 	localInterface = None
 
-	udpReceptionPort = JSON_CONFIG["NETWORK"]["UDP_PORT"]
+	networkProtocol = JSON_CONFIG["NETWORK"]["PROTOCOL"]
 	tcpReceptionPort = JSON_CONFIG["NETWORK"]["TCP_PORT"]
+	udpReceptionPort = JSON_CONFIG["NETWORK"]["UDP_PORT"]
 
 	receptionBuffer = Queue.PriorityQueue()
+	successfulConnection = None
 	isActive = False
 
 	def __init__(self, _receptionBuffer):
@@ -56,48 +57,42 @@ class Network(object):
 			activeInterfacesFile = open('/tmp/activeInterfaces', 'w')
 			activeInterfacesFile.write(dataToWrite)
 			activeInterfacesFile.close()
-			self.udpReceptionSocket.close()
 			self.tcpReceptionSocket.close()
+			self.udpReceptionSocket.close()
 		except Exception as errorMessage:
 			pass
 		finally:
 			logger.write('INFO', '[NETWORK] Objeto destruido.')
 
-	def connect(self, activeInterface):
+	def connect(self, _localInterface):
 		'''Se realizan las conexiones de los protocolos UDP y TCP para la comunicación
 		por medio de NETWORK.'''
-		self.localInterface = activeInterface
-		commandToExecute = 'ip addr show ' + self.localInterface + ' | grep inet'
-		# Obtenemos la dirección IP local asignada por DHCP
-		self.localAddress = os.popen(commandToExecute).readline().split()[1].split('/')[0]
-		try: # Intenta conexión UDP
-			self.udpReceptionSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-			'''if JSON_CONFIG["NETWORK"]["CLOSE_PORT"]: # Para cerrar el puerto en caso de estar ocupado
-				udpCommand = 'fuser -k -s ' + str(self.udpReceptionPort) + '/udp' # -k = kill; -s: modo silecioso 
-				os.system(udpCommand + '\n' + udpCommand)'''
-			self.udpReceptionSocket.bind((self.localAddress, self.udpReceptionPort))
-			self.udpReceptionSocket.settimeout(TIMEOUT)
-			#####################################################################
-			self.udpTransmitter = udpTransmitter.UdpTransmitter(self.localAddress)
-			#####################################################################
-		except socket.error as errorMessage:
-			logger.write('WARNING', '[NETWORK-UDP] Excepción en "' + str(inspect.stack()[0][3]) + ' para UDP " (' +str(errorMessage) + ')')
-		try: # Intenta conexión TCP
+		self.localInterface = _localInterface
+		try:
+			# Obtenemos la dirección IP local asignada estáticamente o por DHCP
+			commandToExecute = 'ip addr show ' + self.localInterface + ' | grep inet'
+			self.localAddress = os.popen(commandToExecute).readline().split()[1].split('/')[0]
+			# Creamos los sockets para una conexión TCP
 			self.tcpReceptionSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 			self.tcpReceptionSocket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-			'''if JSON_CONFIG["NETWORK"]["CLOSE_PORT"]: # Para cerrar el puerto en caso de estar ocupado
-				tcpCommand = 'fuser -k -s ' + str(self.udpReceptionPort) + '/tcp' # -k = kill; -s: modo silecioso 
-				os.system(tcpCommand + '\n' + tcpCommand)'''
 			self.tcpReceptionSocket.bind((self.localAddress, self.tcpReceptionPort))
 			self.tcpReceptionSocket.listen(CONNECTION_LIMIT)
 			self.tcpReceptionSocket.settimeout(TIMEOUT)
-			####################################################
+			# Creamos los sockets para una conexión UDP
+			self.udpReceptionSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+			self.udpReceptionSocket.bind((self.localAddress, self.udpReceptionPort))
+			self.udpReceptionSocket.settimeout(TIMEOUT)
+			######################################################################
 			self.tcpTransmitter = tcpTransmitter.TcpTransmitter()
-			####################################################
+			self.udpTransmitter = udpTransmitter.UdpTransmitter(self.localAddress)
+			######################################################################
+			self.successfulConnection = True
+			return True
 		except socket.error as errorMessage:
-			logger.write('WARNING', '[NETWORK-TCP] Excepción en "' + str(inspect.stack()[0][3]) + ' para TCP " (' +str(errorMessage) + ')')
+			logger.write('ERROR', '[NETWORK] %s.' % str(errorMessage))
+			self.successfulConnection = False
+			return False
 
-	
 	def send(self, message, destinationIp, destinationTcpPort, destinationUdpPort):
 		""" Envia una cadena de texto.
 		@param detinationIP: dirección IP del destinatario
@@ -109,7 +104,7 @@ class Network(object):
 		@param message: cadena de texto a enviar
 		@type message: str """
 		try:
-			if self.lanProtocol == 'TCP':
+			if self.networkProtocol == 'TCP':
 				# Crea un nuevo socket que usa el protocolo de transporte especificado
 				remoteSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 				# Conecta el socket con el dispositivo remoto sobre el puerto especificado
@@ -119,7 +114,7 @@ class Network(object):
 			else:
 				return self.udpTransmitter.send(message, destinationIp, destinationUdpPort)
 		except socket.error as errorMessage:
-			logger.write('WARNING','[NETWORK-UDP] %s.' % errorMessage)
+			logger.write('WARNING','[NETWORK] %s.' % errorMessage)
 			return False
 	
 	def receive(self):
@@ -127,12 +122,12 @@ class Network(object):
 		para esto requiere la inciación de hilos que esperen los datos en paralelo
 		a la ejecución del programa."""
 		self.isActive = True
-		receiveUdpThread = threading.Thread(target = self.receiveUdp, name = 'udpReceptor')
 		receiveTcpThread = threading.Thread(target = self.receiveTcp, name = 'tcpReceptor')
-		receiveUdpThread.start()
+		receiveUdpThread = threading.Thread(target = self.receiveUdp, name = 'udpReceptor')
 		receiveTcpThread.start()
-		receiveUdpThread.join()
+		receiveUdpThread.start()
 		receiveTcpThread.join()
+		receiveUdpThread.join()
 
 	def receiveTcp(self):
 		""" Esta función es ejecutada en un hilo, se queda esperando los paquetes

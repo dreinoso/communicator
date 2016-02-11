@@ -7,6 +7,7 @@
 	@date: Lunes 16 de Mayo de 2015 """
 
 import os
+import copy
 import pickle
 import socket
 
@@ -32,7 +33,11 @@ class TcpTransmitter():
 			return self.sendFile(message.fileName, remoteSocket)
 		# Entonces se trata de enviar una instancia de mensaje
 		else:
-			return self.sendMessageInstance(message, remoteSocket)
+			# Copiamos el objeto antes de borrar el campo 'isInstance', por un posible fallo de envío
+			tmpMessage = copy.copy(message)
+			# Eliminamos el último campo del objeto, ya que el receptor no lo necesita
+			delattr(tmpMessage, 'isInstance')
+			return self.sendMessageInstance(tmpMessage, remoteSocket)
 
 	def sendMessage(self, plainText, remoteSocket):
 		'''Envío de mensaje simple'''

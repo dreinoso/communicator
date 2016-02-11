@@ -12,6 +12,7 @@
 import os
 import json
 import time
+import copy
 import shlex
 import serial
 import signal
@@ -20,7 +21,6 @@ import inspect
 import subprocess
 
 import logger
-import errorList
 import contactList
 import messageClass
 
@@ -31,6 +31,7 @@ JSON_CONFIG = json.load(open(JSON_FILE))
 
 class Modem(object):
 	""" Clase 'Modem'. Permite la creacion de una instancia del dispositivo. """
+	successfulConnection = None
 	serialPort = None
 
 	def __init__(self):
@@ -54,17 +55,10 @@ class Modem(object):
 		self.modemInstance.write(atCommand + '\r')	 # Envio el comando AT al modem
 		modemOutput = self.modemInstance.readlines() # Espero la respuesta
 		# Verificamos si se produjo algún tipo de error relacionado con el comando AT
-		for i, outputElement in enumerate(modemOutput):
-			if outputElement.startswith('+CME ERROR'):
-				errorCode = int(outputElement.replace('+CME ERROR: ', ''))
-				logger.write('ERROR','[SMS] ' + atCommand + ' - ' + errorList.CME_ERRORS[errorCode] + '.')
-				raise
-			elif outputElement.startswith('+CMS ERROR'):
-				errorCode = int(outputElement.replace('+CMS ERROR: ', ''))
-				logger.write('ERROR','[SMS] ' + atCommand + ' - ' + errorList.CMS_ERRORS[errorCode] + '.')
-				raise
-			elif outputElement.startswith('NO CARRIER') or outputElement.startswith('ERROR'):
-				logger.write('ERROR','[SMS] ' + atCommand + ' - ' + errorList.NO_CARRIER + '.')
+		for outputElement in modemOutput:
+			if outputElement.startswith(('+CME ERROR', '+CMS ERROR')) and atCommand != 'AT+CNMA':
+				outputElement = outputElement.replace('\r\n', '')
+				logger.write('ERROR', '[SMS] %s.' % outputElement)
 				raise
 		return modemOutput
 
@@ -74,7 +68,6 @@ class Modem(object):
 class Sms(Modem):
 	""" Subclase de 'Modem' correspondiente al modo de operacion con el que se va
 		a trabajar. """
-	sentMessage = None
 	isActive = False
 
 	def __init__(self, _receptionBuffer):
@@ -92,18 +85,24 @@ class Sms(Modem):
 		self.modemInstance.close()
 		logger.write('INFO', '[SMS] Objeto destruido.')
 
-	def connect(self, _gsmSerialPort):
+	def connect(self, _serialPort):
+		self.serialPort = _serialPort
 		try:
-			self.serialPort = _gsmSerialPort
-			self.modemInstance.port = '/dev/' + _gsmSerialPort
+			self.modemInstance.port = _serialPort
 			self.modemInstance.open()
+			#self.modemInstance.flushInput()
+			#self.modemInstance.flushOutput()
 			time.sleep(1.5)
+			self.sendAT('ATZ')				 # Enviamos un reset
 			self.sendAT('ATE1')				 # Habilitamos el echo
-			self.sendAT('AT+CMGF=1')		 # Modo para Sms
+			self.sendAT('AT+CMEE=2')		 # Habilitamos reporte de error
+			self.sendAT('AT+CMGF=1')		 # Establecemos el modo para sms
+			self.sendAT('AT+CLIP=1')		 # Habilitamos identificador de llamada
 			self.sendAT('AT+CNMI=1,2,0,0,0') # Habilito notificacion de mensaje entrante
-			#self.sendAT('AT+CSCA="+' + str(JSON_CONFIG["SMS"]["MESSAGES_CENTER"]) + '"') # Centro de mensajes CLARO
+			self.successfulConnection = True
 			return True
 		except:
+			self.successfulConnection = False
 			return False
 
 	def receive(self):
@@ -117,6 +116,7 @@ class Sms(Modem):
 			de telefono dado por 'DESTINATION_NUMBER' un mensaje de actualizacion, que por el momento
 			estara compuesto de un 'TimeStamp'. """
 		smsAmount = 0
+		callerID = None
 		smsBodyList = list()
 		smsHeaderList = list()
 		unreadList = self.sendAT('AT+CMGL="REC UNREAD"')
@@ -184,23 +184,29 @@ class Sms(Modem):
 					# Decrementamos la cantidad de mensajes a procesar
 					smsAmount -= 1
 			elif self.modemInstance.inWaiting() is not 0:
-				receptionList = self.modemInstance.readlines()
-				# Ejemplo receptionList: ['\r\n', '+CMT: "+543512641040",,"15/12/29,11:19:38-12"\r\n', 'Nuevo SMS.\r\n']
-				for receptionIndex, receptionData in enumerate(receptionList):
-					if receptionData.startswith('+CMT'):
-						smsHeaderList.append(receptionList[receptionIndex])
-						smsBodyList.append(receptionList[receptionIndex + 1])
-						self.sendAT('AT+CNMA') # Enviamos el ACK
+				bytesToRead = self.modemInstance.inWaiting()
+				receptionList = self.modemInstance.read(bytesToRead).split('\r\n')
+				# Quitamos el primer y último elemento, porque no contienen información
+				receptionList.pop(len(receptionList) - 1)
+				receptionList.pop(0)
+				# Ejemplo receptionList: ['+CMT: "+543512641040","","16/01/31,05:00:08-12"', 'Nuevo SMS.']
+				# Ejemplo receptionList: ['RING', '', '+CLIP: "+543512641040",145,"",0,"",0']
+				# Ejemplo receptionList: ['NO CARRIER']
+				if receptionList[0].startswith('+CMT'):
+					try:
+						smsHeaderList.append(receptionList[0])
+						smsBodyList.append(receptionList[1])
+						self.sendAT('AT+CNMA') # Enviamos el ACK (ńecesario sólo para los Dongle USB)
+					except:
+						pass # La excepción aparece cuando el módem no soporta (no necesita) el ACK
+					finally:
 						smsAmount += 1
-					elif receptionData.startswith('+CMS ERROR'):
-						# ['\r\n', '+CMS ERROR: 500\r\n']
-						self.sentMessage = False
-					elif receptionData.startswith('+CMGS'):
-						# ----- Caso de envío EXITOSO -----
-						# Ejemplo de atResult02[0]: Mensaje enviado desde el Modem.\x1a\r\n
-						# Ejemplo de atResult02[1]: +CMGS: 17\r\n
-						# Ejemplo de atResult02[3]: OK\r\n
-						self.sentMessage = True
+				elif receptionList[0].startswith('RING'):
+					callerID = self.getTelephoneNumber(receptionList[2])
+					logger.write('INFO', '[CALL] El número \'%s\' está llamando...' % callerID)
+				elif receptionList[0].startswith('NO CARRIER'):
+					logger.write('INFO', '[CALL] Llamada perdida de \'%s\'.' % callerID)
+					callerID = None
 			else:
 				time.sleep(1)
 		logger.write('WARNING', '[SMS] Función \'%s\' terminada.' % inspect.stack()[0][3])
@@ -211,31 +217,34 @@ class Sms(Modem):
 			@type telephoneNumber: int
 			@param messageToSend: mensaje de texto a enviar
 			@type messageToSend: str """
+		# Comprobación de envío de texto plano
+		if isinstance(messageToSend, messageClass.SimpleMessage) and not messageToSend.isInstance:
+			smsMessage = messageToSend.plainText
+		# Entonces se trata de enviar una instancia de mensaje
+		else:
+			# Copiamos el objeto antes de borrar el campo 'isInstance', por un posible fallo de envío
+			tmpMessage = copy.copy(messageToSend)
+			# Eliminamos el último campo del objeto, ya que el receptor no lo necesita
+			delattr(tmpMessage, 'isInstance')
+			# Serializamos el objeto para poder transmitirlo
+			smsMessage = 'INSTANCE' + pickle.dumps(tmpMessage)
 		try:
-			# Comprobación de envío de texto plano
-			if isinstance(messageToSend, messageClass.SimpleMessage) and not messageToSend.isInstance:
-				smsMessage = messageToSend.plainText
-			# Entonces se trata de enviar una instancia de mensaje
-			else:
-				smsMessage = 'INSTANCE' + pickle.dumps(messageToSend)
 			# Enviamos los comandos AT correspondientes para efectuar el envío el mensaje de texto
-			atResult01 = self.sendAT('AT+CMGS="' + str(telephoneNumber) + '"') # Numero al cual enviar el Sms
-			atResult02 = self.sendAT(smsMessage + ascii.ctrl('z')) 				 # Mensaje de texto terminado en Ctrl+Z
-			# Esperamos confirmación de la red GSM
-			while self.sentMessage is None:
-				pass
-			if self.sentMessage:
-				logger.write('INFO', '[SMS] Mensaje de texto enviado a \'%s\'.' % str(telephoneNumber))
-				self.removeAllSms() # Borramos el mensaje enviado almacenado en la memoria
-				return True
-			else:
-				logger.write('WARNING','[SMS] Error al enviar el mensaje de texto a \'%s\'.' % str(telephoneNumber))
-				return False
+			self.sendAT('AT+CMGS="' + str(telephoneNumber) + '"') # Numero al cual enviar el Sms
+			self.sendAT(smsMessage + ascii.ctrl('z')) 			  # Mensaje de texto terminado en Ctrl+Z
+			logger.write('INFO', '[SMS] Mensaje de texto enviado a \'%s\'.' % str(telephoneNumber))
+			# Borramos el mensaje enviado almacenado en la memoria
+			self.removeAllSms()
+			return True
 		except:
-			logger.write('ERROR', '[SMS] Dispositivo ocupado! Imposible enviar mensaje a \'%s\'.' % str(telephoneNumber))
-		finally:
-			self.sentMessage = None
+			logger.write('WARNING', '[SMS] Error al enviar el mensaje de texto a \'%s\'.' % str(telephoneNumber))
+			return False
 
+	def sendCall(self, telephoneNumber):
+		self.sendAT('ATD' + str(telephoneNumber) + ';') # Numero al cual se quiere llamar
+
+	def hangUpCall(self):
+		self.sendAT('ATH') # Cuelga la llamada en curso
 
 	def removeSms(self, smsIndex):
 		""" Envia el comando AT correspondiente para elimiar todos los mensajes del dispositivo.
@@ -264,14 +273,15 @@ class Sms(Modem):
 		""" Procesa la cabecera del SMS.
 			@return: numero de telefono del remitente
 			@rtype: int """
+		# Ejemplo de smsHeader recibido de un movil: +CLIP: "+543512641040",145,"",0,"",0']
 		# Ejemplo de smsHeader recibido de un movil: +CMT: "+543512641040",,"15/12/29,11:41:23-12"\r\n
 		# Ejemplo de smsHeader recibido de un movil: +CMGL: 0,"REC UNREAD","+5493512560536",,"14/10/26,17:12:04-12"\r\n
 		# Ejemplo de smsHeader recibido de la web  : +CMGL: 2,"REC UNREAD","876966",,"14/10/26,19:36:42-12"\r\n
-		smsHeader = smsHeader.replace('\r\n', '') # Quitamos el '\r\n' del final
 		headerList = smsHeader.split(',')		  # Separamos smsHeader por comas
 		telephoneNumber = None
-		if headerList[0].startswith('+CMT'):
+		if headerList[0].startswith(('+CLIP', '+CMT')):
 			# Ejemplo de headerList[0]: +CMT: "+543512641040"
+			# Ejemplo de headerList[0]: +CLIP: "+543512641040"
 			telephoneNumber = headerList[0].split()[1].replace('"', '') # Quitamos las comillas
 		elif headerList[0].startswith('+CMGL'):
 			# Ejemplo de headerList[2]: "+5493512560536" | "876966"
@@ -284,9 +294,6 @@ class Sms(Modem):
 			telephoneNumber = telephoneNumber.replace('+54', '') # Quitamos el codigo de pais
 			# Ejemplo de telephoneNumber: 3512641040
 		return int(telephoneNumber)
-
-	def sendCall(self, telephoneNumber):
-		self.sendAT('ATD' + str(telephoneNumber)) # Numero al cual efectuar la llamada
 
 	def sendOutput(self, telephoneNumber, smsMessage):
 		try:
@@ -303,7 +310,8 @@ class Sms(Modem):
 
 class Gprs(Modem):
 
-	wvdialProcess = None
+	pppInterface = None
+
 	local_IP_Address = None
 	remote_IP_Address = None
 	primary_DNS_Address = None
@@ -320,60 +328,60 @@ class Gprs(Modem):
 		self.modemInstance.close()
 		logger.write('INFO', '[GRPS] Objeto destruido.')
 
-	def connect(self, _gprsSerialPort):
+	def connect(self):
 		try:
-			self.serialPort = _gprsSerialPort
-			self.modemInstance.port = '/dev/' + _gprsSerialPort
-			self.modemInstance.open()
-			self.sendAT('AT+CGDCONT=1,"IP","gprs.claro.com.ar"') # Contexto, protocolo y APN
-			self.wvdialProcess = subprocess.Popen(['wvdial'], preexec_fn = os.setsid, stderr = subprocess.PIPE)
-			# Leemos el proceso a medida que se va ejecutando (mientras sigua vivo)
-			while self.wvdialProcess.poll() is None:
-				self.wvdialOutput = self.wvdialProcess.stderr.readline() # Leemos una línea de la salida del proceso wvdial
-				self.wvdialOutput = self.wvdialOutput[:self.wvdialOutput.rfind('\n')] # Quitamos el salto de línea del final
-				if self.wvdialOutput.startswith('--> local  IP address'):
-					# Se asignó una direccion IP...
-					self.local_IP_Address = self.wvdialOutput.replace('--> local  IP address ', '')
-					logger.write('DEBUG', '[GRPS] Dirección IP: %s' % self.local_IP_Address)
-					continue
-				elif self.wvdialOutput.startswith('--> remote IP address'):
-					# Se asignó una puerta de enlace...
-					self.remote_IP_Address = self.wvdialOutput.replace('--> remote IP address ', '')
-					logger.write('DEBUG', '[GRPS] Puerta de enlace: %s' % self.remote_IP_Address)
-					continue
-				elif self.wvdialOutput.startswith('--> primary   DNS address'):
-					# Se asignó un servidor DNS primario...
-					self.primary_DNS_Address = self.wvdialOutput.replace('--> primary   DNS address ', '')
-					logger.write('DEBUG', '[GRPS] DNS Primario: %s' % self.primary_DNS_Address)
-					continue
-				elif self.wvdialOutput.startswith('--> secondary DNS address'):
-					# Se asignó un servidor DNS secundario (último parámetro)...
-					self.secondary_DNS_Address = self.wvdialOutput.replace('--> secondary DNS address ', '')
-					logger.write('DEBUG', '[GRPS] DNS Secundario: %s' % self.secondary_DNS_Address)
-					return True
+			ponProcess = subprocess.Popen('pon', stdout = subprocess.PIPE, stderr = subprocess.PIPE)
+			ponOutput, ponError = ponProcess.communicate()
+			# Si no se produjo ningún error, entonces se intenta iniciar la conexión con el APN
+			if ponError == '':
+				syslogFile = open('/var/log/syslog', 'a+')
+				syslogFile.seek(0, 2) # Apuntamos al final del archivo
+				while True:
+					syslogOutput = syslogFile.readline()
+					if syslogOutput.find('local  IP address ') > 0:
+						# Se asignó una direccion IP...
+						self.local_IP_Address = syslogOutput.split()[8]
+						logger.write('DEBUG', '[GRPS] Dirección IP: %s' % self.local_IP_Address)
+						continue
+					elif syslogOutput.find('remote IP address ') > 0:
+						# Se asignó una puerta de enlace...
+						self.remote_IP_Address = syslogOutput.split()[8]
+						logger.write('DEBUG', '[GRPS] Puerta de enlace: %s' % self.remote_IP_Address)
+						continue
+					elif syslogOutput.find('primary   DNS address ') > 0:
+						# Se asignó un servidor DNS primario...
+						self.primary_DNS_Address = syslogOutput.split()[8]
+						logger.write('DEBUG', '[GRPS] DNS Primario: %s' % self.primary_DNS_Address)
+						continue
+					elif syslogOutput.find('secondary DNS address ') > 0:
+						# Se asignó un servidor DNS secundario (último parámetro)...
+						self.secondary_DNS_Address = syslogOutput.split()[8]
+						logger.write('DEBUG', '[GRPS] DNS Secundario: %s' % self.secondary_DNS_Address)
+						continue
+					elif syslogOutput.find('Script /etc/ppp/ip-up finished') > 0:
+						logger.write('DEBUG', '[GRPS] Parámetros de red configurados exitosamente!')
+						self.isActive = True
+						return True
+					elif syslogOutput.find('Connection terminated') > 0:
+						logger.write('DEBUG', '[GRPS] No se pudo establecer la conexión con la red GPRS!')
+						return False
+			# El puerto serial en '/etc/ppp/options-mobile' está mal configurado o no existe (desconectado)
+			else:
+				logger.write('WARNING', '[GRPS] No hay ningún módem conectado para realizar la conexión!')
 		except:
+			logger.write('ERROR', '[GRPS] Se produjo un error al intentar realizar la conexión!')
 			return False
 
 	def disconnect(self):
-		if self.isActive:
-			self.isActive = False
-			os.killpg(os.getpgid(self.wvdialProcess.pid), signal.SIGTERM)
-			logger.write('WARNING', '[GRPS] Desconectado de la red GPRS correctamente.')
-			return True
-		else:
-			logger.write('WARNING', '[GRPS] No se pudo terminar el modo GPRS porque no estaba activo.')
+		try:
+			poffProcess = subprocess.Popen('poff', stdout = subprocess.PIPE, stderr = subprocess.PIPE)
+			poffOutput, poffError = poffProcess.communicate()
+			if poffOutput.find('No pppd is running') > 0:
+				logger.write('WARNING', '[GRPS] No hay ninguna conexión activa para desconectar!')
+				return False
+			else:
+				logger.write('WARNING', '[GRPS] La conexión activa ha sido desconectada correctamente!')
+				return True
+		except:
+			logger.write('ERROR', '[GRPS] Se produjo un error al intentar desconectar la conexión!')
 			return False
-
-	def verifyConnection(self):
-		# Mientras el proceso siga vivo, es porque la conexíón GPRS sigue activa...
-		while self.wvdialProcess.poll() is None and self.isActive:
-			time.sleep(1.5)
-		self.closePort()
-		if self.wvdialProcess.poll() is None:
-			self.isActive = True
-			self.disconnect()
-		self.serialPort = None
-		logger.write('WARNING', '[GPRS] Funcion \'%s\' terminada.' % inspect.stack()[0][3])
-
-	def getStatus(self):
-		return self.isActive

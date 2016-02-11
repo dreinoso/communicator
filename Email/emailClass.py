@@ -9,6 +9,7 @@
 
 import os
 import json
+import copy
 import shlex
 import email
 import Queue
@@ -42,13 +43,12 @@ JSON_CONFIG = json.load(open(JSON_FILE))
 
 class Email(object):
 
-	emailAccount = None
-
 	smtpServer = smtplib.SMTP
 	imapServer = imaplib.IMAP4_SSL
 
 	receptionBuffer = Queue.PriorityQueue()
-	failedConnection = False
+	successfulConnection = None
+	emailAccount = None
 	isActive = False
 
 	def __init__(self, _receptionBuffer):
@@ -59,8 +59,7 @@ class Email(object):
 		@param _receptionBuffer: Buffer para la recepción de datos
 		@type: list"""
 		self.receptionBuffer = _receptionBuffer
-		self.emailAccount = JSON_CONFIG["EMAIL"]["ACCOUNT"]
-		# Establecemos tiempo maximo antes de reintentar lectura
+		# Establecemos tiempo maximo antes de reintentar lectura (válido para 'imapServer')
 		socket.setdefaulttimeout(TIMEOUT)
 
 	def __del__(self):
@@ -77,21 +76,27 @@ class Email(object):
 
 	def connect(self):
 		try:
-			self.smtpServer = smtplib.SMTP(JSON_CONFIG["EMAIL"]["SMTP_SERVER"], JSON_CONFIG["EMAIL"]["SMTP_PORT"])      # Establecemos servidor y puerto SMTP
-			self.imapServer = imaplib.IMAP4_SSL(JSON_CONFIG["EMAIL"]["IMAP_SERVER"], JSON_CONFIG["EMAIL"]["IMAP_PORT"]) # Establecemos servidor y puerto IMAP
+			smtpHost = JSON_CONFIG["EMAIL"]["SMTP_SERVER"]
+			smtpPort = JSON_CONFIG["EMAIL"]["SMTP_PORT"]
+			imapHost = JSON_CONFIG["EMAIL"]["IMAP_SERVER"]
+			imapPort = JSON_CONFIG["EMAIL"]["IMAP_PORT"]
+			emailPassword = JSON_CONFIG["EMAIL"]["PASSWORD"]
+			self.emailAccount = JSON_CONFIG["EMAIL"]["ACCOUNT"]
+			# El 'timeout' siguiente es para la función 'sendmail' de 'smtpServer'
+			self.smtpServer = smtplib.SMTP(smtpHost, smtpPort, timeout = 30) # Establecemos servidor y puerto SMTP
+			self.imapServer = imaplib.IMAP4_SSL(imapHost, imapPort)          # Establecemos servidor y puerto IMAP
 			self.smtpServer.starttls()
 			self.smtpServer.ehlo()
-			self.smtpServer.login(JSON_CONFIG["EMAIL"]["ACCOUNT"], JSON_CONFIG["EMAIL"]["PASSWORD"]) # Nos logueamos en el servidor SMTP
-			self.imapServer.login(JSON_CONFIG["EMAIL"]["ACCOUNT"], JSON_CONFIG["EMAIL"]["PASSWORD"])            # Nos logueamos en el servidor IMAP
-			self.imapServer.select('INBOX') # Seleccionamos la Bandeja de Entrada
-		except smtplib.SMTPException as smtpError:
-			logger.write('ERROR', '[EMAIL] Se produjo un error: %s' % smtpError)
-			self.failedConnection = True
-			raise
-		except IMAP4.error as imapError:
-			logger.write('ERROR', '[EMAIL] Se produjo un error: %s' % imapError)
-			self.failedConnection = True
-			raise
+			self.smtpServer.login(self.emailAccount, emailPassword) # Nos logueamos en el servidor SMTP
+			self.imapServer.login(self.emailAccount, emailPassword) # Nos logueamos en el servidor IMAP
+			self.imapServer.select('INBOX')                         # Seleccionamos la Bandeja de Entrada
+			self.successfulConnection = True
+			return True
+		# Error con los servidores (probablemente estén mal escritos o los puertos son incorrectos)
+		except Exception as errorMessage:
+			logger.write('ERROR', '[EMAIL] Error al intentar conectar con los servidores SMTP e IMAP!')
+			self.successfulConnection = False
+			return False
 
 	def send(self, message, emailDestination):
 		""" Envia un mensaje de correo electronico. Debe determinar el tipo de mensaje
@@ -108,8 +113,16 @@ class Email(object):
 			return self.sendAttachment(message.fileName, emailDestination)
 		# Entonces se trata de enviar una instancia de mensaje
 		else:
-			plainText = 'INSTANCE' + pickle.dumps(message)
-			return self.sendMessage(plainText, emailDestination)
+			# Copiamos el objeto antes de borrar el campo 'isInstance', por un posible fallo de envío
+			tmpMessage = copy.copy(message)
+			# Eliminamos el último campo del objeto, ya que el receptor no lo necesita
+			delattr(tmpMessage, 'isInstance')
+			# Serializamos el objeto para poder transmitirlo
+			messageSerialized = 'INSTANCE' + pickle.dumps(tmpMessage)
+			if isinstance(message, messageClass.SimpleMessage):
+				return self.sendMessage(messageSerialized, emailDestination)
+			elif isinstance(message, messageClass.FileMessage):
+				return self.sendAttachment(message.fileName, emailDestination, messageSerialized)
 
 	def sendMessage(self, plainText, emailDestination):
 		try:
@@ -314,4 +327,5 @@ class Email(object):
 		except OSError as e: # El comando no fue encontrado (el ejecutable no existe)
 			emailBody = str(e)
 		finally:
+			# Enviamos la respuesta del SO al remitente
 			self.sendMessage(emailBody, sourceEmail)

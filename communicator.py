@@ -62,29 +62,55 @@ def open():
 	global networkInstance, gprsInstance, emailInstance, smsInstance, bluetoothInstance
 	global checkerInstance, transmitterInstance
 
+	# Creamos los buffers de recepción y transmisión, respectivamente
 	receptionBuffer = Queue.PriorityQueue(JSON_CONFIG["COMMUNICATOR"]["RECEPTION_BUFFER"])
 	transmissionBuffer = Queue.PriorityQueue(JSON_CONFIG["COMMUNICATOR"]["TRANSMISSION_BUFFER"])
 
 	# Creamos las instancias de los periféricos
 	gprsInstance = modemClass.Gprs()
+	smsInstance = modemClass.Sms(receptionBuffer)
 	emailInstance = emailClass.Email(receptionBuffer)
 	networkInstance = networkClass.Network(receptionBuffer)
-	smsInstance = modemClass.Sms(receptionBuffer)
 	bluetoothInstance = bluetoothClass.Bluetooth(receptionBuffer)
 
 	# Creamos la instancia del checker y el hilo que va a verificar las conexiones
 	checkerInstance = checkerClass.Checker(networkInstance, gprsInstance, emailInstance, smsInstance, bluetoothInstance)
 
-	# Se crea la instancia para la transmisión de paquetes
+	# Creamos la instancia para la transmisión de paquetes
 	transmitterInstance = transmitterClass.Transmitter(transmissionBuffer, networkInstance, bluetoothInstance, emailInstance, smsInstance, checkerInstance)
 
-	checkerInstance.verifySmsConnection()
-	checkerInstance.verifyEmailConnection()
-	checkerInstance.verifyNetworkConnection()
-	checkerInstance.verifyBluetoothConnection()
-
+	# Ponemos en marcha la comprobación de medios de comunicación y la transmisión de mensajes
 	checkerInstance.start()
 	transmitterInstance.start()
+
+	return True
+
+def close():
+	"""Se cierran los componentes del sistema, unicamente los abiertos previamente"""
+	global receptionBuffer, transmissionBuffer, checkerInstance, transmitterInstance
+	global smsInstance, networkInstance, gprsInstance, bluetoothInstance, emailInstance
+
+	# Frenamos la transmisión de mensajes
+	transmitterInstance.isActive = False
+	transmitterInstance.join()
+
+	# Frenamos la verificación de las conexiones
+	checkerInstance.isActive = False
+	checkerInstance.join()
+
+	# Destruimos todas las instancias de comunicación
+	del smsInstance
+	del gprsInstance
+	del emailInstance
+	del networkInstance
+	del bluetoothInstance
+
+	# Destruimos las instancias de manejo del comunicador
+	del transmitterInstance
+	del receptionBuffer
+	del checkerInstance
+
+	return True
 
 def send(message, receiver = None, device = None):
 	"""Se almacena en el buffer de transmisión el paquete a ser enviado, se guardara
@@ -100,24 +126,32 @@ def send(message, receiver = None, device = None):
 	if not transmissionBuffer.full():
 		# Si el mensaje no es una instancia, la creamos para poder hacer el manejo de transmisión con prioridad
 		if not isinstance(message, messageClass.Message):
-			# Obtenemos el nombre del remitente para poder completar el campo del objeto
-			sender = JSON_CONFIG["COMMUNICATOR"]["NAME"]
-			# Si el mensaje es una ruta a un archivo, creamos la instancia de archivo correspondiente...
-			if os.path.isfile(message):
-				# 'message' puede ser un path relativo, o bien un path absoluto
-				message = messageClass.FileMessage(sender, receiver, message, device)
+			# Al no tratarse de una instancia, no podemos conocer el destino salvo que el usuario lo especifique
+			if receiver is not None:
+				# Si el mensaje es una ruta a un archivo, creamos la instancia de archivo correspondiente...
+				if os.path.isfile(message):
+					# 'message' puede ser un path relativo, o bien un path absoluto
+					message = messageClass.FileMessage('', receiver, message)
+				else:
+				# ... sino, creamos una instancia de mensaje simple.
+					message = messageClass.SimpleMessage('', receiver, message)
+				# Marcamos la instancia para indicar que se trataba de un mensaje que no necesitaba ser objeto
+				setattr(message, 'isInstance', False)
 			else:
-			# ... sino, creamos una instancia de mensaje simple.
-				message = messageClass.SimpleMessage(sender, receiver, message, device)
-			# Marcamos la instancia para saber que se trataba de un mensaje que no necesitaba ser instancia
-			message.isInstance = False
+				logger.write('ERROR', '[COMMUNICATOR] No se especificó un destino para el mensaje!')
+				return False
 		# Si el mensaje es una instancia de archivo, verificamos que la ruta hacia el mismo sea la correcta
 		elif isinstance(message, messageClass.FileMessage):
 			if not os.path.isfile(message.fileName):
 				logger.write('ERROR', '[COMMUNICATOR] La ruta hacia el archivo a enviar es incorrecta!')
 				return False
+		# Comprobamos si el campo 'isInstance' no existe, para crearlo
+		if not hasattr(message, 'isInstance'):
+			setattr(message, 'isInstance', True)
 		# Establecemos el tiempo que permanecerá el mensaje en el buffer antes de ser desechado en caso de no ser enviado
 		setattr(message, 'timeOut', 20)
+		# Damos mayor prioridad al dispositivo referenciado por 'device' (si es que hay alguno)
+		setattr(message, 'device', device)
 		# Indicamos con una marca de tiempo, la hora exacta en la que se almacenó el mensaje en el buffer de transmisión
 		setattr(message, 'timeStamp', time.time())
 		# Almacenamos el mensaje en el buffer de transmisión, con la prioridad correspondiente
@@ -136,7 +170,7 @@ def receive():
 		message = receptionBuffer.get_nowait()
 		return message[1] # Es una tupla y el primer elemento corresponde a la prioridad
 	else:
-		logger.write('INFO', '[COMUNICADOR] El buffer de mensajes esta vacio.')
+		logger.write('INFO', '[COMMUNICATOR] El buffer de mensajes esta vacio.')
 		return None
 
 def lenght():
@@ -149,59 +183,11 @@ def lenght():
 		return receptionBuffer.qsize()
 
 def connectGprs():
-	ttyUSBPattern = re.compile('ttyUSB[0-9]+')
-	lsDevProcess = subprocess.Popen(['ls', '/dev/'], stdout = subprocess.PIPE, stderr = subprocess.PIPE)
-	lsDevOutput, lsDevError = lsDevProcess.communicate()
-	ttyUSBDevices = ttyUSBPattern.findall(lsDevOutput)
-	# Se detectaron dispositivos USB conectados
-	if len(ttyUSBDevices) > 0:
-		if gprsInstance.serialPort not in ttyUSBDevices:
-			wvdialProcess = subprocess.Popen('wvdialconf', stdout = subprocess.PIPE, stderr = subprocess.PIPE)
-			wvdialOutput, wvdialError = wvdialProcess.communicate()
-			ttyUSBPattern = re.compile('ttyUSB[0-9]+<Info>')
-			modemsList = ttyUSBPattern.findall(wvdialError)
-			if len(modemsList) > 0:
-				gprsSerialPort = modemsList[0].replace('<Info>','')
-				if gprsInstance.connect(gprsSerialPort):
-					gprsInstance.isActive = True
-					gprsInfo = gprsSerialPort + ' - ' + gprsInstance.local_IP_Address
-					gprsThread = threading.Thread(target = gprsInstance.verifyConnection, name = 'gprsVerifyConnection')
-					gprsThread.start()
-					logger.write('INFO','[GPRS] Listo para usarse (' + gprsInfo + ').')
-					return True
-				else:
-					logger.write('WARNING','[GPRS] Error al intentar conectar con la red GPRS.')
-					gprsInstance.serialPort = None
-					gprsInstance.closePort()
-					return False
-		# Si llegamos acá es porque el módem ya esta funcionando en modo GPRS
-		elif gprsInstance.getStatus():
-			logger.write('WARNING', '[GPRS] El módem ya está funcionando en modo GPRS!')
-			return True
+	if not gprsInstance.isActive:
+		return gprsInstance.connect()
 	else:
-		logger.write('WARNING', '[GPRS] No se encontró ningún módem para trabajar en modo GPRS.')
-		return False
+		logger.write('WARNING', '[GRPS] Ya existe una conexión activa con la red!')
+		return True
 
 def disconnectGprs():
 	return gprsInstance.disconnect()
-
-def close():
-	"""Se cierran los componentes del sistema, unicamente los abiertos previamente"""
-	global receptionBuffer, transmissionBuffer, checkerInstance, transmitterInstance
-	global smsInstance, networkInstance, gprsInstance, bluetoothInstance, emailInstance
-
-	transmitterInstance.isActive = False
-	transmitterInstance.join()
-
-	checkerInstance.isActive = False
-	checkerInstance.join()
-	
-	del smsInstance
-	del gprsInstance
-	del emailInstance
-	del networkInstance
-	del bluetoothInstance
-
-	del transmitterInstance
-	del receptionBuffer
-	del checkerInstance
