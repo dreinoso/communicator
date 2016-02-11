@@ -1,5 +1,5 @@
 #Módulo de Comunicación Inteligente
-Corresponde a un módulo de comunicación inteligente para comunicación punto a punto. Las comunicaciones que se pretenden son SMS, Email, TCP/IP y Bluetooth.
+Corresponde a un módulo de comunicación inteligente para comunicación punto a punto. Las comunicaciones que se pretenden son SMS, GPRS, EMAIL, TCP/IP y BLUETOOTH.
 
 ##Requisitos del módulo
 	-Python 2.7
@@ -7,7 +7,6 @@ Corresponde a un módulo de comunicación inteligente para comunicación punto a
 		En caso de problemas de dependencias con pip (sudo apt-get install python python-dev libatlas-base-dev gcc gfortran g++)
 	-PyBluez para la ejecución con Bluetooth (sudo pip install pybluez)
 		En caso de problemas de dependencias con pip (sudo apt-get install libbluetooth-dev)
-	-WVdial para obtener el puerto del módem (sudo apt-get install wvdial)
 	-PySerial para la comunicación con el módem (sudo pip install pyserial)
 
 ##Requisitos de Configuración
@@ -19,15 +18,14 @@ Corresponde a un módulo de comunicación inteligente para comunicación punto a
 	"COMMUNICATOR":
 	{
 		"NAME"					: "Datalogger_1", 	# Nombre del Communicador para identificarse
-		"RECEPTION_FILTER"		: 1,				# (0/1) Habilitado: Filtra los mensajes que no sean de contactos registrados
+		"RECEPTION_FILTER"		: 0,				# (0/1) Habilitado: Filtra los mensajes que no sean de contactos registrados
 		"TRANSMISSION_BUFFER" 	: 10,				# Máxima cantidad de elementos para el buffer de transmissión
 		"RECEPTION_BUFFER" 		: 10,				# Máxima cantidad de elementos para el buffer de recepción
 		"RETRANSMISSION_TIME" 	: 5					# Tiempo (en Segundos) para descarte de mensaje
 		},
 	"NETWORK":
 		{
-		"LOCAL_ADDRESS" : "localhost", 	# (192.168.0.15) Dirección de Ip del Comunicador
-		"PROTOCOL"      : "UDP",		# (UDP/TCP) Determinar el Protocolo a utilizar
+		"PROTOCOL"      : "TCP",		# (TCP/UDP) Determinar el Protocolo a utilizar
 		"TCP_PORT"      : 5000,			# (1024 - 65635) Selección del puerto TCP para recepción de mensajes TCP
 		"UDP_PORT"      : 5010			# (1024 - 65635) Selección del puerto UDP para recepción de mensajes UDP. No puede ser el mismo que el puerto TCP
 	 	},
@@ -40,14 +38,12 @@ Corresponde a un módulo de comunicación inteligente para comunicación punto a
 	"BLUETOOTH":
 		{
 		"PROTOCOL"     : 3,			# (0/1/2/3) Determina el protocolo: 0 es L2CAP; 1 es HCI; 2 es SCO; 3 es RFCOMM
-		"MAC"          : "00:24:7E:64:7B:4A",	# MAC del dispositivo Bluetooth, se puede averiguar con: 
-		"SERVICE"      : "BLUETOOTH-Client01",  # 
-		"UUID"         : "94f39d29-7d6d-437d-973b-fba39e49d4ee"  #
+		"SERVICE"      : "BLUETOOTH-Client01",  # Nombre del servicio Bluetooth con el que vamos a aparecer
+		"UUID"         : "94f39d29-7d6d-437d-973b-fba39e49d4ee"  # ID para el servicio (debe ser único)
 		},
 	# ------- CONFIGURACIÓN EMAIL -------
 	"EMAIL":
 		{
-		"NAME"        : "client01",			# Nombre del administrador de la cuenta de correo
 		"ACCOUNT"     : "client01.datalogger@gmail.com",  # Nombre de la cuenta de correo electrónico, debe ser una cuenta de google
 		"PASSWORD"    : "client01dl",		# Contraseña de la cuenta
 		"SUBJECT"	  : "Comunicador Inteligente", # Asunto para los mails que se envian
@@ -59,10 +55,8 @@ Corresponde a un módulo de comunicación inteligente para comunicación punto a
 	# ------- CONFIGURACIÓN SMS -------
 	"SMS":
 		{
-		"CLARO_MESSAGES_CENTER"  : 543200000001,  	# Centro de mensajes de claro, es para no rechazar esos mensajes
-		"CLARO_TELEPHONE_NUMBER" : 3516178949,  	# N° de telefono del chip utilizado   
-		"CLARO_WEB_PAGE"         : 876966,			# Página web de claro, es para no rechazar esos mensajes
-		"CLARO_CHARACTER_LIMIT"  : 160 				# Limite de caracteres para mensajes de claro
+		"TIME_OUT"  : 1.5,  	# Tiempo de respuesta ante una petición al módem
+		"BAUD_RATE" : 19200  	# Velocidad en baudios
 		},
 	# ------- NIVELES DE PRIORIDAD -------
 		# 4 --> Alto
@@ -100,10 +94,11 @@ El uso del comunicador se basa en el llamado de las siguientes funciones:
 	El mensaje se envia por el medio mas óptimo encontrado.
 
 	Envio de textoPlano/archivo: **communicator.send(textoPlano/filePath, contactoRegistrado, dispositivoPreferidoDeEnvio)**
-		Este último campo puede obviarse y el comunicador será el que decida por donde deberá transmitir, es decir communicator.send(mensajeComoCadena, contactoRegistrado)
+		Este último campo puede obviarse y el comunicador será el que decida por donde deberá transmitir, es decir, communicator.send(mensajeComoCadena, contactoRegistrado)
 
-	Envio de instancia mensaje: **communicator.send(instanciaDeMensaje)**
-		Deberia ser una instancia de la clase definida como Message (en messageClass.py).
+	Envio de instancia mensaje: **communicator.send(instanciaDeMensaje, device = dispositivoPreferidoDeEnvio)**
+		Deberia ser una instancia de la clase definida como Message (en messageClass.py). El último campo también puede obviarse y el comunicador será el que decida por donde
+		deberá transmitir, es decir, communicator.send(instanciaDeMensaje)
 ###communicator.recieve()
 	Se obtiene de un buffer el mensaje con mayor prioridad, sea este instancia o texto.
 ###communicator.close()
