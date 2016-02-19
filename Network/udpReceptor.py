@@ -21,7 +21,7 @@ JSON_CONFIG = json.load(open(JSON_FILE))
 # Tamano del buffer en bytes (cantidad de caracteres)
 BUFFER_SIZE = 1024
 DOWNLOADS = 'Downloads'
-TIMEOUT = 2
+TIMEOUT = 5
 
 class UdpReceptor(threading.Thread):
 

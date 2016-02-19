@@ -10,12 +10,16 @@
 import os
 import re
 import time
+import json
 import socket
 import inspect
 import threading
 import subprocess
 
 import logger
+
+JSON_FILE = 'config.json'
+JSON_CONFIG = json.load(open(JSON_FILE))
 
 smsThreadName = 'smsReceptor'
 emailThreadName = 'emailReceptor'
@@ -24,7 +28,7 @@ bluetoothThreadName = 'bluetoothReceptor'
 
 threadNameList = [networkThreadName, smsThreadName, emailThreadName, bluetoothThreadName]
 
-TIME_REFRESH = 5
+REFRESH_TIME = JSON_CONFIG["COMMUNICATOR"]["REFRESH_TIME"]
 
 class Checker(threading.Thread):
 
@@ -36,7 +40,7 @@ class Checker(threading.Thread):
 
 	isActive = False
 
-	def __init__(self, _networkInstance, _gprsInstance, _emailInstance, _smsInstance, _bluetoothInstance):
+	def __init__(self, _smsInstance, _gprsInstance, _emailInstance, _networkInstance, _bluetoothInstance):
 		threading.Thread.__init__(self, name = 'CheckerThread')
 		self.smsInstance = _smsInstance
 		self.gprsInstance = _gprsInstance
@@ -64,13 +68,14 @@ class Checker(threading.Thread):
 			self.availableEmail = self.verifyEmailConnection()
 			self.availableNetwork = self.verifyNetworkConnection()
 			self.availableBluetooth = self.verifyBluetoothConnection()
-			time.sleep(TIME_REFRESH)
+			time.sleep(REFRESH_TIME)
 		logger.write('WARNING', '[CHECKER] Funcion \'%s\' terminada.' % inspect.stack()[0][3])
 
 	def verifySmsConnection(self):
 		"""Se determina la disponibilidad de la comunicación por medio comunicación SMS.
 		@return: Se determina si la comunicación por este medio se puede realizar.
 		@rtype: bool"""
+		# Generamos la expresión regular
 		ttyUSBPattern = re.compile('ttyUSB[0-9]+')
 		lsDevProcess = subprocess.Popen(['ls', '/dev/'], stdout = subprocess.PIPE, stderr = subprocess.PIPE)
 		lsDevOutput, lsDevError = lsDevProcess.communicate()
@@ -85,7 +90,7 @@ class Checker(threading.Thread):
 					logger.write('INFO', '[SMS] Listo para usarse (' + ttyUSBx + ').')
 					smsThread.start()
 					return True
-				# Si se produce un error durante la configuración, cerramos el puerto
+				# Si se produce un error durante la configuración, devolvemos 'False'
 				else:
 					return False
 			# Si el módem ya está en modo activo (funcionando), devolvemos 'True'
@@ -103,6 +108,7 @@ class Checker(threading.Thread):
 		return False
 
 	def verifyGprsConnection(self):
+		# Generamos la expresión regular
 		pppPattern = re.compile('ppp[0-9]+')
 		for networkInterface in os.popen('ip link show').readlines():
 			# Con 'pppPattern.search(networkInterface)' buscamos alguna coincidencia
@@ -120,7 +126,7 @@ class Checker(threading.Thread):
 			# No se encontró coincidencia en la iteración actual, entonces seguimos buscando
 			else:
 				continue
-		# Si llegamos acá y entramos, es porque había una conexión activa y se perdió..
+		# Si entramos es porque había una conexión activa y se perdió
 		if self.gprsInstance.pppInterface is not None:
 			# Limpiamos todos los campos del objeto
 			self.gprsInstance.isActive = False
@@ -135,7 +141,8 @@ class Checker(threading.Thread):
 		"""Se determina la disponibilidad de la comunicación por medio de comunicación Lan.
 		@return: Se determina si la comunicación por este medio se puede realizar.
 		@rtype: bool"""
-		interfacesPattern = re.compile('wlan[0-9]+' '|' 'eth[0-9]+') # Se buscan interfaces de 0 a 100
+		# Generamos la expresión regular
+		interfacesPattern = re.compile('wlan[0-9]+' '|' 'eth[0-9]+')
 		activeInterfacesList = open('/tmp/activeInterfaces', 'a+').read()
 		for networkInterface in os.popen('ip link show').readlines():
 			# Con 'interfacesPattern.search(networkInterface)' buscamos alguna coincidencia

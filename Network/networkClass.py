@@ -136,18 +136,17 @@ class Network(object):
 			try:
 				# Espera por una conexion entrante y devuelve un nuevo socket que representa la conexion, como asi tambien la direccion del cliente
 				remoteSocket, addr = self.tcpReceptionSocket.accept()
-				ipAddress = addr[0]
 				remoteSocket.settimeout(TIMEOUT)
-				threadName = 'Thread-TCPReceptor'
+				ipAddress = addr[0]
 				# Aplicamos el filtro de recepción en caso de estar activado...
 				if JSON_CONFIG["COMMUNICATOR"]["RECEPTION_FILTER"]:
 					ipAddressFounded = False
 					for valueList in contactList.allowedIpAddress.values():
 						if ipAddress in valueList:
 							logger.write('DEBUG', '[NETWORK-TCP] Conexion desde \'%s\' aceptada.' % ipAddress)
-							receptorThread = tcpReceptor.TcpReceptor(threadName, remoteSocket, self.receptionBuffer)
-							ipAddressFounded = True
+							receptorThread = tcpReceptor.TcpReceptor('Thread-TCPReceptor', remoteSocket, self.receptionBuffer)
 							receptorThread.start()
+							ipAddressFounded = True
 							break
 					if not ipAddressFounded:
 						logger.write('WARNING', '[NETWORK-TCP] Mensaje de \'%s\' rechazado!' % ipAddress)
@@ -155,7 +154,7 @@ class Network(object):
 				# ... sino, recibimos todos los mensajes independientemente del origen
 				else:
 					logger.write('DEBUG', '[NETWORK-TCP] Conexion desde \'%s\' aceptada.' % ipAddress)
-					receptorThread = tcpReceptor.TcpReceptor(threadName, remoteSocket, self.receptionBuffer)
+					receptorThread = tcpReceptor.TcpReceptor('Thread-TCPReceptor', remoteSocket, self.receptionBuffer)
 					receptorThread.start()
 			# Para que no se quede esperando indefinidamente en el'accept'
 			except socket.timeout as errorMessage:
@@ -169,23 +168,51 @@ class Network(object):
 		while self.isActive:
 			try:
 				dataReceived, addr = self.udpReceptionSocket.recvfrom(BUFFER_SIZE)
-				if dataReceived.startswith('START_OF_FILE'):
-					# Recibimos el puerto al que se debe responder
-					remoteAddress = dataReceived.split()[1]
-					remotePort = int(dataReceived.split()[2])
-					threadName = 'Thread-File'
-					receptorThread = udpReceptor.UdpReceptor(threadName, self.receptionBuffer, self.localAddress, remoteAddress, remotePort)
-					receptorThread.start()
-				elif dataReceived.startswith('START_OF_INSTANCE'):
-					# Recibimos el puerto al que se debe responder
-					remoteAddress = dataReceived.split()[1]
-					remotePort = int(dataReceived.split()[2])
-					threadName = 'Thread-MessageInstance'
-					receptorThread = udpReceptor.UdpReceptor(threadName,self.receptionBuffer, self.localAddress, remoteAddress, remotePort)
-					receptorThread.start()
+				ipAddress = addr[0]
+				# Aplicamos el filtro de recepción en caso de estar activado...
+				if JSON_CONFIG["COMMUNICATOR"]["RECEPTION_FILTER"]:
+					ipAddressFounded = False
+					for valueList in contactList.allowedIpAddress.values():
+						if ipAddress in valueList:
+							logger.write('DEBUG', '[NETWORK-UDP] Conexion desde \'%s\' aceptada.' % ipAddress)
+							if dataReceived.startswith('START_OF_FILE'):
+								# Recibimos el puerto al que se debe responder
+								remoteAddress = dataReceived.split()[1]
+								remotePort = int(dataReceived.split()[2])
+								receptorThread = udpReceptor.UdpReceptor('Thread-File', self.receptionBuffer, self.localAddress, remoteAddress, remotePort)
+								receptorThread.start()
+							elif dataReceived.startswith('START_OF_INSTANCE'):
+								# Recibimos el puerto al que se debe responder
+								remoteAddress = dataReceived.split()[1]
+								remotePort = int(dataReceived.split()[2])
+								receptorThread = udpReceptor.UdpReceptor('Thread-MessageInstance', self.receptionBuffer, self.localAddress, remoteAddress, remotePort)
+								receptorThread.start()
+							else:
+								self.receptionBuffer.put((10, dataReceived))
+								logger.write('INFO', '[NETWORK-UDP] Ha llegado un nuevo mensaje!')
+							ipAddressFounded = True
+							break
+					if not ipAddressFounded:
+						logger.write('WARNING', '[NETWORK-UDP] Mensaje de \'%s\' rechazado!' % ipAddress)
+						remoteSocket.close()
+				# ... sino, recibimos todos los mensajes independientemente del origen
 				else:
-					self.receptionBuffer.put((10, dataReceived))
-					logger.write('DEBUG', '[NETWORK-UDP] Ha llegado un nuevo mensaje!')
+					logger.write('DEBUG', '[NETWORK-UDP] Conexion desde \'%s\' aceptada.' % ipAddress)
+					if dataReceived.startswith('START_OF_FILE'):
+						# Recibimos el puerto al que se debe responder
+						remoteAddress = dataReceived.split()[1]
+						remotePort = int(dataReceived.split()[2])
+						receptorThread = udpReceptor.UdpReceptor('Thread-File', self.receptionBuffer, self.localAddress, remoteAddress, remotePort)
+						receptorThread.start()
+					elif dataReceived.startswith('START_OF_INSTANCE'):
+						# Recibimos el puerto al que se debe responder
+						remoteAddress = dataReceived.split()[1]
+						remotePort = int(dataReceived.split()[2])
+						receptorThread = udpReceptor.UdpReceptor('Thread-MessageInstance', self.receptionBuffer, self.localAddress, remoteAddress, remotePort)
+						receptorThread.start()
+					else:
+						self.receptionBuffer.put((10, dataReceived))
+						logger.write('INFO', '[NETWORK-UDP] Ha llegado un nuevo mensaje!')
 			# Esta excepción es parte de la ejecución, no implica un error
 			except socket.timeout, errorMessage:
 				pass

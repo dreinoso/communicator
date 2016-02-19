@@ -9,7 +9,6 @@
 import time
 import json
 import Queue
-import pickle
 import inspect
 import threading
 
@@ -29,7 +28,7 @@ class Transmitter(threading.Thread):
 	isActive = False
 	transmissionBuffer = Queue.PriorityQueue()
 
-	def __init__(self, _transmissionBuffer, _networkInstance, _bluetoothInstance, _emailInstance, _smsInstance, _checkerInstance):
+	def __init__(self, _smsInstance, _emailInstance, _networkInstance, _bluetoothInstance, _transmissionBuffer):
 		"""Creación de la clase de transmisión de paquetes TCP.
 		@param _threadName: nombre del hilo
 		@type: string
@@ -43,8 +42,6 @@ class Transmitter(threading.Thread):
 		self.emailInstance = _emailInstance
 		self.networkInstance = _networkInstance
 		self.bluetoothInstance = _bluetoothInstance
-		# Instancias de checker y transmisor
-		self.checkerInstance = _checkerInstance
 		self.transmissionBuffer = _transmissionBuffer
 
 	def __del__(self):
@@ -59,31 +56,25 @@ class Transmitter(threading.Thread):
 			try:
 				# El elemento 0 es la prioridad, por eso sacamos el 1 porque es el mensaje
 				messageInstance = self.transmissionBuffer.get(True, 1.5)[1]
-				# Comprobamos si el contacto éxiste (para ver si se desecha el mensaje o no)
-				if self.contactExists(messageInstance.receiver):
-					# Calculamos el tiempo transcurrido desde que se insertó el mensaje en el buffer hasta ahora
-					elapsedTime = time.time() - messageInstance.timeStamp
-					# Actualizamos el tiempo de vida restante del mensaje que está almacenado en el buffer
-					messageInstance.timeOut = messageInstance.timeOut - elapsedTime
-					# Si todavía no vence el 'timeout', el mensaje es válido y debe ser enviado...
-					if messageInstance.timeOut > 0:
-						transmitterThread = threading.Thread(target = self.expectTransmission, args = (messageInstance,), name = 'ExpectThread')
-						transmitterThread.start()
-					# ... sino, el tiempo expiro y el mensaje debe ser descartado.
-					else:
-						logger.write('WARNING', '[COMMUNICATOR] Mensaje para \'%s\' descartado (el tiempo expiró).' % messageInstance.receiver)
-						# Eliminamos la instancia de mensaje, dado que ya no está en el buffer de transmisión
-						del messageInstance
+				# Calculamos el tiempo transcurrido desde que se insertó el mensaje en el buffer hasta ahora
+				elapsedTime = time.time() - messageInstance.timeStamp
+				# Actualizamos el tiempo de vida restante del mensaje que está almacenado en el buffer
+				messageInstance.timeOut = messageInstance.timeOut - elapsedTime
+				# Si todavía no vence el 'timeout', el mensaje es válido y debe ser enviado...
+				if messageInstance.timeOut > 0:
+					transmitterThread = threading.Thread(target = self.trySend, args = (messageInstance,), name = 'TransmitterThread')
+					transmitterThread.start()
+				# ... sino, el tiempo expiro y el mensaje debe ser descartado.
 				else:
-					logger.write('WARNING', '[COMMUNICATOR] Contacto \'%s\' no registrado! Mensaje descartado...' % messageInstance.receiver)
-					# Eliminamos la instancia de mensaje, dado que el destino es incorrecto
+					logger.write('WARNING', '[COMMUNICATOR] Mensaje para \'%s\' descartado (el tiempo expiró).' % messageInstance.receiver)
+					# Eliminamos la instancia de mensaje, dado que ya no está en el buffer de transmisión
 					del messageInstance
 			# Para que el bloque 'try' (en la funcion 'get') no se quede esperando indefinidamente
 			except Queue.Empty:
 				pass
 		logger.write('WARNING', '[TRANSMITTER] Funcion \'%s\' terminada.' % inspect.stack()[0][3])
 
-	def expectTransmission(self, messageInstance):
+	def trySend(self, messageInstance):
 		'''Esta función es lanzada por un nuevo hilo, entonces puede quedarse esperando
 		el resultado del envio, sin generar una parada en el programa controlador.
 		En caso de que se reciva True no implica que el mensaje se ha enviado, solo 
@@ -107,25 +98,11 @@ class Transmitter(threading.Thread):
 			setattr(messageInstance, 'timeOut', timeOut)
 			setattr(messageInstance, 'timeStamp', timeStamp)
 			# Intervalo de tiempo entre envios sucesivos del mismo paquete
-			time.sleep(JSON_CONFIG["COMMUNICATOR"]["RETRANSMISSION_TIME"])
+			time.sleep(JSON_CONFIG["COMMUNICATOR"]["RETRY_TIME"])
 			self.transmissionBuffer.put((100 - messageInstance.priority, messageInstance), True)
 		# Mensaje enviado por lo que se elimina
 		else:
 			del messageInstance
-
-	def contactExists(self, receiver):
-		# Creamos una lista de claves (clientes registrados en los diccionarios)
-		keysList = list() + contactList.allowedIpAddress.keys()
-		keysList += contactList.allowedMacAddress.keys()
-		keysList += contactList.allowedEmails.keys()
-		keysList += contactList.allowedNumbers.keys()
-		# Buscamos por lo menos una coincidencia, para luego intentar hacer el envío
-		for keys in keysList:
-			if receiver in keys:
-				# El cliente fue encontrado como entrada de un diccionario
-				return True
-		# Si no hubo coincidencia en algún diccionario, entonces el contacto no existe
-		return False
 
 	def setPriorities(self, receiver, device):
 		self.smsPriority = 0
@@ -133,28 +110,28 @@ class Transmitter(threading.Thread):
 		self.networkPriority = 0
 		self.bluetoothPriority = 0
 		# Para SMS
-		if contactList.allowedNumbers.has_key(receiver) and self.checkerInstance.availableSms:
+		if contactList.allowedNumbers.has_key(receiver) and self.smsInstance.isActive:
 			# En caso de preferencia se da máxima prioridad
 			if device == 'SMS':
 				self.smsPriority = 10
 			else:
 				self.smsPriority = JSON_CONFIG["PRIORITY_LEVELS"]["SMS"]
 		# Para EMAIL
-		if contactList.allowedEmails.has_key(receiver) and self.checkerInstance.availableEmail:
+		if contactList.allowedEmails.has_key(receiver) and self.emailInstance.isActive:
 			# En caso de preferencia se da máxima prioridad
 			if device == 'EMAIL':
 				self.emailPriority = 10
 			else:
 				self.emailPriority = JSON_CONFIG["PRIORITY_LEVELS"]["EMAIL"]
 		# Para NETWORK
-		if contactList.allowedIpAddress.has_key(receiver) and self.checkerInstance.availableNetwork:
+		if contactList.allowedIpAddress.has_key(receiver) and self.networkInstance.isActive:
 			# En caso de preferencia se da máxima prioridad
 			if device == 'NETWORK':
 				self.networkPriority = 10
 			else:
 				self.networkPriority = JSON_CONFIG["PRIORITY_LEVELS"]["NETWORK"]
 		# Para BLUETOOTH
-		if contactList.allowedMacAddress.has_key(receiver) and self.checkerInstance.availableBluetooth:
+		if contactList.allowedMacAddress.has_key(receiver) and self.bluetoothInstance.isActive:
 			# En caso de preferencia se da máxima prioridad
 			if device == 'BLUETOOTH':
 				self.bluetoothPriority = 10
@@ -205,5 +182,5 @@ class Transmitter(threading.Thread):
 				return True
 		# No fue posible transmitir por ningún medio
 		else:
-			logger.write('WARNING', '[COMMUNICATOR] No hay módulos para el envío de mensajes a \'%s\'.' % messageInstance.receiver)
+			logger.write('WARNING', '[COMMUNICATOR] No hay módulos para el envío a \'%s\'...' % messageInstance.receiver)
 			return False

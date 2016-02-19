@@ -77,10 +77,7 @@ class Bluetooth(object):
 		logger.write('DEBUG', '[BLUETOOTH] Buscando el servicio \'%s\'.' % destinationServiceName)
 		serviceMatches = bluetooth.find_service(uuid = destinationUUID, address = destinationMAC)
 		# Buscamos alguna coincidencia de servicios Bluetooth especificos
-		if len(serviceMatches) == 0:
-			logger.write('DEBUG', '[BLUETOOTH] No se pudo encontrar el servicio \'%s\'.' % destinationServiceName)
-			return False
-		else:
+		if len(serviceMatches) > 0:
 			try:
 				firstMatch = serviceMatches[0]
 				name = firstMatch['name']
@@ -97,6 +94,9 @@ class Bluetooth(object):
 				# (16, 'Device or resource busy')
 				logger.write('WARNING','[BLUETOOTH] %s.' % bluetoothError)
 				return False
+		else:
+			logger.write('DEBUG', '[BLUETOOTH] No se pudo encontrar el servicio \'%s\'.' % destinationServiceName)
+			return False
 
 	def receive(self):
 		rfcommThread = threading.Thread(target = self.receiveRFCOMM, name = 'rfcommReceptor')
@@ -109,16 +109,15 @@ class Bluetooth(object):
 			try:
 				# Espera por una conexión entrante y devuelve un nuevo socket que representa la conexión, como así también la dirección del cliente
 				remoteSocket, addr = self.localSocketRFCOMM.accept()
-				macAddress = addr[0]
 				remoteSocket.settimeout(TIMEOUT)
-				threadName = 'Thread-%s' % macAddress
+				macAddress = addr[0]
 				# Aplicamos el filtro de recepción en caso de estar activado...
 				if JSON_CONFIG["COMMUNICATOR"]["RECEPTION_FILTER"]:
 					macAddressFounded = False
 					for valueList in contactList.allowedMacAddress.values():
 						if macAddress in valueList:
+							receptorThread = bluetoothReceptor.BluetoothReceptor('Thread-%s' % macAddress, remoteSocket, self.receptionBuffer)
 							logger.write('DEBUG', '[BLUETOOTH] Conexion desde \'%s\' aceptada.' % macAddress)
-							receptorThread = bluetoothReceptor.BluetoothReceptor(threadName, remoteSocket, self.receptionBuffer)
 							macAddressFounded = True
 							receptorThread.start()
 							break
@@ -128,7 +127,7 @@ class Bluetooth(object):
 				# ... sino, recibimos todos los mensajes independientemente del origen
 				else:
 					logger.write('DEBUG', '[BLUETOOTH] Conexion desde \'%s\' aceptada.' % macAddress)
-					receptorThread = bluetoothReceptor.BluetoothReceptor(threadName, remoteSocket, self.receptionBuffer)
+					receptorThread = bluetoothReceptor.BluetoothReceptor('Thread-%s' % macAddress, remoteSocket, self.receptionBuffer)
 					receptorThread.start()
 			# Para que el bloque 'try' (en la funcion 'accept') no se quede esperando indefinidamente
 			except bluetooth.BluetoothError, msg:

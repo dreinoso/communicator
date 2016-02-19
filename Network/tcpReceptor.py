@@ -53,7 +53,7 @@ class TcpReceptor(threading.Thread):
 			# Se trata de un texto plano, sólo se lo almacena 
 			else:
 				self.receptionBuffer.put((10, dataReceived))
-				logger.write('INFO', '[NETWORK-TCP] Mensaje recibido correctamente!')
+				logger.write('INFO', '[NETWORK-TCP] Ha llegado un nuevo mensaje!')
 		except socket.error as errorMessage:
 			logger.write('WARNING', '[NETWORK-TCP] Error al intentar recibir un mensaje: \'%s\'.'% errorMessage )
 		finally:

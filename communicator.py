@@ -7,15 +7,11 @@
 	@organization: UNC - Fcefyn
 	@date: Lunes 16 de Mayo de 2015 """
 
-import re
 import os
 import sys
 import time
 import json
 import Queue
-import pickle
-import threading
-import subprocess
 
 currentDirectory = os.getcwd() 
 if not currentDirectory.endswith('Communicator'):
@@ -32,6 +28,7 @@ import networkClass
 import bluetoothClass
 
 import logger
+import contactList
 import checkerClass
 import messageClass
 import transmitterClass
@@ -43,14 +40,14 @@ os.chdir(currentDirectory)
 
 logger.set() # Solo se setea una vez, todos los objetos usan esta misma configuración
 
-receptionBuffer = Queue.PriorityQueue
-transmissionBuffer = Queue.PriorityQueue
-
 smsInstance = modemClass.Sms
 gprsInstance = modemClass.Gprs
 emailInstance = emailClass.Email
 networkInstance = networkClass.Network
 bluetoothInstance = bluetoothClass.Bluetooth
+
+receptionBuffer = Queue.PriorityQueue
+transmissionBuffer = Queue.PriorityQueue
 
 checkerInstance = checkerClass.Checker             # Instancia que va a verificar las conexiones
 transmitterInstance = transmitterClass.Transmitter # Instancia para la transmisión de paquetes
@@ -59,8 +56,8 @@ def open():
 	"""Se realiza la apertura, inicialización de los componentes que se tengan disponibles
 	"""
 	global receptionBuffer, transmissionBuffer 
-	global networkInstance, gprsInstance, emailInstance, smsInstance, bluetoothInstance
 	global checkerInstance, transmitterInstance
+	global smsInstance, gprsInstance, emailInstance, networkInstance, bluetoothInstance
 
 	# Creamos los buffers de recepción y transmisión, respectivamente
 	receptionBuffer = Queue.PriorityQueue(JSON_CONFIG["COMMUNICATOR"]["RECEPTION_BUFFER"])
@@ -74,10 +71,10 @@ def open():
 	bluetoothInstance = bluetoothClass.Bluetooth(receptionBuffer)
 
 	# Creamos la instancia del checker y el hilo que va a verificar las conexiones
-	checkerInstance = checkerClass.Checker(networkInstance, gprsInstance, emailInstance, smsInstance, bluetoothInstance)
+	checkerInstance = checkerClass.Checker(smsInstance, gprsInstance, emailInstance, networkInstance, bluetoothInstance)
 
 	# Creamos la instancia para la transmisión de paquetes
-	transmitterInstance = transmitterClass.Transmitter(transmissionBuffer, networkInstance, bluetoothInstance, emailInstance, smsInstance, checkerInstance)
+	transmitterInstance = transmitterClass.Transmitter(smsInstance, emailInstance, networkInstance, bluetoothInstance, transmissionBuffer)
 
 	# Ponemos en marcha la comprobación de medios de comunicación y la transmisión de mensajes
 	checkerInstance.start()
@@ -87,8 +84,9 @@ def open():
 
 def close():
 	"""Se cierran los componentes del sistema, unicamente los abiertos previamente"""
-	global receptionBuffer, transmissionBuffer, checkerInstance, transmitterInstance
-	global smsInstance, networkInstance, gprsInstance, bluetoothInstance, emailInstance
+	global receptionBuffer, transmissionBuffer
+	global checkerInstance, transmitterInstance
+	global smsInstance, gprsInstance, emailInstance, networkInstance, bluetoothInstance
 
 	# Frenamos la transmisión de mensajes
 	transmitterInstance.isActive = False
@@ -105,10 +103,13 @@ def close():
 	del networkInstance
 	del bluetoothInstance
 
-	# Destruimos las instancias de manejo del comunicador
-	del transmitterInstance
+	# Destruimos los buffer de recepción y transmisión
 	del receptionBuffer
+	del transmissionBuffer
+
+	# Destruimos las instancias de manejo del comunicador
 	del checkerInstance
+	del transmitterInstance
 
 	return True
 
@@ -145,7 +146,21 @@ def send(message, receiver = None, device = None):
 			if not os.path.isfile(message.fileName):
 				logger.write('ERROR', '[COMMUNICATOR] La ruta hacia el archivo a enviar es incorrecta!')
 				return False
-		# Comprobamos si el campo 'isInstance' no existe, para crearlo
+		################################## VERIFICACIÓN DE CONTACTO ##################################
+		# Antes de poner el mensaje en el buffer, comprobamos que el cliente esté en algún diccionario
+		clientList = list() + contactList.allowedIpAddress.keys()
+		clientList += contactList.allowedMacAddress.keys()
+		clientList += contactList.allowedEmails.keys()
+		clientList += contactList.allowedNumbers.keys()
+		# Quitamos los clientes repetidos
+		clientList = list(set(clientList))
+		# Buscamos por lo menos una coincidencia, para luego intentar hacer el envío
+		if message.receiver not in clientList:
+			# El cliente fue encontrado como entrada de un diccionario
+			logger.write('WARNING', '[COMMUNICATOR] \'%s\' no registrado! Mensaje descartado...' % message.receiver)
+			return False
+		################################ FIN VERIFICACIÓN DE CONTACTO ################################
+		# Verificamos si el campo 'isInstance' no existe, para crearlo
 		if not hasattr(message, 'isInstance'):
 			setattr(message, 'isInstance', True)
 		# Establecemos el tiempo que permanecerá el mensaje en el buffer antes de ser desechado en caso de no ser enviado
@@ -156,7 +171,7 @@ def send(message, receiver = None, device = None):
 		setattr(message, 'timeStamp', time.time())
 		# Almacenamos el mensaje en el buffer de transmisión, con la prioridad correspondiente
 		transmissionBuffer.put((100 - message.priority, message))
-		logger.write('INFO', '[COMMUNICATOR] Mensaje almacenado en transmisor esperando ser enviado...')
+		logger.write('INFO', '[COMMUNICATOR] Mensaje almacenado en el buffer esperando ser enviado...')
 		return True
 	else:
 		logger.write('WARNING', '[COMMUNICATOR] El buffer de transmisión esta lleno, imposible enviar!')
@@ -167,10 +182,10 @@ def receive():
 	@return: Mensaje recibido
 	@rtype: str"""
 	if receptionBuffer.qsize() > 0:
-		message = receptionBuffer.get_nowait()
-		return message[1] # Es una tupla y el primer elemento corresponde a la prioridad
+		# El elemento 0 es la prioridad, por eso sacamos el 1 porque es el mensaje
+		return receptionBuffer.get_nowait()[1]
 	else:
-		logger.write('INFO', '[COMMUNICATOR] El buffer de mensajes esta vacio.')
+		logger.write('INFO', '[COMMUNICATOR] El buffer de mensajes esta vacío!')
 		return None
 
 def lenght():
@@ -183,6 +198,7 @@ def lenght():
 		return receptionBuffer.qsize()
 
 def connectGprs():
+	# Si no hay una conexión GPRS activa, intentamos conectarnos a la red
 	if not gprsInstance.isActive:
 		return gprsInstance.connect()
 	else:

@@ -2,8 +2,8 @@
 
 class Message(object):
 
-	sender = None	# Emisor del mensajes, la fuente
-	receiver= None	# Receptor del mensajes, a quien esta destinado
+	sender = None	# Emisor del mensaje, la fuente
+	receiver= None	# Receptor del mensaje, a quien esta destinado
 	priority = None	# Prioridad del mensaje para envio (valores posibles 0-99)
 
 	def __init__(self, _sender, _receiver):
@@ -27,8 +27,7 @@ class SimpleMessage(Message):
 
 class FileMessage(Message):
 
-	fileName = None	# Nombre del archivo a enviar o la ruta con el nombre si estuviera 
-					# en otra carpeta /ruta/archivo.txt
+	fileName = None	# Path relativo o absoluto hacia el archivo a enviar
 
 	def __init__(self, _sender, _receiver, _fileName):
 		"""Se establecen los parametros esenciales que debe tener una Instancia de Archivo
