@@ -29,8 +29,8 @@ import bluetoothClass
 
 import logger
 import contactList
-import checkerClass
 import messageClass
+import controllerClass
 import transmitterClass
 
 JSON_FILE = 'config.json'
@@ -49,14 +49,14 @@ bluetoothInstance = bluetoothClass.Bluetooth
 receptionBuffer = Queue.PriorityQueue
 transmissionBuffer = Queue.PriorityQueue
 
-checkerInstance = checkerClass.Checker             # Instancia que va a verificar las conexiones
+controllerInstance = controllerClass.Controller    # Instancia que pone enfuncionamiento los periféricos
 transmitterInstance = transmitterClass.Transmitter # Instancia para la transmisión de paquetes
 
 def open():
 	"""Se realiza la apertura, inicialización de los componentes que se tengan disponibles
 	"""
 	global receptionBuffer, transmissionBuffer 
-	global checkerInstance, transmitterInstance
+	global controllerInstance, transmitterInstance
 	global smsInstance, gprsInstance, emailInstance, networkInstance, bluetoothInstance
 
 	# Creamos los buffers de recepción y transmisión, respectivamente
@@ -70,14 +70,14 @@ def open():
 	networkInstance = networkClass.Network(receptionBuffer)
 	bluetoothInstance = bluetoothClass.Bluetooth(receptionBuffer)
 
-	# Creamos la instancia del checker y el hilo que va a verificar las conexiones
-	checkerInstance = checkerClass.Checker(smsInstance, gprsInstance, emailInstance, networkInstance, bluetoothInstance)
+	# Creamos la instancia para levantar las conexiones
+	controllerInstance = controllerClass.Controller(smsInstance, gprsInstance, emailInstance, networkInstance, bluetoothInstance)
 
 	# Creamos la instancia para la transmisión de paquetes
 	transmitterInstance = transmitterClass.Transmitter(smsInstance, emailInstance, networkInstance, bluetoothInstance, transmissionBuffer)
 
-	# Ponemos en marcha la comprobación de medios de comunicación y la transmisión de mensajes
-	checkerInstance.start()
+	# Ponemos en marcha el controlador de medios de comunicación y la transmisión de mensajes
+	controllerInstance.start()
 	transmitterInstance.start()
 
 	return True
@@ -85,7 +85,7 @@ def open():
 def close():
 	"""Se cierran los componentes del sistema, unicamente los abiertos previamente"""
 	global receptionBuffer, transmissionBuffer
-	global checkerInstance, transmitterInstance
+	global controllerInstance, transmitterInstance
 	global smsInstance, gprsInstance, emailInstance, networkInstance, bluetoothInstance
 
 	# Frenamos la transmisión de mensajes
@@ -93,8 +93,8 @@ def close():
 	transmitterInstance.join()
 
 	# Frenamos la verificación de las conexiones
-	checkerInstance.isActive = False
-	checkerInstance.join()
+	controllerInstance.isActive = False
+	controllerInstance.join()
 
 	# Destruimos todas las instancias de comunicación
 	del smsInstance
@@ -108,7 +108,7 @@ def close():
 	del transmissionBuffer
 
 	# Destruimos las instancias de manejo del comunicador
-	del checkerInstance
+	del controllerInstance
 	del transmitterInstance
 
 	return True
