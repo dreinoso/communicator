@@ -25,15 +25,17 @@ SMS, GPRS, EMAIL, TCP/IP y BLUETOOTH.
 	  se determinan con 0 deshabilitar, 1 para habilitar.
 	
 	{
-	# --------- CONFIGURACIÓN NETWORK ---------
+	# --------- CONFIGURACIÓN COMMUNICATOR ---------
 	"COMMUNICATOR":
 	{
 		"NAME"                : "Datalogger_1", # Nombre del Comunicador para identificarse
 		"RECEPTION_FILTER"    : 0,              # (0/1) Habilitado: Filtra los mensajes que no sean de contactos registrados
 		"TRANSMISSION_BUFFER" : 10,             # Máxima cantidad de elementos para el buffer de transmissión
 		"RECEPTION_BUFFER"    : 10,             # Máxima cantidad de elementos para el buffer de recepción
-		"RETRANSMISSION_TIME" : 5               # Tiempo (en segundos) para descarte de mensaje
+		"RETRY_TIME"          : 5,              # Tiempo (en segundos) entre reintentos
+		"REFRESH_TIME"        : 5               # Tiempo (en segundos) para verificar conexiones
 		},
+	# --------- CONFIGURACIÓN NETWORK ---------
 	"NETWORK":
 		{
 		"PROTOCOL" : "TCP", # (TCP/UDP) Determinar el Protocolo a utilizar
