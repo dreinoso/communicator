@@ -16,28 +16,11 @@ class Message(object):
 		self.sender = _sender
 		self.receiver = _receiver
 
-class SimpleMessage(Message):
+class InfoMessage(Message):
 
-	plainText = None
+	infoText = None
 
-	def __init__(self, _sender, _receiver, _plainText):
+	def __init__(self, _sender, _receiver, _infoText):
 		Message.__init__(self, _sender, _receiver)
-		self.plainText = _plainText
-		self.priority = 10
-
-class FileMessage(Message):
-
-	fileName = None	# Path relativo o absoluto hacia el archivo a enviar
-
-	def __init__(self, _sender, _receiver, _fileName):
-		"""Se establecen los parametros esenciales que debe tener una Instancia de Archivo
-		del coomunicador
-		@param _receiver: Receptor del mensajes, a quien esta destinado
-		@type: string
-		@param _sender: Emisor del mensajes, la fuente
-		@type: string
-		@param _fileName:  Nombre del archivo a enviar o la ruta del archivo
-		@type: string"""
-		Message.__init__(self, _sender, _receiver)
-		self.fileName = _fileName
+		self.infoText = _infoText
 		self.priority = 10

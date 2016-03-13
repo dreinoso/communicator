@@ -197,7 +197,7 @@ class Controller(threading.Thread):
 		a través Email.
 		@return: Se determina si la comunicación por este medio se puede realizar.
 		@rtype: bool"""
-		TEST_REMOTE_SERVER = 'www.google.com'
+		TEST_REMOTE_SERVER = 'www.gmail.com'
 		try:
 			remoteHost = socket.gethostbyname(TEST_REMOTE_SERVER)
 			testSocket = socket.create_connection((remoteHost, 80), 2) # Se determina si es alcanzable

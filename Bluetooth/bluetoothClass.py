@@ -25,11 +25,11 @@ class Bluetooth(object):
 
 	localMACAddress = None
 	localPortRFCOMM = None
-	localSocketRFCOMM = bluetooth.BluetoothSocket()
+	localSocketRFCOMM = None
 
 	bluetoothTransmitter = bluetoothTransmitter.BluetoothTransmitter()
-	receptionBuffer = Queue.PriorityQueue()
 	successfulConnection = None
+	receptionBuffer = None
 	isActive = False
 
 	def __init__(self, _receptionBuffer):
@@ -99,36 +99,36 @@ class Bluetooth(object):
 			return False
 
 	def receive(self):
+		self.isActive = True
 		rfcommThread = threading.Thread(target = self.receiveRFCOMM, name = 'rfcommReceptor')
 		rfcommThread.start()
 		rfcommThread.join()
 
 	def receiveRFCOMM(self):
-		self.isActive = True
 		while self.isActive:
 			try:
 				# Espera por una conexión entrante y devuelve un nuevo socket que representa la conexión, como así también la dirección del cliente
 				remoteSocket, addr = self.localSocketRFCOMM.accept()
 				remoteSocket.settimeout(TIMEOUT)
+				enabledFilter = False
 				macAddress = addr[0]
-				# Aplicamos el filtro de recepción en caso de estar activado...
+				# Aplicamos el filtro de recepción en caso de estar activado
 				if JSON_CONFIG["COMMUNICATOR"]["RECEPTION_FILTER"]:
-					macAddressFounded = False
+					enabledFilter = True
 					for valueList in contactList.allowedMacAddress.values():
-						if macAddress in valueList:
-							receptorThread = bluetoothReceptor.BluetoothReceptor('Thread-%s' % macAddress, remoteSocket, self.receptionBuffer)
-							logger.write('DEBUG', '[BLUETOOTH] Conexion desde \'%s\' aceptada.' % macAddress)
-							macAddressFounded = True
-							receptorThread.start()
+						if ipAddress in valueList:
+							# Deshabilitamos el filtro ya que el cliente estaba registrado
+							enabledFilter = False
 							break
-					if not macAddressFounded:
-						logger.write('WARNING', '[BLUETOOTH] Mensaje de \'%s\' rechazado!' % macAddress)
-						remoteSocket.close()
-				# ... sino, recibimos todos los mensajes independientemente del origen
-				else:
-					logger.write('DEBUG', '[BLUETOOTH] Conexion desde \'%s\' aceptada.' % macAddress)
-					receptorThread = bluetoothReceptor.BluetoothReceptor('Thread-%s' % macAddress, remoteSocket, self.receptionBuffer)
+				# El filtro está activado y el cliente fue encontrado, o el filtro no está habilitado
+				if not enabledFilter:
+					logger.write('DEBUG', '[BLUETOOTH] Conexión desde \'%s\' aceptada.' % macAddress)
+					receptorThread = bluetoothReceptor.BluetoothReceptor('Thread-Receptor', remoteSocket, self.receptionBuffer)
 					receptorThread.start()
+				# El cliente no fue encontrado, por lo que debemos rechazar su mensaje
+				else:
+					logger.write('WARNING', '[BLUETOOTH] Mensaje de \'%s\' rechazado!' % macAddress)
+					remoteSocket.close()
 			# Para que el bloque 'try' (en la funcion 'accept') no se quede esperando indefinidamente
 			except bluetooth.BluetoothError, msg:
 				pass

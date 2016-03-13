@@ -26,7 +26,7 @@ class Transmitter(threading.Thread):
 	bluetoothPriority = 0
 
 	isActive = False
-	transmissionBuffer = Queue.PriorityQueue()
+	transmissionBuffer = None
 
 	def __init__(self, _smsInstance, _emailInstance, _networkInstance, _bluetoothInstance, _transmissionBuffer):
 		"""Creación de la clase de transmisión de paquetes TCP.

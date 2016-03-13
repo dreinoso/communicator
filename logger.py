@@ -17,12 +17,6 @@ CONSOLE_FORMAT = '[%(levelname)s] %(message)s'
 FILE_FORMAT = '[%(asctime)s][%(levelname)s] %(message)s'
 FILE_LOG = 'HistoricalEvents.log'
 
-LOGGING_LEVELS = {'DEBUG' : logging.DEBUG,
-                  'INFO' : logging.INFO,
-                  'WARNING' : logging.WARNING,
-                  'ERROR' : logging.ERROR,
-                  'CRITICAL' : logging.CRITICAL}
-
 logger = logging.getLogger(__name__) # Creamos el objeto Logger
 
 def set():
@@ -32,9 +26,9 @@ def set():
 	@type name: str
 	"""
 	global logger
-	logger.setLevel(LOGGING_LEVELS['DEBUG'])
+	logger.setLevel(logging.DEBUG)
 
-	fileFormatter = logging.Formatter(FILE_FORMAT)          # Creamos el 'formatter' para la consola
+	fileFormatter = logging.Formatter(FILE_FORMAT)          # Creamos el 'formatter' para el archivo LOG
 	fileHandler = logging.FileHandler(FILE_LOG)             # Creamos el 'handler' para el archivo LOG
 	fileHandler.setLevel(JSON_CONFIG["FILE_LOGGING_LEVEL"]) # Establecemos el nivel para almacenar los mensajes
 	fileHandler.setFormatter(fileFormatter)                 # Establecemos el formato de los mensajes

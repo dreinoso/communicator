@@ -14,13 +14,12 @@ import messageClass
 JSON_FILE = 'config.json'
 JSON_CONFIG = json.load(open(JSON_FILE))
 
-# Tamano del buffer en bytes (cantidad de caracteres)
-BUFFER_SIZE = 1024
+BUFFER_SIZE = 4096 # Tamano del buffer en bytes (cantidad de caracteres)
 DOWNLOADS = 'Downloads'
 
 class BluetoothReceptor(threading.Thread):
 
-	receptionBuffer = Queue.Queue()
+	receptionBuffer = None
 
 	def __init__(self, _threadName, _remoteSocket, _receptionBuffer):
 		threading.Thread.__init__(self, name = _threadName)
@@ -29,18 +28,27 @@ class BluetoothReceptor(threading.Thread):
 
 	def run(self):
 		try:
-			dataReceived = self.remoteSocket.recv(BUFFER_SIZE)
-			if dataReceived == 'START_OF_FILE':
+			receivedData = self.remoteSocket.recv(BUFFER_SIZE)
+			# Debemos iniciar una descarga de archivo
+			if receivedData == 'START_OF_FILE':
 				self.receiveFile()
-			elif dataReceived == 'START_OF_INSTANCE':
-				self.receiveMessageInstance()
+			# Recibimos una instancia de objeto
+			elif receivedData.startswith('INSTANCE'):
+				# Quitamos la 'etiqueta' que hace refencia a una instancia de mensaje
+				serializedMessage = receivedData[len('INSTANCE'):]
+				# 'Deserializamos' la instancia de mensaje para obtener el objeto en sí
+				messageInstance = pickle.loads(serializedMessage)
+				self.receptionBuffer.put((100 - messageInstance.priority, messageInstance))
+				logger.write('INFO', '[BLUETOOTH] Ha llegado una nueva instancia de mensaje!')
 			# Se trata de un texto plano, sólo se lo almacena 
 			else:
-				self.receptionBuffer.put((10, dataReceived))
+				self.receptionBuffer.put((10, receivedData))
 				logger.write('INFO', '[BLUETOOTH] Ha llegado un nuevo mensaje!')
 		except bluetooth.BluetoothError as errorMessage:
 			logger.write('WARNING', '[BLUETOOTH] Error al intentar recibir un mensaje: \'%s\'.'% errorMessage )
 		finally:
+			# Cierra la conexion del socket cliente
+			self.remoteSocket.close()
 			logger.write('DEBUG', '[BLUETOOTH] \'%s\' terminado y cliente desconectado.' % self.getName())
 
 	def receiveFile(self):
@@ -67,13 +75,14 @@ class BluetoothReceptor(threading.Thread):
 					inputData = self.remoteSocket.recv(BUFFER_SIZE)
 					if inputData != 'EOF':
 						fileObject.write(inputData)
-						time.sleep(0.1) # IMPORTANTE, no borrar.
+						time.sleep(0.15) # IMPORTANTE, no borrar.
 						self.remoteSocket.send('ACK')
 					else: 
 						fileObject.close()
-						logger.write('INFO', '[BLUETOOTH] Archivo \'%s\' descargado correctamente!' % fileName)
 						break
 				self.remoteSocket.send('ACK') # IMPORTANTE, no borrar.
+				self.receptionBuffer.put((10, fileName))
+				logger.write('INFO', '[BLUETOOTH] Archivo \'%s\' descargado correctamente!' % fileName)
 				return True
 			else:
 				self.remoteSocket.send('FILE_EXISTS') # Comunicamos al transmisor que el archivo ya existe
@@ -82,38 +91,3 @@ class BluetoothReceptor(threading.Thread):
 		except bluetooth.BluetoothError as errorMessage:
 			logger.write('WARNING', '[BLUETOOTH] Error al intentar descargar el archivo \'%s\': %s' % (fileName, str(errorMessage)))
 			return False
-		finally:
-			# Cierra la conexion del socket cliente
-			self.remoteSocket.close()
-
-	def receiveMessageInstance(self):
-		'''Por medio de una sincronización de mensajes se recibe la cadena de a partes
-		que corresponde a la instancia serializada, y se arma a medida que lleguen los 
-		caracteres, cuando se tiene la cadena completa se la deserializa para obtener 
-		la instancia y almacenarla en el buffer.'''
-		try:
-			serializedMessage = ''
-			self.remoteSocket.send('ACK')
-			while True:
-				inputData = self.remoteSocket.recv(BUFFER_SIZE)
-				if inputData != 'END_OF_INSTANCE':
-					serializedMessage = serializedMessage + inputData
-					self.remoteSocket.send('ACK')
-				else:
-					# Deserialización de la instancia
-					message = pickle.loads(serializedMessage)
-					break
-			###########################################################
-			if isinstance(message, messageClass.FileMessage):
-				self.remoteSocket.recv(BUFFER_SIZE) # START_OF_FILE
-				if self.receiveFile():
-					self.receptionBuffer.put((100 - message.priority, message))
-			else:
-				self.receptionBuffer.put((100 - message.priority, message))
-				logger.write('INFO', '[BLUETOOTH] Instancia de mensaje recibido correctamente!')
-			###########################################################
-		except bluetooth.BluetoothError as errorMessage:
-			logger.write('WARNING', '[BLUETOOTH] Error al intentar recibir una instancia de mensaje ' + str(errorMessage))
-		finally:
-			# Cierra la conexion del socket cliente
-			self.remoteSocket.close()

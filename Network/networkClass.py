@@ -8,21 +8,23 @@
 
 import os
 import json
-import time
-import Queue
+import pickle
 import socket
 import inspect
 import threading
 
 import logger
 import contactList
+import messageClass
+
 import tcpReceptor
-import udpReceptor
 import tcpTransmitter
 import udpTransmitter
 
+''' For best match with hardware and network realities, the value of bufsize should be
+	a relatively small power of 2, for example, 4096'''
 TIMEOUT = 1.5
-BUFFER_SIZE = 1024
+BUFFER_SIZE = 4096 # Tamano del buffer en bytes (cantidad de caracteres)
 CONNECTION_LIMIT = 5
 
 JSON_FILE = 'config.json'
@@ -33,12 +35,11 @@ class Network(object):
 	localAddress = None
 	localInterface = None
 
-	networkProtocol = JSON_CONFIG["NETWORK"]["PROTOCOL"]
-	tcpReceptionPort = JSON_CONFIG["NETWORK"]["TCP_PORT"]
-	udpReceptionPort = JSON_CONFIG["NETWORK"]["UDP_PORT"]
+	tcpPort = JSON_CONFIG["NETWORK"]["TCP_PORT"]
+	udpPort = JSON_CONFIG["NETWORK"]["UDP_PORT"]
 
-	receptionBuffer = Queue.PriorityQueue()
 	successfulConnection = None
+	receptionBuffer = None
 	isActive = False
 
 	def __init__(self, _receptionBuffer):
@@ -75,16 +76,16 @@ class Network(object):
 			# Creamos los sockets para una conexión TCP
 			self.tcpReceptionSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 			self.tcpReceptionSocket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-			self.tcpReceptionSocket.bind((self.localAddress, self.tcpReceptionPort))
+			self.tcpReceptionSocket.bind((self.localAddress, self.tcpPort))
 			self.tcpReceptionSocket.listen(CONNECTION_LIMIT)
 			self.tcpReceptionSocket.settimeout(TIMEOUT)
 			# Creamos los sockets para una conexión UDP
 			self.udpReceptionSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-			self.udpReceptionSocket.bind((self.localAddress, self.udpReceptionPort))
+			self.udpReceptionSocket.bind((self.localAddress, self.udpPort))
 			self.udpReceptionSocket.settimeout(TIMEOUT)
 			######################################################################
 			self.tcpTransmitter = tcpTransmitter.TcpTransmitter()
-			self.udpTransmitter = udpTransmitter.UdpTransmitter(self.localAddress)
+			self.udpTransmitter = udpTransmitter.UdpTransmitter()
 			######################################################################
 			self.successfulConnection = True
 			return True
@@ -104,17 +105,17 @@ class Network(object):
 		@param message: cadena de texto a enviar
 		@type message: str """
 		try:
-			if self.networkProtocol == 'TCP':
+			if isinstance(message, messageClass.Message) and hasattr(message, 'fileName'):
 				# Crea un nuevo socket que usa el protocolo de transporte especificado
 				remoteSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 				# Conecta el socket con el dispositivo remoto sobre el puerto especificado
 				remoteSocket.connect((destinationIp, destinationTcpPort))
 				logger.write('DEBUG', '[NETWORK-TCP] Conectado con la dirección \'%s\'.' % destinationIp)
-				return self.tcpTransmitter.send(message, remoteSocket)
+				return self.tcpTransmitter.sendFile(message.fileName, remoteSocket)
 			else:
 				return self.udpTransmitter.send(message, destinationIp, destinationUdpPort)
 		except socket.error as errorMessage:
-			logger.write('WARNING','[NETWORK] %s.' % errorMessage)
+			logger.write('WARNING', '[NETWORK] %s.' % errorMessage)
 			return False
 	
 	def receive(self):
@@ -137,26 +138,26 @@ class Network(object):
 				# Espera por una conexion entrante y devuelve un nuevo socket que representa la conexion, como asi tambien la direccion del cliente
 				remoteSocket, addr = self.tcpReceptionSocket.accept()
 				remoteSocket.settimeout(TIMEOUT)
+				enabledFilter = False
 				ipAddress = addr[0]
-				# Aplicamos el filtro de recepción en caso de estar activado...
+				# Aplicamos el filtro de recepción en caso de estar activado
 				if JSON_CONFIG["COMMUNICATOR"]["RECEPTION_FILTER"]:
-					ipAddressFounded = False
+					enabledFilter = True
 					for valueList in contactList.allowedIpAddress.values():
 						if ipAddress in valueList:
-							logger.write('DEBUG', '[NETWORK-TCP] Conexion desde \'%s\' aceptada.' % ipAddress)
-							receptorThread = tcpReceptor.TcpReceptor('Thread-TCPReceptor', remoteSocket, self.receptionBuffer)
-							receptorThread.start()
-							ipAddressFounded = True
+							# Deshabilitamos el filtro ya que el cliente estaba registrado
+							enabledFilter = False
 							break
-					if not ipAddressFounded:
-						logger.write('WARNING', '[NETWORK-TCP] Mensaje de \'%s\' rechazado!' % ipAddress)
-						remoteSocket.close()
-				# ... sino, recibimos todos los mensajes independientemente del origen
-				else:
+				# El filtro está activado y el cliente fue encontrado, o el filtro no está habilitado
+				if not enabledFilter:
 					logger.write('DEBUG', '[NETWORK-TCP] Conexion desde \'%s\' aceptada.' % ipAddress)
-					receptorThread = tcpReceptor.TcpReceptor('Thread-TCPReceptor', remoteSocket, self.receptionBuffer)
+					receptorThread = tcpReceptor.TcpReceptor('Thread-Receptor', remoteSocket, self.receptionBuffer)
 					receptorThread.start()
-			# Para que no se quede esperando indefinidamente en el'accept'
+				# El cliente no fue encontrado, por lo que debemos rechazar su mensaje
+				else:
+					logger.write('WARNING', '[NETWORK-TCP] Mensaje de \'%s\' rechazado!' % ipAddress)
+					remoteSocket.close()
+			# Para que el bloque 'try' (en la funcion 'accept') no se quede esperando indefinidamente
 			except socket.timeout as errorMessage:
 				pass
 		self.tcpReceptionSocket.close()
@@ -167,52 +168,34 @@ class Network(object):
 		y mensajes que lleguen al puerto UDP establecido para guardarlos en el buffer."""	
 		while self.isActive:
 			try:
-				dataReceived, addr = self.udpReceptionSocket.recvfrom(BUFFER_SIZE)
+				receivedData, addr = self.udpReceptionSocket.recvfrom(BUFFER_SIZE)
+				enabledFilter = False
 				ipAddress = addr[0]
-				# Aplicamos el filtro de recepción en caso de estar activado...
+				# Aplicamos el filtro de recepción en caso de estar activado
 				if JSON_CONFIG["COMMUNICATOR"]["RECEPTION_FILTER"]:
-					ipAddressFounded = False
+					enabledFilter = True
 					for valueList in contactList.allowedIpAddress.values():
 						if ipAddress in valueList:
-							logger.write('DEBUG', '[NETWORK-UDP] Conexion desde \'%s\' aceptada.' % ipAddress)
-							if dataReceived.startswith('START_OF_FILE'):
-								# Recibimos el puerto al que se debe responder
-								remoteAddress = dataReceived.split()[1]
-								remotePort = int(dataReceived.split()[2])
-								receptorThread = udpReceptor.UdpReceptor('Thread-File', self.receptionBuffer, self.localAddress, remoteAddress, remotePort)
-								receptorThread.start()
-							elif dataReceived.startswith('START_OF_INSTANCE'):
-								# Recibimos el puerto al que se debe responder
-								remoteAddress = dataReceived.split()[1]
-								remotePort = int(dataReceived.split()[2])
-								receptorThread = udpReceptor.UdpReceptor('Thread-MessageInstance', self.receptionBuffer, self.localAddress, remoteAddress, remotePort)
-								receptorThread.start()
-							else:
-								self.receptionBuffer.put((10, dataReceived))
-								logger.write('INFO', '[NETWORK-UDP] Ha llegado un nuevo mensaje!')
-							ipAddressFounded = True
+							# Deshabilitamos el filtro ya que el cliente estaba registrado
+							enabledFilter = False
 							break
-					if not ipAddressFounded:
-						logger.write('WARNING', '[NETWORK-UDP] Mensaje de \'%s\' rechazado!' % ipAddress)
-						remoteSocket.close()
-				# ... sino, recibimos todos los mensajes independientemente del origen
-				else:
+				# El filtro está activado y el cliente fue encontrado, o el filtro no está habilitado
+				if not enabledFilter:
 					logger.write('DEBUG', '[NETWORK-UDP] Conexion desde \'%s\' aceptada.' % ipAddress)
-					if dataReceived.startswith('START_OF_FILE'):
-						# Recibimos el puerto al que se debe responder
-						remoteAddress = dataReceived.split()[1]
-						remotePort = int(dataReceived.split()[2])
-						receptorThread = udpReceptor.UdpReceptor('Thread-File', self.receptionBuffer, self.localAddress, remoteAddress, remotePort)
-						receptorThread.start()
-					elif dataReceived.startswith('START_OF_INSTANCE'):
-						# Recibimos el puerto al que se debe responder
-						remoteAddress = dataReceived.split()[1]
-						remotePort = int(dataReceived.split()[2])
-						receptorThread = udpReceptor.UdpReceptor('Thread-MessageInstance', self.receptionBuffer, self.localAddress, remoteAddress, remotePort)
-						receptorThread.start()
+					if receivedData.startswith('INSTANCE'):
+						# Quitamos la 'etiqueta' que hace refencia a una instancia de mensaje
+						serializedMessage = receivedData[len('INSTANCE'):]
+						# 'Deserializamos' la instancia de mensaje para obtener el objeto en sí
+						messageInstance = pickle.loads(serializedMessage)
+						self.receptionBuffer.put((100 - messageInstance.priority, messageInstance))
+						logger.write('INFO', '[NETWORK-UDP] Ha llegado una nueva instancia de mensaje!')
 					else:
-						self.receptionBuffer.put((10, dataReceived))
+						self.receptionBuffer.put((10, receivedData))
 						logger.write('INFO', '[NETWORK-UDP] Ha llegado un nuevo mensaje!')
+				# El cliente no fue encontrado, por lo que debemos rechazar su mensaje
+				else:
+					logger.write('WARNING', '[NETWORK-UDP] Mensaje de \'%s\' rechazado!' % ipAddress)
+					remoteSocket.close()
 			# Esta excepción es parte de la ejecución, no implica un error
 			except socket.timeout, errorMessage:
 				pass

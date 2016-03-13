@@ -12,10 +12,8 @@
 import os
 import json
 import time
-import copy
 import shlex
 import serial
-import signal
 import pickle
 import inspect
 import subprocess
@@ -68,6 +66,7 @@ class Modem(object):
 class Sms(Modem):
 	""" Subclase de 'Modem' correspondiente al modo de operacion con el que se va
 		a trabajar. """
+	successfulSending = None
 	isActive = False
 
 	def __init__(self, _receptionBuffer):
@@ -155,9 +154,9 @@ class Sms(Modem):
 						smsMessage = smsBody.replace('\r\n', '')
 						if smsMessage.startswith('INSTANCE'):
 							# Quitamos la 'etiqueta' que hace refencia a una instancia de mensaje
-							messageInstance = smsMessage[len('INSTANCE'):]
+							serializedMessage = smsMessage[len('INSTANCE'):]
 							# 'Deserializamos' la instancia de mensaje para obtener el objeto en sí
-							messageInstance = pickle.loads(messageInstance)
+							messageInstance = pickle.loads(serializedMessage)
 							self.receptionBuffer.put((100 - messageInstance.priority, messageInstance))
 						else: 
 							self.receptionBuffer.put((10, smsMessage))
@@ -192,7 +191,10 @@ class Sms(Modem):
 				# Ejemplo receptionList: ['+CMT: "+543512641040","","16/01/31,05:00:08-12"', 'Nuevo SMS.']
 				# Ejemplo receptionList: ['RING', '', '+CLIP: "+543512641040",145,"",0,"",0']
 				# Ejemplo receptionList: ['NO CARRIER']
+				# Ejemplo receptionList: ['+CMS ERROR: 500']
+				print receptionList
 				if receptionList[0].startswith('+CMT'):
+					# Significa un mensaje entrante
 					try:
 						smsHeaderList.append(receptionList[0])
 						smsBodyList.append(receptionList[1])
@@ -202,42 +204,91 @@ class Sms(Modem):
 					finally:
 						smsAmount += 1
 				elif receptionList[0].startswith('RING'):
+					# Significa una llamade entrante
 					callerID = self.getTelephoneNumber(receptionList[2])
 					logger.write('INFO', '[CALL] El número \'%s\' está llamando...' % callerID)
 				elif receptionList[0].startswith('NO CARRIER'):
+					# Significa una llamada perdida
 					logger.write('INFO', '[CALL] Llamada perdida de \'%s\'.' % callerID)
 					callerID = None
+				elif receptionList[0].startswith('+CMS'):
+					# Significa que no se pudo enviar el mensaje
+					self.successfulSending = False
 			else:
 				time.sleep(1)
 		logger.write('WARNING', '[SMS] Función \'%s\' terminada.' % inspect.stack()[0][3])
 
-	def send(self, messageToSend, telephoneNumber):
+	def send(self, message, telephoneNumber):
 		""" Envia el comando AT correspondiente para enviar un mensaje de texto.
 			@param telephoneNumber: numero de telefono del destinatario
 			@type telephoneNumber: int
 			@param messageToSend: mensaje de texto a enviar
 			@type messageToSend: str """
 		# Comprobación de envío de texto plano
-		if isinstance(messageToSend, messageClass.SimpleMessage) and not messageToSend.isInstance:
-			smsMessage = messageToSend.plainText
+		if isinstance(message, messageClass.Message) and hasattr(message, 'plainText'):
+			return self.sendMessage(message.plainText, telephoneNumber)
+		# Comprobación de envío de archivo
+		elif isinstance(message, messageClass.Message) and hasattr(message, 'fileName'):
+			logger.write('ERROR', '[SMS] Imposible enviar \'%s\' por este medio!' % message.fileName)
+			return False
 		# Entonces se trata de enviar una instancia de mensaje
 		else:
-			# Copiamos el objeto antes de borrar el campo 'isInstance', por un posible fallo de envío
-			tmpMessage = copy.copy(messageToSend)
-			# Eliminamos el último campo del objeto, ya que el receptor no lo necesita
-			delattr(tmpMessage, 'isInstance')
-			# Serializamos el objeto para poder transmitirlo
-			smsMessage = 'INSTANCE' + pickle.dumps(tmpMessage)
+			return self.sendMessageInstance(message, telephoneNumber)
+
+	def sendMessage(self, plainText, telephoneNumber):
 		try:
+			self.successfulSending = None
 			# Enviamos los comandos AT correspondientes para efectuar el envío el mensaje de texto
-			self.sendAT('AT+CMGS="' + str(telephoneNumber) + '"') # Numero al cual enviar el Sms
-			self.sendAT(smsMessage + ascii.ctrl('z')) 			  # Mensaje de texto terminado en Ctrl+Z
-			logger.write('INFO', '[SMS] Mensaje de texto enviado a \'%s\'.' % str(telephoneNumber))
+			info01 = self.sendAT('AT+CMGS="' + str(telephoneNumber) + '"') # Numero al cual enviar el Sms
+			info02 = self.sendAT(plainText + ascii.ctrl('z'))              # Mensaje de texto terminado en Ctrl+Z
 			# Borramos el mensaje enviado almacenado en la memoria
 			self.removeAllSms()
-			return True
+			# ------------------ Caso de envío EXITOSO ------------------
+			# Ejemplo de info02[0]: Mensaje enviado desde el Modem.\x1a\r\n
+			# Ejemplo de info02[1]: +CMGS: 17\r\n
+			# Ejemplo de info02[3]: OK\r\n
+			for i in info02:
+				if i.startswith('OK'):
+					logger.write('INFO', '[SMS] Mensaje de texto enviado a \'%s\'.' % str(telephoneNumber))
+					return True
+			# Esperamos respuesta de la red ante la petición del envío
+			while self.successfulSending is None:
+				pass
+			# Examinamos la confirmación de la red
+			if self.successfulSending is False:
+				logger.write('WARNING', '[SMS] No se pudo enviar el mensaje a \'%s\'.' % str(telephoneNumber))
+				return False
 		except:
-			logger.write('WARNING', '[SMS] Error al enviar el mensaje de texto a \'%s\'.' % str(telephoneNumber))
+			logger.write('ERROR', '[SMS] Error al enviar el mensaje de texto a \'%s\'.' % str(telephoneNumber))
+			return False
+
+	def sendMessageInstance(self, message, telephoneNumber):
+		try:
+			self.successfulSending = None
+			# Serializamos el objeto para poder transmitirlo
+			serializedMessage = 'INSTANCE' + pickle.dumps(message)
+			# Enviamos los comandos AT correspondientes para efectuar el envío el mensaje de texto
+			info01 = self.sendAT('AT+CMGS="' + str(telephoneNumber) + '"') # Numero al cual enviar el Sms
+			info02 = self.sendAT(serializedMessage + ascii.ctrl('z'))      # Mensaje de texto terminado en Ctrl+Z
+			# Borramos el mensaje enviado almacenado en la memoria
+			self.removeAllSms()
+			# ------------------ Caso de envío EXITOSO ------------------
+			# Ejemplo de info02[0]: Mensaje enviado desde el Modem.\x1a\r\n
+			# Ejemplo de info02[1]: +CMGS: 17\r\n
+			# Ejemplo de info02[3]: OK\r\n
+			for i in info02:
+				if i.startswith('OK'):
+					logger.write('INFO', '[SMS] Instancia de mensaje enviada a \'%s\'.' % str(telephoneNumber))
+					return True
+			# Esperamos respuesta de la red ante la petición del envío
+			while self.successfulSending is None:
+				pass
+			# Examinamos la confirmación de la red
+			if self.successfulSending is False:
+				logger.write('WARNING', '[SMS] No se pudo enviar la instancia a \'%s\'.' % str(telephoneNumber))
+				return False
+		except:
+			logger.write('ERROR', '[SMS] Instancia de mensaje no enviada a \'%s\'.' % str(telephoneNumber))
 			return False
 
 	def sendCall(self, telephoneNumber):

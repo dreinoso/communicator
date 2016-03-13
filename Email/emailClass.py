@@ -9,10 +9,8 @@
 
 import os
 import json
-import copy
 import shlex
 import email
-import Queue
 import pickle
 import socket
 import inspect
@@ -35,19 +33,19 @@ import logger
 import contactList
 import messageClass
 
-TIMEOUT = 5
-ATTACHMENTS = 'Attachments'
-
 JSON_FILE = 'config.json'
 JSON_CONFIG = json.load(open(JSON_FILE))
+
+TIMEOUT = 5
+ATTACHMENTS = 'Attachments'
 
 class Email(object):
 
 	smtpServer = smtplib.SMTP
 	imapServer = imaplib.IMAP4_SSL
 
-	receptionBuffer = Queue.PriorityQueue()
 	successfulConnection = None
+	receptionBuffer = None
 	emailAccount = None
 	isActive = False
 
@@ -106,23 +104,14 @@ class Email(object):
 		@param emailDestination: correo electronico del destinatario
 		@type emailDestination: str """
 		# Comprobación de envío de texto plano
-		if isinstance(message, messageClass.SimpleMessage) and not message.isInstance:
+		if isinstance(message, messageClass.Message) and hasattr(message, 'plainText'):
 			return self.sendMessage(message.plainText, emailDestination)
 		# Comprobación de envío de archivo
-		elif isinstance(message, messageClass.FileMessage) and not message.isInstance:
+		elif isinstance(message, messageClass.Message) and hasattr(message, 'fileName'):
 			return self.sendAttachment(message.fileName, emailDestination)
 		# Entonces se trata de enviar una instancia de mensaje
 		else:
-			# Copiamos el objeto antes de borrar el campo 'isInstance', por un posible fallo de envío
-			tmpMessage = copy.copy(message)
-			# Eliminamos el último campo del objeto, ya que el receptor no lo necesita
-			delattr(tmpMessage, 'isInstance')
-			# Serializamos el objeto para poder transmitirlo
-			messageSerialized = 'INSTANCE' + pickle.dumps(tmpMessage)
-			if isinstance(message, messageClass.SimpleMessage):
-				return self.sendMessage(messageSerialized, emailDestination)
-			elif isinstance(message, messageClass.FileMessage):
-				return self.sendAttachment(message.fileName, emailDestination, messageSerialized)
+			return self.sendMessageInstance(message, emailDestination)
 
 	def sendMessage(self, plainText, emailDestination):
 		try:
@@ -170,14 +159,30 @@ class Email(object):
 				encoders.encode_base64(attachmentFile)
 			# Agregamos una cabecera al email, de nombre 'Content-Disposition' y valor 'attachment' ('filename' es el parámetro)
 			attachmentFile.add_header('Content-Disposition', 'attachment', filename = fileName)
-			mimeText = MIMEText(messageToSend, _subtype = 'plain')
+			#mimeText = MIMEText(messageToSend, _subtype = 'plain')
 			mimeMultipart.attach(attachmentFile)
-			mimeMultipart.attach(mimeText)
+			#mimeMultipart.attach(mimeText)
 			self.smtpServer.sendmail(mimeMultipart['From'], mimeMultipart['To'], mimeMultipart.as_string())
 			logger.write('INFO', '[EMAIL] Archivo \'%s\' enviado correctamente!' % fileName)
 			return True
 		except Exception as errorMessage:
 			logger.write('WARNING', '[EMAIL] Archivo \'%s\' no enviado: %s' % (fileName, str(errorMessage)))
+			return False
+
+	def sendMessageInstance(self, message, emailDestination):
+		try:
+			# Serializamos el objeto para poder transmitirlo
+			serializedMessage = 'INSTANCE' + pickle.dumps(message)
+			# Se construye un mensaje simple
+			mimeText = MIMEText(serializedMessage)
+			mimeText['From'] = '%s <%s>' % (JSON_CONFIG["COMMUNICATOR"]["NAME"], JSON_CONFIG["EMAIL"]["ACCOUNT"])
+			mimeText['To'] = emailDestination
+			mimeText['Subject'] = JSON_CONFIG["EMAIL"]["SUBJECT"]
+			self.smtpServer.sendmail(mimeText['From'], mimeText['To'], mimeText.as_string())
+			logger.write('INFO', '[EMAIL] Instancia de mensaje enviada a \'%s\'' % emailDestination)
+			return True
+		except Exception as errorMessage:
+			logger.write('WARNING', '[EMAIL] Instancia de mensaje no enviada: %s' % str(errorMessage))
 			return False
 
 	def receive(self):
@@ -205,8 +210,8 @@ class Email(object):
 				emailAmount = len(emailIdsList) # Cantidad de emails no leidos
 				logger.write('DEBUG', '[EMAIL] Ha(n) llegado ' + str(emailAmount) + ' nuevo(s) mensaje(s) de correo electronico!')
 				# Recorremos los emails recibidos...
-				for i in emailIdsList:
-					result, emailData = self.imapServer.uid('fetch', i, '(RFC822)')
+				for emailId in emailIdsList:
+					result, emailData = self.imapServer.uid('fetch', emailId, '(RFC822)')
 					# Retorna un objeto 'message', y podemos acceder a los items de su cabecera como un diccionario.
 					emailReceived = email.message_from_string(emailData[0][1])
 					sourceName = self.getSourceName(emailReceived)     # Almacenamos el nombre del remitente
@@ -222,27 +227,34 @@ class Email(object):
 						if emailBody is not None:
 							#self.sendOutput(sourceEmail, emailSubject, emailBody) # -----> SOLO PARA LA DEMO <-----
 							if emailBody.startswith('INSTANCE'):
-								messageInstance = emailBody[len('INSTANCE'):]
-								messageInstance = pickle.loads(messageInstance)
+								# Quitamos la 'etiqueta' que hace refencia a una instancia de mensaje
+								serializedMessage = emailBody[len('INSTANCE'):]
+								# 'Deserializamos' la instancia de mensaje para obtener el objeto en sí
+								messageInstance = pickle.loads(serializedMessage)
 								self.receptionBuffer.put((100 - messageInstance.priority, messageInstance))
-								logger.write('INFO', '[EMAIL] Instancia de mensaje recibida correctamente!')
+								logger.write('INFO', '[EMAIL] Ha llegado una nueva instancia de mensaje!')
 							else:
 								emailBody = emailBody[:emailBody.rfind('\r\n')] # Elimina el salto de línea del final
 								self.receptionBuffer.put((10, emailBody))
-								logger.write('INFO', '[EMAIL] Mensaje de texto plano recibido correctamente!')
+								logger.write('INFO', '[EMAIL] Ha llegado un nuevo mensaje!')
 					else:
 						logger.write('WARNING', '[EMAIL] Imposible procesar la solicitud. El correo no se encuentra registrado!')
 						messageToSend = 'Imposible procesar la solicitud. Usted no se encuentra registrado!'
 						self.sendMessage(messageToSend, sourceEmail)
+					# Eliminamos el mensaje de la bandeja de entrada porque ya fue leído
+					self.deleteEmail(emailId)
 			# ... sino, dejamos de esperar mensajes
 			else:
 				break
 		logger.write('WARNING', '[EMAIL] Función \'%s\' terminada.' % inspect.stack()[0][3])
 
 	def receiveAttachment(self, emailHeader):
-		currentDirectory = os.getcwd()                                   # Obtenemos el directorio actual de trabajo
-		fileName = emailHeader.get_filename()                            # Obtenemos el nombre del archivo adjunto
-		filePath = os.path.join(currentDirectory, ATTACHMENTS, fileName) # Obtenemos el path relativo del archivo a descargar
+		# Obtenemos el directorio actual de trabajo
+		currentDirectory = os.getcwd()
+		# Obtenemos el nombre del archivo adjunto
+		fileName = emailHeader.get_filename()
+		# Obtenemos el path relativo del archivo a descargar
+		filePath = os.path.join(currentDirectory, ATTACHMENTS, fileName)
 		# Verificamos si el directorio 'ATTACHMENTS' no está creado en el directorio actual
 		if ATTACHMENTS not in os.listdir(currentDirectory):
 			os.mkdir(ATTACHMENTS)
@@ -251,6 +263,7 @@ class Email(object):
 			fileObject = open(filePath, 'w+')
 			fileObject.write(emailHeader.get_payload(decode = True))
 			fileObject.close()
+			self.receptionBuffer.put((10, fileName))
 			logger.write('INFO', '[EMAIL] Archivo adjunto \'%s\' descargado correctamente!' % fileName)
 			return True
 		else:
@@ -312,8 +325,7 @@ class Email(object):
 			return None
 
 	def deleteEmail(self, emailId):
-		self.imapServer.copy(emailId, '[Gmail]/Trash')
-		self.imapServer.store(emailId, '+FLAGS', r'(\Deleted)')
+		self.imapServer.store(emailId, '+FLAGS', '\\Deleted')
 		self.imapServer.expunge()
 
 	def sendOutput(self, sourceEmail, emailSubject, emailBody):

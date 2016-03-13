@@ -46,9 +46,6 @@ emailInstance = emailClass.Email
 networkInstance = networkClass.Network
 bluetoothInstance = bluetoothClass.Bluetooth
 
-receptionBuffer = Queue.PriorityQueue
-transmissionBuffer = Queue.PriorityQueue
-
 controllerInstance = controllerClass.Controller    # Instancia que pone enfuncionamiento los periféricos
 transmitterInstance = transmitterClass.Transmitter # Instancia para la transmisión de paquetes
 
@@ -129,22 +126,21 @@ def send(message, receiver = None, device = None):
 		if not isinstance(message, messageClass.Message):
 			# Al no tratarse de una instancia, no podemos conocer el destino salvo que el usuario lo especifique
 			if receiver is not None:
-				# Si el mensaje es una ruta a un archivo, creamos la instancia de archivo correspondiente...
-				if os.path.isfile(message):
-					# 'message' puede ser un path relativo, o bien un path absoluto
-					message = messageClass.FileMessage('', receiver, message)
+				tmpMessage = message
+				# Creamos la instancia general de un mensaje
+				message = messageClass.Message('', receiver)
+				# Verificamos si el mensaje es una ruta a un archivo (path relativo o path absoluto)...
+				if os.path.isfile(tmpMessage):
+					# Insertamos el campo 'fileName'
+					setattr(message, 'fileName', tmpMessage)
+				# Entonces es un mensaje de texto plano
 				else:
-				# ... sino, creamos una instancia de mensaje simple.
-					message = messageClass.SimpleMessage('', receiver, message)
-				# Marcamos la instancia para indicar que se trataba de un mensaje que no necesitaba ser objeto
-				setattr(message, 'isInstance', False)
+					# Insertamos el campo 'plainText'
+					setattr(message, 'plainText', tmpMessage)
+				# Le asignamos una prioridad
+				setattr(message, 'priority', 10)
 			else:
 				logger.write('ERROR', '[COMMUNICATOR] No se especificó un destino para el mensaje!')
-				return False
-		# Si el mensaje es una instancia de archivo, verificamos que la ruta hacia el mismo sea la correcta
-		elif isinstance(message, messageClass.FileMessage):
-			if not os.path.isfile(message.fileName):
-				logger.write('ERROR', '[COMMUNICATOR] La ruta hacia el archivo a enviar es incorrecta!')
 				return False
 		################################## VERIFICACIÓN DE CONTACTO ##################################
 		# Antes de poner el mensaje en el buffer, comprobamos que el cliente esté en algún diccionario
@@ -160,9 +156,6 @@ def send(message, receiver = None, device = None):
 			logger.write('WARNING', '[COMMUNICATOR] \'%s\' no registrado! Mensaje descartado...' % message.receiver)
 			return False
 		################################ FIN VERIFICACIÓN DE CONTACTO ################################
-		# Verificamos si el campo 'isInstance' no existe, para crearlo
-		if not hasattr(message, 'isInstance'):
-			setattr(message, 'isInstance', True)
 		# Establecemos el tiempo que permanecerá el mensaje en el buffer antes de ser desechado en caso de no ser enviado
 		setattr(message, 'timeOut', 20)
 		# Damos mayor prioridad al dispositivo referenciado por 'device' (si es que hay alguno)

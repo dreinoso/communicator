@@ -8,25 +8,20 @@
 
 import os
 import json
-import time
-import Queue
-import pickle
-import socket
 import threading
 
 import logger
-import messageClass
 
 JSON_FILE = 'config.json'
 JSON_CONFIG = json.load(open(JSON_FILE))
 
 # Tamano del buffer en bytes (cantidad de caracteres)
-BUFFER_SIZE = 1024
+BUFFER_SIZE = 4096
 DOWNLOADS = 'Downloads'
 
 class TcpReceptor(threading.Thread):
 
-	receptionBuffer = Queue.Queue()
+	receptionBuffer = None
 
 	def __init__(self, _threadName, _remoteSocket, _receptionBuffer):
 		"""Creación de la clase para la recepción de paquetes TCP.
@@ -44,20 +39,8 @@ class TcpReceptor(threading.Thread):
 		'''Una vez establecida la conexión este hilo se lanza, lo primero es leer
 		el mensaje de sincronización para determinar que es lo que se esta por 
 		recibir, de acuerdo a este contenido el comportamiento sera diferente.'''
-		try:
-			dataReceived = self.remoteSocket.recv(BUFFER_SIZE)
-			if dataReceived == 'START_OF_FILE':
-				self.receiveFile()
-			elif dataReceived == 'START_OF_INSTANCE':
-				self.receiveMessageInstance()
-			# Se trata de un texto plano, sólo se lo almacena 
-			else:
-				self.receptionBuffer.put((10, dataReceived))
-				logger.write('INFO', '[NETWORK-TCP] Ha llegado un nuevo mensaje!')
-		except socket.error as errorMessage:
-			logger.write('WARNING', '[NETWORK-TCP] Error al intentar recibir un mensaje: \'%s\'.'% errorMessage )
-		finally:
-			logger.write('DEBUG', '[NETWORK-TCP] \'%s\' terminado y cliente desconectado.' % self.getName())
+		self.receiveFile()
+		logger.write('DEBUG', '[NETWORK-TCP] \'%s\' terminado y cliente desconectado.' % self.getName())
 
 	def receiveFile(self):
 		'''Para la recepción del archivo, primero se verifica que le archivo no 
@@ -66,7 +49,6 @@ class TcpReceptor(threading.Thread):
 		archivo y la capeta de descarga en caso de que no exista. Se escribe el 
 		archivo a medida que llegan los paquetes.'''
 		try:
-			self.remoteSocket.send('ACK')
 			currentDirectory = os.getcwd()                 # Obtenemos el directorio actual de trabajo
 			fileName = self.remoteSocket.recv(BUFFER_SIZE) # Obtenemos el nombre del archivo a recibir
 			# Obtenemos el path relativo del archivo a descargar
@@ -87,8 +69,9 @@ class TcpReceptor(threading.Thread):
 						self.remoteSocket.send('ACK')
 					else: 
 						fileObject.close()
-						logger.write('INFO', '[NETWORK-TCP] Archivo \'%s\' descargado correctamente!' % fileName)
 						break
+				self.receptionBuffer.put((10, fileName))
+				logger.write('INFO', '[NETWORK-TCP] Archivo \'%s\' descargado correctamente!' % fileName)
 				return True
 			else:
 				# Comunicamos al transmisor que el archivo ya existe
@@ -98,38 +81,6 @@ class TcpReceptor(threading.Thread):
 		except socket.error as errorMessage:
 			logger.write('WARNING', '[NETWORK-TCP] Error al intentar descargar el archivo \'%s\': %s' % (fileName, str(errorMessage)))
 			return False
-		finally:
-			# Cierra la conexion del socket cliente
-			self.remoteSocket.close()
-
-	def receiveMessageInstance(self):
-		'''Por medio de una sincronización de mensajes se recibe la cadena de a partes
-		que corresponde a la instancia serializada, y se arma a medida que lleguen los 
-		caracteres, cuando se tiene la cadena completa se la deserializa para obtener 
-		la instancia y almacenarla en el buffer.'''
-		try:
-			serializedMessage = ''
-			self.remoteSocket.send('ACK')
-			while True:
-				inputData = self.remoteSocket.recv(BUFFER_SIZE)
-				if inputData != 'END_OF_INSTANCE':
-					serializedMessage = serializedMessage + inputData
-					self.remoteSocket.send('ACK')
-				else:
-					# Deserialización de la instancia
-					message = pickle.loads(serializedMessage)
-					break
-			###########################################################
-			if isinstance(message, messageClass.FileMessage):
-				self.remoteSocket.recv(BUFFER_SIZE) # START_OF_FILE
-				if self.receiveFile():
-					self.receptionBuffer.put((100 - message.priority, message))
-			else:
-				self.receptionBuffer.put((100 - message.priority, message))
-				logger.write('INFO', '[NETWORK-TCP] Ha llegado una nueva instancia de mensaje!')
-			###########################################################
-		except socket.error as errorMessage:
-			logger.write('WARNING', '[NETWORK-TCP] Error al intentar recibir una instancia de mensaje ' + str(errorMessage))
 		finally:
 			# Cierra la conexion del socket cliente
 			self.remoteSocket.close()

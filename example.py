@@ -16,10 +16,9 @@ def main():
 	print '----------- MODULO DE COMUNICACION -----------\n'
 	print '\t\t1 - Enviar mensaje/archivo'
 	print '\t\t2 - Enviar instancia de mensaje'
-	print '\t\t3 - Enviar instancia de archivo'
-	print '\t\t4 - Leer un mensaje'
-	print '\t\t5 - Conectar GPRS'
-	print '\t\t6 - Desconectar GPRS'
+	print '\t\t3 - Leer un mensaje'
+	print '\t\t4 - Conectar GPRS'
+	print '\t\t5 - Desconectar GPRS'
 	print '\t\tc - DEBUG: Cerrar Comunicador'
 	print '\t\to - DEBUG: Abrir Comunicador'
 	print '\t\tq - Salir\n'
@@ -65,68 +64,39 @@ def main():
 					continue
 				# Establecemos el campo 'receiver'
 				receiver = raw_input('Cliente a enviar: ')
-				# Establecemos el campo 'plainText'
-				plainText = raw_input('Mensaje a enviar: ')
+				# Establecemos el campo 'infoText'
+				infoText = raw_input('Mensaje a enviar: ')
 				# Creamos la instancia de mensaje
-				simpleMessage = messageClass.SimpleMessage(sender, receiver, plainText)
+				infoMessage = messageClass.InfoMessage(sender, receiver, infoText)
 				# Preguntamos si hay alguna preferencia en relación a los medios de comunicación
 				selectDevice = askDevices()
 				if selectDevice is True:
 					# El medio preferido está dado por 'device'
 					device = raw_input('Medio de comunicación preferido: ')
-					communicator.send(simpleMessage, device = device) # <----- IMPORTANTE
+					communicator.send(infoMessage, device = device) # <----- IMPORTANTE
 				elif selectDevice is False:
 					# El medio se elige automáticamente
-					communicator.send(simpleMessage) # <----- IMPORTANTE
+					communicator.send(infoMessage) # <----- IMPORTANTE
 				else:
 					print 'Abortado.'
 					continue
-			# Opción 3 - Enviar instancia de archivo
+			# Opcion 3 - Leer un mensaje
 			elif optionSelected is '3':
-				# Establecemos el campo 'sender'
-				sender = raw_input('Nombre del emisor: ')
-				# Preguntamos si se desea ver una lista con los clientes registrados
-				selectClient = askClients()
-				if selectClient is None:
-					print 'Abortado.'
-					continue
-				# Establecemos el campo 'receiver'
-				receiver = raw_input('Cliente a enviar: ')
-				# Establecemos el campo 'fileName'
-				fileName = raw_input('Archivo a enviar: ')
-				# Creamos la instancia de mensaje
-				fileInstance = messageClass.FileMessage(sender, receiver, fileName)
-				# Preguntamos si hay alguna preferencia en relación a los medios de comunicación
-				selectDevice = askDevices()
-				if selectDevice is True:
-					# El medio preferido está dado por 'device'
-					device = raw_input('Medio de comunicación preferido: ')
-					communicator.send(fileInstance, device = device) # <----- IMPORTANTE
-				elif selectDevice is False:
-					# El medio se elige automáticamente
-					communicator.send(fileInstance) # <----- IMPORTANTE
-				else:
-					print 'Abortado.'
-					continue
-			# Opcion 4 - Leer un mensaje
-			elif optionSelected is '4':
 				messageReceived = communicator.receive()
 				if messageReceived is not None:
 					if isinstance(messageReceived, messageClass.Message):
 						print 'Instancia de mensaje recibida: ' + str(messageReceived)
 						print '\tPrioridad: ' + str(messageReceived.priority)
 						print '\tEmisor: ' + messageReceived.sender
-						if isinstance(messageReceived, messageClass.SimpleMessage):
-							print '\tMensaje de texto: ' + str(messageReceived.plainText)
-						elif isinstance(messageReceived, messageClass.FileMessage):
-							print '\tNombre del archivo: ' + messageReceived.fileName
+						if isinstance(messageReceived, messageClass.InfoMessage):
+							print '\tMensaje de texto: ' + str(messageReceived.infoText)
 					else:
 						print 'Mensaje recibido: %s' % messageReceived
-			# Opcion 5 - Conectar GPRS
-			elif optionSelected is '5':
+			# Opcion 4 - Conectar GPRS
+			elif optionSelected is '4':
 				communicator.connectGprs()
-			# Opcion 6 - Desconectar GPRS
-			elif optionSelected is '6':
+			# Opcion 5 - Desconectar GPRS
+			elif optionSelected is '5':
 				communicator.disconnectGprs()
 			elif optionSelected is 'c':
 				communicator.close()

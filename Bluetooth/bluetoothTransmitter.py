@@ -1,37 +1,32 @@
 # coding=utf-8
 
 import os
-import copy
+import time
 import pickle
 import bluetooth
 
 import logger
 import messageClass
 
-# Tamano del buffer en bytes (cantidad de caracteres)
-BUFFER_SIZE = 1024
+BUFFER_SIZE = 4096 # Tamano del buffer en bytes (cantidad de caracteres)
 
 class BluetoothTransmitter():
 
 	def __init__(self):
-		"""Creación de la clase de transmisión de paquetes Bluetooth."""
+		"""Constructor de la clase de transmisión de paquetes Bluetooth."""
 
 	def send(self, message, remoteSocket):
 		'''Dependiendo del tipo de mensaje de que se trate, el envio del mensaje
 		se comportara diferente'''
 		# Comprobación de envío de texto plano
-		if isinstance(message, messageClass.SimpleMessage) and not message.isInstance:
+		if isinstance(message, messageClass.Message) and hasattr(message, 'plainText'):
 			return self.sendMessage(message.plainText, remoteSocket)
 		# Comprobación de envío de archivo
-		elif isinstance(message, messageClass.FileMessage) and not message.isInstance:
+		elif isinstance(message, messageClass.Message) and hasattr(message, 'fileName'):
 			return self.sendFile(message.fileName, remoteSocket)
 		# Entonces se trata de enviar una instancia de mensaje
 		else:
-			# Copiamos el objeto antes de borrar el campo 'isInstance', por un posible fallo de envío
-			tmpMessage = copy.copy(message)
-			# Eliminamos el último campo del objeto, ya que el receptor no lo necesita
-			delattr(tmpMessage, 'isInstance')
-			return self.sendMessageInstance(tmpMessage, remoteSocket)
+			return self.sendMessageInstance(message, remoteSocket)
 
 	def sendMessage(self, plainText, remoteSocket):
 		'''Envío de mensaje simple'''
@@ -90,31 +85,21 @@ class BluetoothTransmitter():
 			logger.write('WARNING', '[BLUETOOTH] Archivo \'%s\' no enviado: %s' % (fileName, str(errorMessage)))
 			return False
 		finally:
-			remoteSocket.close() # Cierra la conexion del socket cliente
+			# Cierra la conexion del socket cliente
+			remoteSocket.close()
 
 	def sendMessageInstance(self, message, remoteSocket):
 		'''Envió de la instancia mensaje. Primero debe realizarse una serialización de la clase
 		y enviar de a BUFFER_SIZE cantidad de caracteres, en definitiva se trata de una cadena.'''
 		try:
-			remoteSocket.send('START_OF_INSTANCE') # Indicamos al otro extremo que vamos a transmitir una instancia de mensaje
-			remoteSocket.recv(BUFFER_SIZE) # Espera de confirmación ACK
-			messageSerialized = pickle.dumps(message) # Serialización de la instancia
-			bytesSent = 0 
-			while bytesSent < len(messageSerialized): # Comienza el envio de la instancia
-				outputData = messageSerialized[bytesSent:bytesSent + BUFFER_SIZE]
-				remoteSocket.send(outputData)
-				bytesSent = bytesSent + BUFFER_SIZE
-				remoteSocket.recv(BUFFER_SIZE) # ACK
-			remoteSocket.send('END_OF_INSTANCE')
-			################################################################################
-			if isinstance(message, messageClass.FileMessage):
-				return self.sendFile(message.fileName, remoteSocket)
-			else:
-				logger.write('INFO', '[BLUETOOTH] Instancia de mensaje enviado correctamente!')
-				return True
-			################################################################################
+			# Serializamos el objeto para poder transmitirlo
+			serializedMessage = 'INSTANCE' + pickle.dumps(message)
+			# Transmitimos la instancia serializada al destino correspondiente
+			remoteSocket.send(serializedMessage)
+			logger.write('INFO', '[BLUETOOTH] Instancia de mensaje enviada correctamente!')
+			return True
 		except Exception as errorMessage:
-			logger.write('WARNING', '[BLUETOOTH] Instancia de mensaje no enviado: %s' % str(errorMessage))
+			logger.write('WARNING', '[BLUETOOTH] Instancia de mensaje no enviada: %s' % str(errorMessage))
 			return False
 		finally:
 			# Cierra la conexion del socket cliente

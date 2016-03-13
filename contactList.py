@@ -9,9 +9,9 @@
 	@organization: UNC - Fcefyn
 	@date: Lunes 16 de Abril de 2015 """
 
-# Direcciones IP y puertos permitidos
+# Direcciones IP permitidas
 allowedIpAddress = dict()
-allowedIpAddress = {'client02': ('192.168.1.2', 6000, 6010)}
+allowedIpAddress = {'client02' : ('192.168.1.6', 6000, 6010)}
 
 # Direcciones MAC permitidas
 allowedMacAddress = dict()
@@ -22,7 +22,7 @@ allowedEmails = dict()
 allowedEmails = {'client02' : 'client02.datalogger@gmail.com',
 				 'client03' : 'mauriciolg.90@gmail.com'}
 
-# Numeros de teléfono permitidos
+# Numeros telefónicos permitidos
 allowedNumbers = dict()
 allowedNumbers = {'client02' : 3512560536,
 				  'client03' : 3512641040}
