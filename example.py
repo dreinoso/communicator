@@ -119,7 +119,7 @@ def askClients():
 	showClients = raw_input('¿Desea ver los clientes registrados? [S/n] ')
 	if showClients is 'S' or showClients is 's' or len(showClients) is 0:
 		# Creamos una lista de claves (clientes registrados en los diccionarios)
-		clientList = list() + contactList.allowedIpAddress.keys()
+		clientList = list() + contactList.allowedHosts.keys()
 		clientList += contactList.allowedMacAddress.keys()
 		clientList += contactList.allowedEmails.keys()
 		clientList += contactList.allowedNumbers.keys()

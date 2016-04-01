@@ -19,21 +19,18 @@ JSON_CONFIG = json.load(open(JSON_FILE))
 
 class Bluetooth(object):
 
-	bluetoothProtocol = JSON_CONFIG["BLUETOOTH"]["PROTOCOL"]
 	localServiceName = JSON_CONFIG["BLUETOOTH"]["SERVICE"]
 	localUUID = JSON_CONFIG["BLUETOOTH"]["UUID"]
 
 	localMACAddress = None
 	localPortRFCOMM = None
-	localSocketRFCOMM = None
 
-	bluetoothTransmitter = bluetoothTransmitter.BluetoothTransmitter()
 	successfulConnection = None
-	receptionBuffer = None
+	receptionQueue = None
 	isActive = False
 
-	def __init__(self, _receptionBuffer):
-		self.receptionBuffer = _receptionBuffer
+	def __init__(self, _receptionQueue):
+		self.receptionQueue = _receptionQueue
 
 	def __del__(self):
 		try:
@@ -52,20 +49,23 @@ class Bluetooth(object):
 		self.localMACAddress = _localMACAddress
 		try:
 			# Creamos un nuevo socket Bluetooth que usa el protocolo de transporte especificado
-			self.localSocketRFCOMM = bluetooth.BluetoothSocket(bluetooth.RFCOMM)
+			self.serverSocketRFCOMM = bluetooth.BluetoothSocket(bluetooth.RFCOMM)
 			# Enlazamos al adaptador local algun puerto disponible usando SDP (Service Discovery Protocol)
-			self.localSocketRFCOMM.bind((self.localMACAddress, bluetooth.PORT_ANY))
+			self.serverSocketRFCOMM.bind((self.localMACAddress, bluetooth.PORT_ANY))
 			# Especificamos el numero de conexiones permitidas (todavia sin aceptar) antes de rechazar las nuevas entrantes
-			self.localSocketRFCOMM.listen(CONNECTIONS)
+			self.serverSocketRFCOMM.listen(CONNECTIONS)
 			# Especificamos el tiempo de espera de conexiones (funcion 'accept')
-			self.localSocketRFCOMM.settimeout(TIMEOUT)
+			self.serverSocketRFCOMM.settimeout(TIMEOUT)
 			# Especificamos el anuncio de nuestro servicio
-			bluetooth.advertise_service(self.localSocketRFCOMM, self.localServiceName,
+			bluetooth.advertise_service(self.serverSocketRFCOMM, self.localServiceName,
 										service_id = self.localUUID,
 										service_classes = [self.localUUID, bluetooth.SERIAL_PORT_CLASS],
 										profiles = [bluetooth.SERIAL_PORT_PROFILE])
 			# Almacenamos el puerto asignado por el 'bind'
-			self.localPortRFCOMM = self.localSocketRFCOMM.getsockname()[1]
+			self.localPortRFCOMM = self.serverSocketRFCOMM.getsockname()[1]
+			#######################################################################
+			self.bluetoothTransmitter = bluetoothTransmitter.BluetoothTransmitter()
+			#######################################################################
 			self.successfulConnection = True
 			return True
 		except bluetooth._bluetooth.error as bluetoothError:
@@ -75,8 +75,9 @@ class Bluetooth(object):
 
 	def send(self, messageToSend, destinationServiceName, destinationMAC, destinationUUID):
 		logger.write('DEBUG', '[BLUETOOTH] Buscando el servicio \'%s\'.' % destinationServiceName)
+		# Buscamos un servicio Bluetooth específico
 		serviceMatches = bluetooth.find_service(uuid = destinationUUID, address = destinationMAC)
-		# Buscamos alguna coincidencia de servicios Bluetooth especificos
+		# Verificamos si hubo alguna coincidencia
 		if len(serviceMatches) > 0:
 			try:
 				firstMatch = serviceMatches[0]
@@ -84,11 +85,11 @@ class Bluetooth(object):
 				host = firstMatch['host']
 				port = firstMatch['port']
 				# Crea un nuevo socket Bluetooth que usa el protocolo de transporte especificado
-				remoteSocket = bluetooth.BluetoothSocket(self.bluetoothProtocol)
+				clientSocket = bluetooth.BluetoothSocket(bluetooth.RFCOMM)
 				# Conecta el socket con el dispositivo remoto (host) sobre el puerto (channel) especificado
-				remoteSocket.connect((host, port))
+				clientSocket.connect((host, port))
 				logger.write('DEBUG', '[BLUETOOTH] Conectado con la dirección \'%s\'.' % host)
-				return self.bluetoothTransmitter.send(messageToSend, remoteSocket)
+				return self.bluetoothTransmitter.send(messageToSend, clientSocket)
 			except bluetooth.btcommon.BluetoothError as bluetoothError:
 				# (11, 'Resource temporarily unavailable')
 				# (16, 'Device or resource busy')
@@ -108,7 +109,7 @@ class Bluetooth(object):
 		while self.isActive:
 			try:
 				# Espera por una conexión entrante y devuelve un nuevo socket que representa la conexión, como así también la dirección del cliente
-				remoteSocket, addr = self.localSocketRFCOMM.accept()
+				remoteSocket, addr = self.serverSocketRFCOMM.accept()
 				remoteSocket.settimeout(TIMEOUT)
 				enabledFilter = False
 				macAddress = addr[0]
@@ -123,7 +124,7 @@ class Bluetooth(object):
 				# El filtro está activado y el cliente fue encontrado, o el filtro no está habilitado
 				if not enabledFilter:
 					logger.write('DEBUG', '[BLUETOOTH] Conexión desde \'%s\' aceptada.' % macAddress)
-					receptorThread = bluetoothReceptor.BluetoothReceptor('Thread-Receptor', remoteSocket, self.receptionBuffer)
+					receptorThread = bluetoothReceptor.BluetoothReceptor('Thread-Receptor', remoteSocket, self.receptionQueue)
 					receptorThread.start()
 				# El cliente no fue encontrado, por lo que debemos rechazar su mensaje
 				else:
@@ -132,5 +133,5 @@ class Bluetooth(object):
 			# Para que el bloque 'try' (en la funcion 'accept') no se quede esperando indefinidamente
 			except bluetooth.BluetoothError, msg:
 				pass
-		self.localSocketRFCOMM.close()
+		self.serverSocketRFCOMM.close()
 		logger.write('WARNING','[BLUETOOTH] Función \'%s\' terminada.' % inspect.stack()[0][3])

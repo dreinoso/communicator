@@ -1,12 +1,13 @@
 {
 "COMMUNICATOR":
 	{
-	"NAME"                : "Datalogger_1",
+	"NAME"                : "Datalogger01",
 	"RECEPTION_FILTER"    : 0,
-	"TRANSMISSION_BUFFER" : 10,
-	"RECEPTION_BUFFER"    : 10,
-	"RETRY_TIME"          : 5,
-	"REFRESH_TIME"        : 5
+	"TRANSMISSION_QSIZE"  : 25,
+	"RECEPTION_QSIZE"     : 50,
+	"RETRY_TIME"          : 15,
+	"REFRESH_TIME"        : 5,
+	"TIME_TO_LIVE"        : 3600
 	},
 "NETWORK":
 	{
@@ -15,7 +16,6 @@
  	},
 "BLUETOOTH":
 	{
-	"PROTOCOL" : 3,
 	"SERVICE"  : "BLUETOOTH-Client01",
 	"UUID"     : "94f39d29-7d6d-437d-973b-fba39e49d4ee"
 	},
@@ -41,7 +41,11 @@
 	"EMAIL"     : 2,
 	"BLUETOOTH" : 3
 	},
-"FILE_LOGGING_LEVEL"    : "DEBUG",
-"CONSOLE_LOGGING_LEVEL" : "DEBUG"
+"LOGGER":
+	{
+	"FILE_LOG"              : "events.log",
+	"FILE_LOGGING_LEVEL"    : "DEBUG",
+	"CONSOLE_LOGGING_LEVEL" : "DEBUG"
+	}
 }
 

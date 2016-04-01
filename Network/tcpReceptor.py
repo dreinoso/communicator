@@ -21,19 +21,19 @@ DOWNLOADS = 'Downloads'
 
 class TcpReceptor(threading.Thread):
 
-	receptionBuffer = None
+	receptionQueue = None
 
-	def __init__(self, _threadName, _remoteSocket, _receptionBuffer):
+	def __init__(self, _threadName, _remoteSocket, _receptionQueue):
 		"""Creación de la clase para la recepción de paquetes TCP.
 		@param _threadName: nombre del hilo
 		@type: string
 		@param socket para la recepción del paquete
 		@type: socket
-		@param _receptionBuffer: buffer para almacenar el mensaje o instancia
+		@param _receptionQueue: buffer para almacenar el mensaje o instancia
 		@type: queue"""
 		threading.Thread.__init__(self, name = _threadName)
 		self.remoteSocket = _remoteSocket
-		self.receptionBuffer = _receptionBuffer
+		self.receptionQueue = _receptionQueue
 
 	def run(self):
 		'''Una vez establecida la conexión este hilo se lanza, lo primero es leer
@@ -70,7 +70,7 @@ class TcpReceptor(threading.Thread):
 					else: 
 						fileObject.close()
 						break
-				self.receptionBuffer.put((10, fileName))
+				self.receptionQueue.put((10, fileName))
 				logger.write('INFO', '[NETWORK-TCP] Archivo \'%s\' descargado correctamente!' % fileName)
 				return True
 			else:

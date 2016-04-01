@@ -21,21 +21,21 @@ class UdpTransmitter(object):
 	def __init__(self):
 		"""Constructor de la clase de transmisión de paquetes UDP."""
 
-	def send(self, message, destinationIp, destinationPort):
+	def send(self, message, destinationHost, destinationUdpPort):
 		'''Dependiendo del tipo de mensaje de que se trate, el envio del mensaje
 		se comportara diferente'''
 		# Comprobación de envío de texto plano
 		if isinstance(message, messageClass.Message) and hasattr(message, 'plainText'):
-			return self.sendMessage(message.plainText, destinationIp, destinationPort)
+			return self.sendMessage(message.plainText, destinationHost, destinationUdpPort)
 		# Entonces se trata de enviar una instancia de mensaje
 		else:
-			return self.sendMessageInstance(message, destinationIp, destinationPort)
+			return self.sendMessageInstance(message, destinationHost, destinationUdpPort)
 
-	def sendMessage(self, plainText, destinationIp, destinationPort):
+	def sendMessage(self, plainText, destinationHost, destinationUdpPort):
 		'''Envío de mensaje simple'''
 		try:
 			transmissionSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)			
-			transmissionSocket.sendto(plainText, (destinationIp, destinationPort))
+			transmissionSocket.sendto(plainText, (destinationHost, destinationUdpPort))
 			logger.write('INFO', '[NETWORK-UDP] Mensaje enviado correctamente!')
 			return True
 		except Exception as errorMessage:
@@ -45,7 +45,7 @@ class UdpTransmitter(object):
 			# Cerramos el socket que permitió la conexión con el cliente
 			transmissionSocket.close()
 	
-	def sendMessageInstance(self, message, destinationIp, destinationPort):
+	def sendMessageInstance(self, message, destinationHost, destinationUdpPort):
 		'''Envió de la instancia mensaje. Primero debe realizarse una serialización de la clase
 		y enviar de a BUFFER_SIZE cantidad de caracteres, en definitiva se trata de una cadena.'''
 		try:
@@ -53,7 +53,7 @@ class UdpTransmitter(object):
 			# Serializamos el objeto para poder transmitirlo
 			serializedMessage = 'INSTANCE' + pickle.dumps(message)
 			# Transmitimos la instancia serializada al destino correspondiente
-			transmissionSocket.sendto(serializedMessage, (destinationIp, destinationPort))
+			transmissionSocket.sendto(serializedMessage, (destinationHost, destinationUdpPort))
 			logger.write('INFO', '[NETWORK-UDP] Instancia de mensaje enviada correctamente!')
 			return True
 		except Exception as errorMessage:

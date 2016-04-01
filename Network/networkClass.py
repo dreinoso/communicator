@@ -32,22 +32,22 @@ JSON_CONFIG = json.load(open(JSON_FILE))
 
 class Network(object):
 
-	localAddress = None
-	localInterface = None
-
 	tcpPort = JSON_CONFIG["NETWORK"]["TCP_PORT"]
 	udpPort = JSON_CONFIG["NETWORK"]["UDP_PORT"]
 
+	localInterface = None
+	localAddress = None
+
 	successfulConnection = None
-	receptionBuffer = None
+	receptionQueue = None
 	isActive = False
 
-	def __init__(self, _receptionBuffer):
+	def __init__(self, _receptionQueue):
 		"""Se crean los sockets para envío y recepción. Se activa el hilo para la recepción 
 		y se asigna el buffer también para la recepción.
-		@param _receptionBuffer: Buffer para la recepción de datos
+		@param _receptionQueue: Buffer para la recepción de datos
 		@type: list"""
-		self.receptionBuffer = _receptionBuffer
+		self.receptionQueue = _receptionQueue
 
 	def __del__(self):
 		"""Elminación de la instancia de esta clase, cerrando conexiones establecidas, para no dejar
@@ -83,10 +83,10 @@ class Network(object):
 			self.udpReceptionSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 			self.udpReceptionSocket.bind((self.localAddress, self.udpPort))
 			self.udpReceptionSocket.settimeout(TIMEOUT)
-			######################################################################
+			#####################################################
 			self.tcpTransmitter = tcpTransmitter.TcpTransmitter()
 			self.udpTransmitter = udpTransmitter.UdpTransmitter()
-			######################################################################
+			#####################################################
 			self.successfulConnection = True
 			return True
 		except socket.error as errorMessage:
@@ -94,7 +94,7 @@ class Network(object):
 			self.successfulConnection = False
 			return False
 
-	def send(self, message, destinationIp, destinationTcpPort, destinationUdpPort):
+	def send(self, message, destinationHost, destinationTcpPort, destinationUdpPort):
 		""" Envia una cadena de texto.
 		@param detinationIP: dirección IP del destinatario
 		@type emailDestination: str
@@ -107,13 +107,13 @@ class Network(object):
 		try:
 			if isinstance(message, messageClass.Message) and hasattr(message, 'fileName'):
 				# Crea un nuevo socket que usa el protocolo de transporte especificado
-				remoteSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+				clientSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 				# Conecta el socket con el dispositivo remoto sobre el puerto especificado
-				remoteSocket.connect((destinationIp, destinationTcpPort))
-				logger.write('DEBUG', '[NETWORK-TCP] Conectado con la dirección \'%s\'.' % destinationIp)
-				return self.tcpTransmitter.sendFile(message.fileName, remoteSocket)
+				clientSocket.connect((destinationHost, destinationTcpPort))
+				logger.write('DEBUG', '[NETWORK-TCP] Conectado con la dirección \'%s\'.' % destinationHost)
+				return self.tcpTransmitter.sendFile(message.fileName, clientSocket)
 			else:
-				return self.udpTransmitter.send(message, destinationIp, destinationUdpPort)
+				return self.udpTransmitter.send(message, destinationHost, destinationUdpPort)
 		except socket.error as errorMessage:
 			logger.write('WARNING', '[NETWORK] %s.' % errorMessage)
 			return False
@@ -143,7 +143,7 @@ class Network(object):
 				# Aplicamos el filtro de recepción en caso de estar activado
 				if JSON_CONFIG["COMMUNICATOR"]["RECEPTION_FILTER"]:
 					enabledFilter = True
-					for valueList in contactList.allowedIpAddress.values():
+					for valueList in contactList.allowedHosts.values():
 						if ipAddress in valueList:
 							# Deshabilitamos el filtro ya que el cliente estaba registrado
 							enabledFilter = False
@@ -151,7 +151,7 @@ class Network(object):
 				# El filtro está activado y el cliente fue encontrado, o el filtro no está habilitado
 				if not enabledFilter:
 					logger.write('DEBUG', '[NETWORK-TCP] Conexion desde \'%s\' aceptada.' % ipAddress)
-					receptorThread = tcpReceptor.TcpReceptor('Thread-Receptor', remoteSocket, self.receptionBuffer)
+					receptorThread = tcpReceptor.TcpReceptor('Thread-Receptor', remoteSocket, self.receptionQueue)
 					receptorThread.start()
 				# El cliente no fue encontrado, por lo que debemos rechazar su mensaje
 				else:
@@ -174,7 +174,7 @@ class Network(object):
 				# Aplicamos el filtro de recepción en caso de estar activado
 				if JSON_CONFIG["COMMUNICATOR"]["RECEPTION_FILTER"]:
 					enabledFilter = True
-					for valueList in contactList.allowedIpAddress.values():
+					for valueList in contactList.allowedHosts.values():
 						if ipAddress in valueList:
 							# Deshabilitamos el filtro ya que el cliente estaba registrado
 							enabledFilter = False
@@ -187,15 +187,14 @@ class Network(object):
 						serializedMessage = receivedData[len('INSTANCE'):]
 						# 'Deserializamos' la instancia de mensaje para obtener el objeto en sí
 						messageInstance = pickle.loads(serializedMessage)
-						self.receptionBuffer.put((100 - messageInstance.priority, messageInstance))
+						self.receptionQueue.put((messageInstance.priority, messageInstance))
 						logger.write('INFO', '[NETWORK-UDP] Ha llegado una nueva instancia de mensaje!')
 					else:
-						self.receptionBuffer.put((10, receivedData))
+						self.receptionQueue.put((10, receivedData))
 						logger.write('INFO', '[NETWORK-UDP] Ha llegado un nuevo mensaje!')
 				# El cliente no fue encontrado, por lo que debemos rechazar su mensaje
 				else:
 					logger.write('WARNING', '[NETWORK-UDP] Mensaje de \'%s\' rechazado!' % ipAddress)
-					remoteSocket.close()
 			# Esta excepción es parte de la ejecución, no implica un error
 			except socket.timeout, errorMessage:
 				pass

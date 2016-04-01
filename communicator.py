@@ -38,40 +38,47 @@ JSON_CONFIG = json.load(open(JSON_FILE))
 
 os.chdir(currentDirectory)
 
-logger.set() # Solo se setea una vez, todos los objetos usan esta misma configuración
-
 smsInstance = modemClass.Sms
 gprsInstance = modemClass.Gprs
 emailInstance = emailClass.Email
 networkInstance = networkClass.Network
 bluetoothInstance = bluetoothClass.Bluetooth
 
-controllerInstance = controllerClass.Controller    # Instancia que pone enfuncionamiento los periféricos
+controllerInstance = controllerClass.Controller    # Instancia que controla los medios
 transmitterInstance = transmitterClass.Transmitter # Instancia para la transmisión de paquetes
 
 def open():
 	"""Se realiza la apertura, inicialización de los componentes que se tengan disponibles
 	"""
-	global receptionBuffer, transmissionBuffer 
+	global receptionQueue, transmissionQueue 
 	global controllerInstance, transmitterInstance
 	global smsInstance, gprsInstance, emailInstance, networkInstance, bluetoothInstance
 
-	# Creamos los buffers de recepción y transmisión, respectivamente
-	receptionBuffer = Queue.PriorityQueue(JSON_CONFIG["COMMUNICATOR"]["RECEPTION_BUFFER"])
-	transmissionBuffer = Queue.PriorityQueue(JSON_CONFIG["COMMUNICATOR"]["TRANSMISSION_BUFFER"])
+	# Creamos el logger de eventos
+	FILE_LOG = JSON_CONFIG["LOGGER"]["FILE_LOG"]
+	FILE_LOGGING_LEVEL = JSON_CONFIG["LOGGER"]["FILE_LOGGING_LEVEL"]
+	CONSOLE_LOGGING_LEVEL = JSON_CONFIG["LOGGER"]["CONSOLE_LOGGING_LEVEL"]
+	logger.set(FILE_LOG, FILE_LOGGING_LEVEL, CONSOLE_LOGGING_LEVEL)
+
+	# Creamos las colas de recepción y transmisión, respectivamente
+	RECEPTION_QSIZE = JSON_CONFIG["COMMUNICATOR"]["RECEPTION_QSIZE"]
+	TRANSMISSION_QSIZE = JSON_CONFIG["COMMUNICATOR"]["TRANSMISSION_QSIZE"]
+	receptionQueue = Queue.PriorityQueue(RECEPTION_QSIZE)
+	transmissionQueue = Queue.PriorityQueue(TRANSMISSION_QSIZE)
 
 	# Creamos las instancias de los periféricos
 	gprsInstance = modemClass.Gprs()
-	smsInstance = modemClass.Sms(receptionBuffer)
-	emailInstance = emailClass.Email(receptionBuffer)
-	networkInstance = networkClass.Network(receptionBuffer)
-	bluetoothInstance = bluetoothClass.Bluetooth(receptionBuffer)
+	smsInstance = modemClass.Sms(receptionQueue)
+	emailInstance = emailClass.Email(receptionQueue)
+	networkInstance = networkClass.Network(receptionQueue)
+	bluetoothInstance = bluetoothClass.Bluetooth(receptionQueue)
 
-	# Creamos la instancia para levantar las conexiones
-	controllerInstance = controllerClass.Controller(smsInstance, gprsInstance, emailInstance, networkInstance, bluetoothInstance)
+	# Creamos la instancia que levantará las conexiones
+	REFRESH_TIME = JSON_CONFIG["COMMUNICATOR"]["REFRESH_TIME"]
+	controllerInstance = controllerClass.Controller(REFRESH_TIME, smsInstance, gprsInstance, emailInstance, networkInstance, bluetoothInstance)
 
 	# Creamos la instancia para la transmisión de paquetes
-	transmitterInstance = transmitterClass.Transmitter(smsInstance, emailInstance, networkInstance, bluetoothInstance, transmissionBuffer)
+	transmitterInstance = transmitterClass.Transmitter(smsInstance, emailInstance, networkInstance, bluetoothInstance, transmissionQueue)
 
 	# Ponemos en marcha el controlador de medios de comunicación y la transmisión de mensajes
 	controllerInstance.start()
@@ -81,7 +88,7 @@ def open():
 
 def close():
 	"""Se cierran los componentes del sistema, unicamente los abiertos previamente"""
-	global receptionBuffer, transmissionBuffer
+	global receptionQueue, transmissionQueue
 	global controllerInstance, transmitterInstance
 	global smsInstance, gprsInstance, emailInstance, networkInstance, bluetoothInstance
 
@@ -100,9 +107,9 @@ def close():
 	del networkInstance
 	del bluetoothInstance
 
-	# Destruimos los buffer de recepción y transmisión
-	del receptionBuffer
-	del transmissionBuffer
+	# Destruimos las colas de recepción y transmisión
+	del receptionQueue
+	del transmissionQueue
 
 	# Destruimos las instancias de manejo del comunicador
 	del controllerInstance
@@ -111,7 +118,7 @@ def close():
 	return True
 
 def send(message, receiver = None, device = None):
-	"""Se almacena en el buffer de transmisión el paquete a ser enviado, se guardara
+	"""Se almacena en la cola de transmisión el paquete a ser enviado, se guardara
 	en caso de que se hayan establecido parametros correctos. En caso de tratarse 
 	de un mensaje simple o archivo simple, se los convierte en Instancias para simplificar
 	el manejo del mensaje por el transmisor. Pero se envia unicamente la cadena de
@@ -119,9 +126,9 @@ def send(message, receiver = None, device = None):
 	@param message: paquete a ser enviado, ya sea mensaje (o instancia) o un archivo (o instancia)
 	@param receiver: es el contacto al que se envia el mensaje
 	@param device: modo de envío preferente para ese mensaje en particular (puede no definirse)"""
-	global transmissionBuffer
+	global transmissionQueue
 
-	if not transmissionBuffer.full():
+	if not transmissionQueue.full():
 		# Si el mensaje no es una instancia, la creamos para poder hacer el manejo de transmisión con prioridad
 		if not isinstance(message, messageClass.Message):
 			# Al no tratarse de una instancia, no podemos conocer el destino salvo que el usuario lo especifique
@@ -143,8 +150,8 @@ def send(message, receiver = None, device = None):
 				logger.write('ERROR', '[COMMUNICATOR] No se especificó un destino para el mensaje!')
 				return False
 		################################## VERIFICACIÓN DE CONTACTO ##################################
-		# Antes de poner el mensaje en el buffer, comprobamos que el cliente esté en algún diccionario
-		clientList = list() + contactList.allowedIpAddress.keys()
+		# Antes de poner el mensaje en la cola, comprobamos que el cliente esté en algún diccionario
+		clientList = list() + contactList.allowedHosts.keys()
 		clientList += contactList.allowedMacAddress.keys()
 		clientList += contactList.allowedEmails.keys()
 		clientList += contactList.allowedNumbers.keys()
@@ -156,39 +163,42 @@ def send(message, receiver = None, device = None):
 			logger.write('WARNING', '[COMMUNICATOR] \'%s\' no registrado! Mensaje descartado...' % message.receiver)
 			return False
 		################################ FIN VERIFICACIÓN DE CONTACTO ################################
-		# Establecemos el tiempo que permanecerá el mensaje en el buffer antes de ser desechado en caso de no ser enviado
-		setattr(message, 'timeOut', 20)
+		# Ponemos en maýusculas el dispositivo preferido, si es que se estableció alguno
+		if device is not None:
+			device = device.upper()
 		# Damos mayor prioridad al dispositivo referenciado por 'device' (si es que hay alguno)
 		setattr(message, 'device', device)
-		# Indicamos con una marca de tiempo, la hora exacta en la que se almacenó el mensaje en el buffer de transmisión
+		# Indicamos con una marca de tiempo, la hora exacta en la que se almacenó el mensaje en la cola de transmisión
 		setattr(message, 'timeStamp', time.time())
-		# Almacenamos el mensaje en el buffer de transmisión, con la prioridad correspondiente
-		transmissionBuffer.put((100 - message.priority, message))
-		logger.write('INFO', '[COMMUNICATOR] Mensaje almacenado en el buffer esperando ser enviado...')
+		# Establecemos el tiempo que permanecerá el mensaje en la cola antes de ser desechado en caso de no ser enviado
+		setattr(message, 'timeToLive', JSON_CONFIG["COMMUNICATOR"]["TIME_TO_LIVE"])
+		# Almacenamos el mensaje en la cola de transmisión, con la prioridad correspondiente
+		transmissionQueue.put((message.priority, message))
+		logger.write('INFO', '[COMMUNICATOR] Mensaje almacenado en la cola esperando ser enviado...')
 		return True
 	else:
-		logger.write('WARNING', '[COMMUNICATOR] El buffer de transmisión esta lleno, imposible enviar!')
+		logger.write('WARNING', '[COMMUNICATOR] La cola de transmisión esta llena, imposible enviar!')
 		return False
 
 def receive():
-	"""Se obtiene de un buffer circular el mensaje recibido mas antiguo.
+	"""Se obtiene de una cola el mensaje recibido mas antiguo.
 	@return: Mensaje recibido
 	@rtype: str"""
-	if receptionBuffer.qsize() > 0:
+	if receptionQueue.qsize() > 0:
 		# El elemento 0 es la prioridad, por eso sacamos el 1 porque es el mensaje
-		return receptionBuffer.get_nowait()[1]
+		return receptionQueue.get_nowait()[1]
 	else:
-		logger.write('INFO', '[COMMUNICATOR] El buffer de mensajes esta vacío!')
+		logger.write('INFO', '[COMMUNICATOR] La cola de mensajes esta vacía!')
 		return None
 
-def lenght():
-	"""Devuelve el tamaño del buffer de recepción.
-	@return: Cantidad de elementos en el buffer
+def length():
+	"""Devuelve el tamaño de la cola de recepción.
+	@return: Cantidad de elementos en la cola
 	@rtype: int"""
-	if receptionBuffer.qsize() == None:
+	if receptionQueue.qsize() == None:
 		return 0
 	else:
-		return receptionBuffer.qsize()
+		return receptionQueue.qsize()
 
 def connectGprs():
 	# Si no hay una conexión GPRS activa, intentamos conectarnos a la red

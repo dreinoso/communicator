@@ -30,6 +30,7 @@ JSON_CONFIG = json.load(open(JSON_FILE))
 class Modem(object):
 	""" Clase 'Modem'. Permite la creacion de una instancia del dispositivo. """
 	successfulConnection = None
+	receptionQueue = None
 	serialPort = None
 
 	def __init__(self):
@@ -69,14 +70,14 @@ class Sms(Modem):
 	successfulSending = None
 	isActive = False
 
-	def __init__(self, _receptionBuffer):
+	def __init__(self, _receptionQueue):
 		""" Constructor de la clase 'Sms'. Configura el modem para operar en modo mensajes
 			de texto, indica el sitio donde se van a almacenar los mensajes recibidos,
 			habilita notificacion para los SMS entrantes y establece el numero del centro
 			de mensajes CLARO para poder enviar mensajes de texto (este campo puede variar
 			dependiendo de la compania de telefonia de la tarjeta SIM). """
 		Modem.__init__(self)
-		self.receptionBuffer = _receptionBuffer
+		self.receptionQueue = _receptionQueue
 
 	def __del__(self):
 		""" Destructor de la clase 'Modem'. Cierra la conexion establecida
@@ -96,8 +97,8 @@ class Sms(Modem):
 			self.sendAT('ATE1')				 # Habilitamos el echo
 			self.sendAT('AT+CMEE=2')		 # Habilitamos reporte de error
 			self.sendAT('AT+CMGF=1')		 # Establecemos el modo para sms
-			self.sendAT('AT+CLIP=1')		 # Habilitamos identificador de llamada
-			self.sendAT('AT+CNMI=1,2,0,0,0') # Habilito notificacion de mensaje entrante
+			self.sendAT('AT+CLIP=1')		 # Habilitamos identificador de llamadas
+			self.sendAT('AT+CNMI=1,2,0,0,0') # Habilitamos notificacion de mensaje entrante
 			self.successfulConnection = True
 			return True
 		except:
@@ -157,9 +158,9 @@ class Sms(Modem):
 							serializedMessage = smsMessage[len('INSTANCE'):]
 							# 'Deserializamos' la instancia de mensaje para obtener el objeto en sí
 							messageInstance = pickle.loads(serializedMessage)
-							self.receptionBuffer.put((100 - messageInstance.priority, messageInstance))
+							self.receptionQueue.put((messageInstance.priority, messageInstance))
 						else: 
-							self.receptionBuffer.put((10, smsMessage))
+							self.receptionQueue.put((10, smsMessage))
 						#self.sendOutput(telephoneNumber, smsMessage) # -----> SOLO PARA LA DEMO <-----
 						logger.write('INFO', '[SMS] Mensaje de ' + str(telephoneNumber) + ' recibido correctamente!')
 					else:
@@ -184,6 +185,7 @@ class Sms(Modem):
 					smsAmount -= 1
 			elif self.modemInstance.inWaiting() is not 0:
 				bytesToRead = self.modemInstance.inWaiting()
+				print self.modemInstance.read(bytesToRead)
 				receptionList = self.modemInstance.read(bytesToRead).split('\r\n')
 				# Quitamos el primer y último elemento, porque no contienen información
 				receptionList.pop(len(receptionList) - 1)
@@ -239,8 +241,8 @@ class Sms(Modem):
 		try:
 			self.successfulSending = None
 			# Enviamos los comandos AT correspondientes para efectuar el envío el mensaje de texto
-			info01 = self.sendAT('AT+CMGS="' + str(telephoneNumber) + '"') # Numero al cual enviar el Sms
-			info02 = self.sendAT(plainText + ascii.ctrl('z'))              # Mensaje de texto terminado en Ctrl+Z
+			info01 = self.sendAT('AT+CMGS="' + str(telephoneNumber) + '"') # Numero al cual enviar el SMS
+			info02 = self.sendAT(plainText + ascii.ctrl('z'))              # Mensaje de texto terminado en Ctrl+z
 			# Borramos el mensaje enviado almacenado en la memoria
 			self.removeAllSms()
 			# ------------------ Caso de envío EXITOSO ------------------

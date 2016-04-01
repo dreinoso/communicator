@@ -26,9 +26,9 @@ class Transmitter(threading.Thread):
 	bluetoothPriority = 0
 
 	isActive = False
-	transmissionBuffer = None
+	transmissionQueue = None
 
-	def __init__(self, _smsInstance, _emailInstance, _networkInstance, _bluetoothInstance, _transmissionBuffer):
+	def __init__(self, _smsInstance, _emailInstance, _networkInstance, _bluetoothInstance, _transmissionQueue):
 		"""Creación de la clase de transmisión de paquetes TCP.
 		@param _threadName: nombre del hilo
 		@type: string
@@ -42,7 +42,7 @@ class Transmitter(threading.Thread):
 		self.emailInstance = _emailInstance
 		self.networkInstance = _networkInstance
 		self.bluetoothInstance = _bluetoothInstance
-		self.transmissionBuffer = _transmissionBuffer
+		self.transmissionQueue = _transmissionQueue
 
 	def __del__(self):
 		logger.write('INFO', '[TRANSMITTER] Objeto destruido.')
@@ -50,21 +50,21 @@ class Transmitter(threading.Thread):
 	def run(self):
  		'''Toma del buffer una instancia mensaje (la de mayor prioridad) con parametros 
  		adicionales en la instancia para determinar si el mensaje es válido en relación 
- 		al timeout. De ser posible'''
+ 		al timeToLive. De ser posible'''
  		self.isActive = True
 		while self.isActive:
 			try:
-				# El elemento 0 es la prioridad, por eso sacamos el 1 porque es el mensaje
-				messageInstance = self.transmissionBuffer.get(True, 1.5)[1]
-				# Calculamos el tiempo transcurrido desde que se insertó el mensaje en el buffer hasta ahora
+				# El elemento 0 es la prioridad, por eso sacamos el 1 que es el mensaje
+				messageInstance = self.transmissionQueue.get(True, 1.5)[1]
+				# Calculamos el tiempo transcurrido desde la creación del mensaje
 				elapsedTime = time.time() - messageInstance.timeStamp
-				# Actualizamos el tiempo de vida restante del mensaje que está almacenado en el buffer
-				messageInstance.timeOut = messageInstance.timeOut - elapsedTime
-				# Si todavía no vence el 'timeout', el mensaje es válido y debe ser enviado...
-				if messageInstance.timeOut > 0:
+				# Actualizamos el tiempo de vida restante del mensaje
+				messageInstance.timeToLive = messageInstance.timeToLive - elapsedTime
+				# Si todavía no se alcanzó el tiempo de vida, el mensaje sigue siendo válido...
+				if messageInstance.timeToLive > 0:
 					transmitterThread = threading.Thread(target = self.trySend, args = (messageInstance,), name = 'TransmitterThread')
 					transmitterThread.start()
-				# ... sino, el tiempo expiro y el mensaje debe ser descartado.
+				# ... sino, el tiempo fue excedido y el mensaje debe ser descartado.
 				else:
 					logger.write('WARNING', '[COMMUNICATOR] Mensaje para \'%s\' descartado (el tiempo expiró).' % messageInstance.receiver)
 					# Eliminamos la instancia de mensaje, dado que ya no está en el buffer de transmisión
@@ -82,25 +82,27 @@ class Transmitter(threading.Thread):
 		Si en cambio se recibe False el mensaje no se pudo enviar, pero el mensaje
 		es correcto entonces debe volverse a guardar en el buffer. Los controles sobre
 		el envio se hacen en cada uno de los modos, estos deciden y notifican'''
+		# Establecemos el orden jerárquico de los medios de comunicación
 		self.setPriorities(messageInstance.receiver, messageInstance.device)
 		# Hacemos una copia de los campos del objeto
 		device = messageInstance.device
-		timeOut = messageInstance.timeOut
 		timeStamp = messageInstance.timeStamp
+		timeToLive = messageInstance.timeToLive
 		# Eliminamos los campos del objeto, ya que el receptor no los necesita
 		delattr(messageInstance, 'device')
-		delattr(messageInstance, 'timeOut')
 		delattr(messageInstance, 'timeStamp')
-		# Si el envío falla, se vuelve a colocar el mensaje en el buffer para ser enviado nuevamente
+		delattr(messageInstance, 'timeToLive')
+		# Intentamos enviar el mensaje por todos los medios disponibles
 		if not self.send(messageInstance):
 			# Insertamos nuevamente los campos eliminados para manejar el próximo envío
 			setattr(messageInstance, 'device', device)
-			setattr(messageInstance, 'timeOut', timeOut)
 			setattr(messageInstance, 'timeStamp', timeStamp)
-			# Intervalo de tiempo entre envios sucesivos del mismo paquete
+			setattr(messageInstance, 'timeToLive', timeToLive)
+			# Esperamos un tiempo ‘retryTime’ antes de un posterior reintento
 			time.sleep(JSON_CONFIG["COMMUNICATOR"]["RETRY_TIME"])
-			self.transmissionBuffer.put((100 - messageInstance.priority, messageInstance), True)
-		# Mensaje enviado por lo que se elimina
+			# Como el envío falló, se vuelve a colocar el mensaje en la cola
+			self.transmissionQueue.put((messageInstance.priority, messageInstance), True)
+		# Como el mensaje fue enviado con éxito, se lo elimina del sistema
 		else:
 			del messageInstance
 
@@ -124,7 +126,7 @@ class Transmitter(threading.Thread):
 			else:
 				self.emailPriority = JSON_CONFIG["PRIORITY_LEVELS"]["EMAIL"]
 		# Para NETWORK
-		if contactList.allowedIpAddress.has_key(receiver) and self.networkInstance.isActive:
+		if contactList.allowedHosts.has_key(receiver) and self.networkInstance.isActive:
 			# En caso de preferencia se da máxima prioridad
 			if device == 'NETWORK':
 				self.networkPriority = 10
@@ -164,8 +166,8 @@ class Transmitter(threading.Thread):
 				return True
 		# Intentamos transmitir por NETWORK
 		elif self.networkPriority != 0 and self.networkPriority >= self.bluetoothPriority:
-			destinationIp, destinationTcpPort, destinationUdpPort = contactList.allowedIpAddress[messageInstance.receiver]
-			if not self.networkInstance.send(messageInstance, destinationIp, destinationTcpPort, destinationUdpPort):
+			destinationHost, destinationTcpPort, destinationUdpPort = contactList.allowedHosts[messageInstance.receiver]
+			if not self.networkInstance.send(messageInstance, destinationHost, destinationTcpPort, destinationUdpPort):
 				logger.write('DEBUG', '[COMMUNICATOR-NETWORK] Falló. Reintentando con otro periférico.')
 				self.networkPriority = 0          # Se descarta para la próxima selección
 				return self.send(messageInstance) # Se reintenta con otros periféricos

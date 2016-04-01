@@ -19,12 +19,12 @@ DOWNLOADS = 'Downloads'
 
 class BluetoothReceptor(threading.Thread):
 
-	receptionBuffer = None
+	receptionQueue = None
 
-	def __init__(self, _threadName, _remoteSocket, _receptionBuffer):
+	def __init__(self, _threadName, _remoteSocket, _receptionQueue):
 		threading.Thread.__init__(self, name = _threadName)
 		self.remoteSocket = _remoteSocket
-		self.receptionBuffer = _receptionBuffer
+		self.receptionQueue = _receptionQueue
 
 	def run(self):
 		try:
@@ -38,11 +38,11 @@ class BluetoothReceptor(threading.Thread):
 				serializedMessage = receivedData[len('INSTANCE'):]
 				# 'Deserializamos' la instancia de mensaje para obtener el objeto en sí
 				messageInstance = pickle.loads(serializedMessage)
-				self.receptionBuffer.put((100 - messageInstance.priority, messageInstance))
+				self.receptionQueue.put((messageInstance.priority, messageInstance))
 				logger.write('INFO', '[BLUETOOTH] Ha llegado una nueva instancia de mensaje!')
 			# Se trata de un texto plano, sólo se lo almacena 
 			else:
-				self.receptionBuffer.put((10, receivedData))
+				self.receptionQueue.put((10, receivedData))
 				logger.write('INFO', '[BLUETOOTH] Ha llegado un nuevo mensaje!')
 		except bluetooth.BluetoothError as errorMessage:
 			logger.write('WARNING', '[BLUETOOTH] Error al intentar recibir un mensaje: \'%s\'.'% errorMessage )
@@ -81,7 +81,7 @@ class BluetoothReceptor(threading.Thread):
 						fileObject.close()
 						break
 				self.remoteSocket.send('ACK') # IMPORTANTE, no borrar.
-				self.receptionBuffer.put((10, fileName))
+				self.receptionQueue.put((10, fileName))
 				logger.write('INFO', '[BLUETOOTH] Archivo \'%s\' descargado correctamente!' % fileName)
 				return True
 			else:

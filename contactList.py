@@ -9,9 +9,9 @@
 	@organization: UNC - Fcefyn
 	@date: Lunes 16 de Abril de 2015 """
 
-# Direcciones IP permitidas
-allowedIpAddress = dict()
-allowedIpAddress = {'client02' : ('192.168.1.6', 6000, 6010)}
+# Hosts permitidos
+allowedHosts = dict()
+allowedHosts = {'client02' : ('192.168.1.6', 6000, 6010)}
 
 # Direcciones MAC permitidas
 allowedMacAddress = dict()

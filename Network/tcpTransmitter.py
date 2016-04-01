@@ -16,10 +16,10 @@ class TcpTransmitter():
 	def __init__(self):
 		"""Constructor de la clase de transmisión de paquetes TCP."""
 
-	def sendMessage(self, plainText, remoteSocket):
+	def sendMessage(self, plainText, clientSocket):
 		'''Envío de mensaje simple'''
 		try:
-			remoteSocket.send(plainText)
+			clientSocket.send(plainText)
 			logger.write('INFO', '[NETWORK-TCP] Mensaje enviado correctamente!')
 			return True
 		except Exception as errorMessage:
@@ -27,9 +27,9 @@ class TcpTransmitter():
 			return False
 		finally:
 			# Cierra la conexion del socket cliente
-			remoteSocket.close()
+			clientSocket.close()
 
-	def sendFile(self, fileName, remoteSocket):
+	def sendFile(self, fileName, clientSocket):
 		'''Envio de archivo simple, es decir unicamente el archivo sin una instancia de control.
 		Esta función solo se llama en caso de que el archivo exista. Por lo que solo resta abrirlo.
 		Se hacen sucecivas lecturas del archivo, y se envian. El receptor se encarga de recibir y 
@@ -39,9 +39,9 @@ class TcpTransmitter():
 			absoluteFilePath = os.path.abspath(fileName)
 			fileDirectory, fileName = os.path.split(absoluteFilePath)
 			fileObject = open(absoluteFilePath, 'rb')
-			remoteSocket.send(fileName) # Enviamos el nombre del archivo
+			clientSocket.send(fileName) # Enviamos el nombre del archivo
 			# Recibe confirmación para comenzar a transmitir (READY)
-			if remoteSocket.recv(BUFFER_SIZE) == "READY":
+			if clientSocket.recv(BUFFER_SIZE) == "READY":
 				# Guardamos la posición inicial del archivo (donde comienza)
 				fileBeginning = fileObject.tell()
 				# Apuntamos al final del archivo
@@ -55,11 +55,11 @@ class TcpTransmitter():
 				logger.write('DEBUG', '[NETWORK-TCP] Transfiriendo archivo \'%s\'...' % fileName)
 				while bytesSent < fileSize:
 					outputData = fileObject.read(BUFFER_SIZE)
-					remoteSocket.send(outputData)
+					clientSocket.send(outputData)
 					bytesSent += len(outputData)
-					remoteSocket.recv(BUFFER_SIZE) # ACK
+					clientSocket.recv(BUFFER_SIZE) # ACK
 				fileObject.close()
-				remoteSocket.send('EOF')
+				clientSocket.send('EOF')
 				logger.write('INFO', '[NETWORK-TCP] Archivo \'%s\' enviado correctamente!' % fileName)
 				return True
 			# Recibe 'FILE_EXISTS'
@@ -72,4 +72,4 @@ class TcpTransmitter():
 			return False
 		finally:
 			# Cierra la conexion del socket cliente
-			remoteSocket.close()
+			clientSocket.close()

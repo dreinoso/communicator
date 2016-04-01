@@ -8,37 +8,31 @@
 
 import sys
 import logging
-import json
-
-JSON_FILE = 'config.json'
-JSON_CONFIG = json.load(open(JSON_FILE))
 
 CONSOLE_FORMAT = '[%(levelname)s] %(message)s'
 FILE_FORMAT = '[%(asctime)s][%(levelname)s] %(message)s'
-FILE_LOG = 'HistoricalEvents.log'
 
 logger = logging.getLogger(__name__) # Creamos el objeto Logger
 
-def set():
+def set(FILE_LOG, FILE_LOGGING_LEVEL, CONSOLE_LOGGING_LEVEL):
 	"""Se configura el logger, los manejadores (junto con los niveles de mensajes) 
 	y los formatos de los mismos.
 	@param name: Nombre del objeto logger
 	@type name: str
 	"""
-	global logger
 	logger.setLevel(logging.DEBUG)
 
-	fileFormatter = logging.Formatter(FILE_FORMAT)          # Creamos el 'formatter' para el archivo LOG
-	fileHandler = logging.FileHandler(FILE_LOG)             # Creamos el 'handler' para el archivo LOG
-	fileHandler.setLevel(JSON_CONFIG["FILE_LOGGING_LEVEL"]) # Establecemos el nivel para almacenar los mensajes
-	fileHandler.setFormatter(fileFormatter)                 # Establecemos el formato de los mensajes
-	logger.addHandler(fileHandler)                          # Añadimos el 'handler' al objeto Logger
+	fileFormatter = logging.Formatter(FILE_FORMAT) # Creamos el 'formatter' para el archivo LOG
+	fileHandler = logging.FileHandler(FILE_LOG)    # Creamos el 'handler' para el archivo LOG
+	fileHandler.setLevel(FILE_LOGGING_LEVEL)       # Establecemos el nivel para almacenar los mensajes
+	fileHandler.setFormatter(fileFormatter)        # Establecemos el formato de los mensajes
+	logger.addHandler(fileHandler)                 # Añadimos el 'handler' al objeto Logger
 
-	consoleFormatter = logging.Formatter(CONSOLE_FORMAT)          # Creamos el 'formatter' para la consola
-	consoleHandler = logging.StreamHandler(sys.stdout)            # Creamos el 'handler para la consola
-	consoleHandler.setLevel(JSON_CONFIG["CONSOLE_LOGGING_LEVEL"]) # Establecemos el nivel para mostrar los mensajes
-	consoleHandler.setFormatter(consoleFormatter)                 # Establecemos el formato de los mensajes
-	logger.addHandler(consoleHandler)                             # Añadimos el 'handler' al objeto Logger
+	consoleFormatter = logging.Formatter(CONSOLE_FORMAT) # Creamos el 'formatter' para la consola
+	consoleHandler = logging.StreamHandler(sys.stdout)   # Creamos el 'handler para la consola
+	consoleHandler.setLevel(CONSOLE_LOGGING_LEVEL)       # Establecemos el nivel para mostrar los mensajes
+	consoleHandler.setFormatter(consoleFormatter)        # Establecemos el formato de los mensajes
+	logger.addHandler(consoleHandler)                    # Añadimos el 'handler' al objeto Logger
 
 def write(logType, message):
 	"""Se añade un mensaje al logger si es correcto el tipo de mensaje, el mensaje

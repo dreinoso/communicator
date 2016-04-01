@@ -10,7 +10,6 @@
 import os
 import re
 import time
-import json
 import socket
 import inspect
 import threading
@@ -18,17 +17,12 @@ import subprocess
 
 import logger
 
-JSON_FILE = 'config.json'
-JSON_CONFIG = json.load(open(JSON_FILE))
-
 smsThreadName = 'smsReceptor'
 emailThreadName = 'emailReceptor'
 networkThreadName = 'networkReceptor'
 bluetoothThreadName = 'bluetoothReceptor'
 
 threadNameList = [networkThreadName, smsThreadName, emailThreadName, bluetoothThreadName]
-
-REFRESH_TIME = JSON_CONFIG["COMMUNICATOR"]["REFRESH_TIME"]
 
 class Controller(threading.Thread):
 
@@ -40,8 +34,10 @@ class Controller(threading.Thread):
 
 	isActive = False
 
-	def __init__(self, _smsInstance, _gprsInstance, _emailInstance, _networkInstance, _bluetoothInstance):
+	def __init__(self, _REFRESH_TIME, _smsInstance, _gprsInstance, _emailInstance, _networkInstance, _bluetoothInstance):
 		threading.Thread.__init__(self, name = 'ControllerThread')
+		self.REFRESH_TIME = _REFRESH_TIME
+		# Obtenemos las instancias de los medios
 		self.smsInstance = _smsInstance
 		self.gprsInstance = _gprsInstance
 		self.emailInstance = _emailInstance
@@ -68,7 +64,7 @@ class Controller(threading.Thread):
 			self.availableEmail = self.verifyEmailConnection()
 			self.availableNetwork = self.verifyNetworkConnection()
 			self.availableBluetooth = self.verifyBluetoothConnection()
-			time.sleep(REFRESH_TIME)
+			time.sleep(self.REFRESH_TIME)
 		logger.write('WARNING', '[CONTROLLER] Funcion \'%s\' terminada.' % inspect.stack()[0][3])
 
 	def verifySmsConnection(self):

@@ -15,23 +15,23 @@ class BluetoothTransmitter():
 	def __init__(self):
 		"""Constructor de la clase de transmisión de paquetes Bluetooth."""
 
-	def send(self, message, remoteSocket):
+	def send(self, message, clientSocket):
 		'''Dependiendo del tipo de mensaje de que se trate, el envio del mensaje
 		se comportara diferente'''
 		# Comprobación de envío de texto plano
 		if isinstance(message, messageClass.Message) and hasattr(message, 'plainText'):
-			return self.sendMessage(message.plainText, remoteSocket)
+			return self.sendMessage(message.plainText, clientSocket)
 		# Comprobación de envío de archivo
 		elif isinstance(message, messageClass.Message) and hasattr(message, 'fileName'):
-			return self.sendFile(message.fileName, remoteSocket)
+			return self.sendFile(message.fileName, clientSocket)
 		# Entonces se trata de enviar una instancia de mensaje
 		else:
-			return self.sendMessageInstance(message, remoteSocket)
+			return self.sendMessageInstance(message, clientSocket)
 
-	def sendMessage(self, plainText, remoteSocket):
+	def sendMessage(self, plainText, clientSocket):
 		'''Envío de mensaje simple'''
 		try:
-			remoteSocket.send(plainText)
+			clientSocket.send(plainText)
 			logger.write('INFO', '[BLUETOOTH] Mensaje enviado correctamente!')
 			return True
 		except Exception as errorMessage:
@@ -39,9 +39,9 @@ class BluetoothTransmitter():
 			return False
 		finally:
 			# Cierra la conexion del socket cliente
-			remoteSocket.close()
+			clientSocket.close()
 
-	def sendFile(self, fileName, remoteSocket):
+	def sendFile(self, fileName, clientSocket):
 		'''Envio de archivo simple, es decir unicamente el archivo sin una instancia de control.
 		Esta función solo se llama en caso de que el archivo exista. Por lo que solo resta abrirlo.
 		Se hacen sucecivas lecturas del archivo, y se envian. El receptor se encarga de recibir y 
@@ -51,11 +51,11 @@ class BluetoothTransmitter():
 			absoluteFilePath = os.path.abspath(fileName)
 			fileDirectory, fileName = os.path.split(absoluteFilePath)
 			fileObject = open(absoluteFilePath, 'rb')
-			remoteSocket.send('START_OF_FILE')
-			remoteSocket.recv(BUFFER_SIZE) # ACK
-			remoteSocket.send(fileName) # Enviamos el nombre del archivo
+			clientSocket.send('START_OF_FILE')
+			clientSocket.recv(BUFFER_SIZE) # ACK
+			clientSocket.send(fileName) # Enviamos el nombre del archivo
 			# Recibe confirmación para comenzar a transmitir (READY)
-			if remoteSocket.recv(BUFFER_SIZE) == "READY":
+			if clientSocket.recv(BUFFER_SIZE) == "READY":
 				# Guardamos la posición inicial del archivo (donde comienza)
 				fileBeginning = fileObject.tell()
 				# Apuntamos al final del archivo
@@ -69,12 +69,12 @@ class BluetoothTransmitter():
 				logger.write('DEBUG', '[BLUETOOTH] Transfiriendo archivo \'%s\'...' % fileName)
 				while bytesSent < fileSize:
 					outputData = fileObject.read(BUFFER_SIZE)
-					remoteSocket.send(outputData)
+					clientSocket.send(outputData)
 					bytesSent += len(outputData)
-					remoteSocket.recv(BUFFER_SIZE) # ACK
+					clientSocket.recv(BUFFER_SIZE) # ACK
 				fileObject.close()
-				remoteSocket.send('EOF')
-				remoteSocket.recv(BUFFER_SIZE) # IMPORTANTE ACK, no borrar.
+				clientSocket.send('EOF')
+				clientSocket.recv(BUFFER_SIZE) # IMPORTANTE ACK, no borrar.
 				logger.write('INFO', '[BLUETOOTH] Archivo \'%s\' enviado correctamente!' % fileName)
 				return True
 			# Recibe 'FILE_EXISTS'
@@ -86,16 +86,16 @@ class BluetoothTransmitter():
 			return False
 		finally:
 			# Cierra la conexion del socket cliente
-			remoteSocket.close()
+			clientSocket.close()
 
-	def sendMessageInstance(self, message, remoteSocket):
+	def sendMessageInstance(self, message, clientSocket):
 		'''Envió de la instancia mensaje. Primero debe realizarse una serialización de la clase
 		y enviar de a BUFFER_SIZE cantidad de caracteres, en definitiva se trata de una cadena.'''
 		try:
 			# Serializamos el objeto para poder transmitirlo
 			serializedMessage = 'INSTANCE' + pickle.dumps(message)
 			# Transmitimos la instancia serializada al destino correspondiente
-			remoteSocket.send(serializedMessage)
+			clientSocket.send(serializedMessage)
 			logger.write('INFO', '[BLUETOOTH] Instancia de mensaje enviada correctamente!')
 			return True
 		except Exception as errorMessage:
@@ -103,4 +103,4 @@ class BluetoothTransmitter():
 			return False
 		finally:
 			# Cierra la conexion del socket cliente
-			remoteSocket.close()
+			clientSocket.close()

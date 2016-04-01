@@ -45,18 +45,18 @@ class Email(object):
 	imapServer = imaplib.IMAP4_SSL
 
 	successfulConnection = None
-	receptionBuffer = None
+	receptionQueue = None
 	emailAccount = None
 	isActive = False
 
-	def __init__(self, _receptionBuffer):
+	def __init__(self, _receptionQueue):
 		""" Configura el protocolo SMTP y el protocolo IMAP. El primero se encargara
 		de enviar correos electronicos, mientras que el segungo a recibirlos.
 		mbos disponen de una misma cuenta asociada a GMAIL para tales fines (y
 		que esta dada en el archivo 'contactList.py'. 
-		@param _receptionBuffer: Buffer para la recepción de datos
+		@param _receptionQueue: Buffer para la recepción de datos
 		@type: list"""
-		self.receptionBuffer = _receptionBuffer
+		self.receptionQueue = _receptionQueue
 		# Establecemos tiempo maximo antes de reintentar lectura (válido para 'imapServer')
 		socket.setdefaulttimeout(TIMEOUT)
 
@@ -83,6 +83,7 @@ class Email(object):
 			# El 'timeout' siguiente es para la función 'sendmail' de 'smtpServer'
 			self.smtpServer = smtplib.SMTP(smtpHost, smtpPort, timeout = 30) # Establecemos servidor y puerto SMTP
 			self.imapServer = imaplib.IMAP4_SSL(imapHost, imapPort)          # Establecemos servidor y puerto IMAP
+			self.smtpServer.ehlo()
 			self.smtpServer.starttls()
 			self.smtpServer.ehlo()
 			self.smtpServer.login(self.emailAccount, emailPassword) # Nos logueamos en el servidor SMTP
@@ -116,7 +117,7 @@ class Email(object):
 	def sendMessage(self, plainText, emailDestination):
 		try:
 			# Se construye un mensaje simple
-			mimeText = MIMEText(plainText)
+			mimeText = MIMEText(plainText, 'plain')
 			mimeText['From'] = '%s <%s>' % (JSON_CONFIG["COMMUNICATOR"]["NAME"], JSON_CONFIG["EMAIL"]["ACCOUNT"])
 			mimeText['To'] = emailDestination
 			mimeText['Subject'] = JSON_CONFIG["EMAIL"]["SUBJECT"]
@@ -127,16 +128,16 @@ class Email(object):
 			logger.write('WARNING', '[EMAIL] Mensaje no enviado: %s' % str(errorMessage))
 			return False
 
-	def sendAttachment(self, fileName, emailDestination, messageToSend = 'Este email tiene un archivo adjunto.'):
+	def sendAttachment(self, relativeFilePath, emailDestination, messageToSend = 'Este email tiene un archivo adjunto.'):
 		try:
-			absoluteFilePath = os.path.abspath(fileName)
+			mimeMultipart = MIMEMultipart()
+			mimeMultipart['From'] = '%s <%s>' % (JSON_CONFIG["COMMUNICATOR"]["NAME"], JSON_CONFIG["EMAIL"]["ACCOUNT"])
+			mimeMultipart['To'] = emailDestination
+			mimeMultipart['Subject'] = JSON_CONFIG["EMAIL"]["SUBJECT"]
+			absoluteFilePath = os.path.abspath(relativeFilePath)
 			fileDirectory, fileName = os.path.split(absoluteFilePath)
 			cType = mimetypes.guess_type(absoluteFilePath)[0]
 			mainType, subType = cType.split('/', 1)
-			mimeMultipart = MIMEMultipart()
-			mimeMultipart['Subject'] = JSON_CONFIG["EMAIL"]["SUBJECT"]
-			mimeMultipart['From'] = '%s <%s>' % (JSON_CONFIG["COMMUNICATOR"]["NAME"], JSON_CONFIG["EMAIL"]["ACCOUNT"])
-			mimeMultipart['To'] = emailDestination
 			if mainType == 'text':
 				fileObject = open(absoluteFilePath)
 				# Note: we should handle calculating the charset
@@ -199,7 +200,6 @@ class Email(object):
 			while emailIds[0] == '' and self.isActive:
 				try:
 					self.imapServer.recent() # Actualizamos la Bandeja de Entrada
-					#result, emailIds = self.imapServer.search(None, '(UNSEEN)') # Buscamos emails sin leer (nuevos)
 					result, emailIds = self.imapServer.uid('search', None, '(UNSEEN)') # Buscamos emails sin leer (nuevos)
 					# Ejemplo de emailIds: ['35 36 37']
 				except Exception as e:
@@ -231,11 +231,11 @@ class Email(object):
 								serializedMessage = emailBody[len('INSTANCE'):]
 								# 'Deserializamos' la instancia de mensaje para obtener el objeto en sí
 								messageInstance = pickle.loads(serializedMessage)
-								self.receptionBuffer.put((100 - messageInstance.priority, messageInstance))
+								self.receptionQueue.put((messageInstance.priority, messageInstance))
 								logger.write('INFO', '[EMAIL] Ha llegado una nueva instancia de mensaje!')
 							else:
 								emailBody = emailBody[:emailBody.rfind('\r\n')] # Elimina el salto de línea del final
-								self.receptionBuffer.put((10, emailBody))
+								self.receptionQueue.put((10, emailBody))
 								logger.write('INFO', '[EMAIL] Ha llegado un nuevo mensaje!')
 					else:
 						logger.write('WARNING', '[EMAIL] Imposible procesar la solicitud. El correo no se encuentra registrado!')
@@ -263,7 +263,7 @@ class Email(object):
 			fileObject = open(filePath, 'w+')
 			fileObject.write(emailHeader.get_payload(decode = True))
 			fileObject.close()
-			self.receptionBuffer.put((10, fileName))
+			self.receptionQueue.put((10, fileName))
 			logger.write('INFO', '[EMAIL] Archivo adjunto \'%s\' descargado correctamente!' % fileName)
 			return True
 		else:
