@@ -42,12 +42,12 @@ def main():
 				# Indicamos el mensaje que se desea enviar
 				messageToSend = raw_input('Mensaje a enviar: ')
 				# Preguntamos si hay alguna preferencia en relación a los medios de comunicación
-				selectDevice = askDevices()
-				if selectDevice is True:
-					# El medio preferido está dado por 'device'
-					device = raw_input('Medio de comunicación preferido: ')
-					communicator.send(messageToSend, receiver, device) # <----- IMPORTANTE
-				elif selectDevice is False:
+				selectMedia = askMedia()
+				if selectMedia is True:
+					# El medio preferido está dado por 'media'
+					media = raw_input('Medio de comunicación preferido: ')
+					communicator.send(messageToSend, receiver, media) # <----- IMPORTANTE
+				elif selectMedia is False:
 					# El medio se elige automáticamente
 					communicator.send(messageToSend, receiver) # <----- IMPORTANTE
 				else:
@@ -69,12 +69,12 @@ def main():
 				# Creamos la instancia de mensaje
 				infoMessage = messageClass.InfoMessage(sender, receiver, infoText)
 				# Preguntamos si hay alguna preferencia en relación a los medios de comunicación
-				selectDevice = askDevices()
-				if selectDevice is True:
-					# El medio preferido está dado por 'device'
-					device = raw_input('Medio de comunicación preferido: ')
-					communicator.send(infoMessage, device = device) # <----- IMPORTANTE
-				elif selectDevice is False:
+				selectMedia = askMedia()
+				if selectMedia is True:
+					# El medio preferido está dado por 'media'
+					media = raw_input('Medio de comunicación preferido: ')
+					communicator.send(infoMessage, media = media) # <----- IMPORTANTE
+				elif selectMedia is False:
 					# El medio se elige automáticamente
 					communicator.send(infoMessage) # <----- IMPORTANTE
 				else:
@@ -132,12 +132,12 @@ def askClients():
 	else:
 		return None
 
-def askDevices():
-	selectDevice = raw_input('¿Desea elegir un medio de comunicación preferido? [S/n] ')
-	if selectDevice is 'S' or selectDevice is 's' or len(selectDevice) is 0:
+def askMedia():
+	selectMedia = raw_input('¿Desea elegir un medio de comunicación preferido? [S/n] ')
+	if selectMedia is 'S' or selectMedia is 's' or len(selectMedia) is 0:
 		print 'Lista de medios: NETWORK, BLUETOOTH, EMAIL, SMS.'
 		return True
-	elif selectDevice is 'N' or selectDevice is 'n':
+	elif selectMedia is 'N' or selectMedia is 'n':
 		return False
 	else:
 		return None

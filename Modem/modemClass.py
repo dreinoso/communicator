@@ -299,6 +299,9 @@ class Sms(Modem):
 	def hangUpCall(self):
 		self.sendAT('ATH') # Cuelga la llamada en curso
 
+	def answerCall(self):
+		self.sendAT('ATA') # Atiende la llamada entrante
+
 	def removeSms(self, smsIndex):
 		""" Envia el comando AT correspondiente para elimiar todos los mensajes del dispositivo.
 			El comando AT tiene una serie de parametros, que dependiendo de cada uno de ellos

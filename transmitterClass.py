@@ -83,19 +83,19 @@ class Transmitter(threading.Thread):
 		es correcto entonces debe volverse a guardar en el buffer. Los controles sobre
 		el envio se hacen en cada uno de los modos, estos deciden y notifican'''
 		# Establecemos el orden jerárquico de los medios de comunicación
-		self.setPriorities(messageInstance.receiver, messageInstance.device)
+		self.setPriorities(messageInstance.receiver, messageInstance.media)
 		# Hacemos una copia de los campos del objeto
-		device = messageInstance.device
+		media = messageInstance.media
 		timeStamp = messageInstance.timeStamp
 		timeToLive = messageInstance.timeToLive
 		# Eliminamos los campos del objeto, ya que el receptor no los necesita
-		delattr(messageInstance, 'device')
+		delattr(messageInstance, 'media')
 		delattr(messageInstance, 'timeStamp')
 		delattr(messageInstance, 'timeToLive')
 		# Intentamos enviar el mensaje por todos los medios disponibles
 		if not self.send(messageInstance):
 			# Insertamos nuevamente los campos eliminados para manejar el próximo envío
-			setattr(messageInstance, 'device', device)
+			setattr(messageInstance, 'media', media)
 			setattr(messageInstance, 'timeStamp', timeStamp)
 			setattr(messageInstance, 'timeToLive', timeToLive)
 			# Esperamos un tiempo ‘retryTime’ antes de un posterior reintento
@@ -106,7 +106,7 @@ class Transmitter(threading.Thread):
 		else:
 			del messageInstance
 
-	def setPriorities(self, receiver, device):
+	def setPriorities(self, receiver, media):
 		self.smsPriority = 0
 		self.emailPriority = 0
 		self.networkPriority = 0
@@ -114,28 +114,28 @@ class Transmitter(threading.Thread):
 		# Para SMS
 		if contactList.allowedNumbers.has_key(receiver) and self.smsInstance.isActive:
 			# En caso de preferencia se da máxima prioridad
-			if device == 'SMS':
+			if media == 'SMS':
 				self.smsPriority = 10
 			else:
 				self.smsPriority = JSON_CONFIG["PRIORITY_LEVELS"]["SMS"]
 		# Para EMAIL
 		if contactList.allowedEmails.has_key(receiver) and self.emailInstance.isActive:
 			# En caso de preferencia se da máxima prioridad
-			if device == 'EMAIL':
+			if media == 'EMAIL':
 				self.emailPriority = 10
 			else:
 				self.emailPriority = JSON_CONFIG["PRIORITY_LEVELS"]["EMAIL"]
 		# Para NETWORK
 		if contactList.allowedHosts.has_key(receiver) and self.networkInstance.isActive:
 			# En caso de preferencia se da máxima prioridad
-			if device == 'NETWORK':
+			if media == 'NETWORK':
 				self.networkPriority = 10
 			else:
 				self.networkPriority = JSON_CONFIG["PRIORITY_LEVELS"]["NETWORK"]
 		# Para BLUETOOTH
 		if contactList.allowedMacAddress.has_key(receiver) and self.bluetoothInstance.isActive:
 			# En caso de preferencia se da máxima prioridad
-			if device == 'BLUETOOTH':
+			if media == 'BLUETOOTH':
 				self.bluetoothPriority = 10
 			else:
 				self.bluetoothPriority = JSON_CONFIG["PRIORITY_LEVELS"]["BLUETOOTH"]

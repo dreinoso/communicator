@@ -117,7 +117,7 @@ def close():
 
 	return True
 
-def send(message, receiver = None, device = None):
+def send(message, receiver = None, media = None):
 	"""Se almacena en la cola de transmisión el paquete a ser enviado, se guardara
 	en caso de que se hayan establecido parametros correctos. En caso de tratarse 
 	de un mensaje simple o archivo simple, se los convierte en Instancias para simplificar
@@ -125,7 +125,7 @@ def send(message, receiver = None, device = None):
 	texto o el archivo
 	@param message: paquete a ser enviado, ya sea mensaje (o instancia) o un archivo (o instancia)
 	@param receiver: es el contacto al que se envia el mensaje
-	@param device: modo de envío preferente para ese mensaje en particular (puede no definirse)"""
+	@param media: modo de envío preferente para ese mensaje en particular (puede no definirse)"""
 	global transmissionQueue
 
 	if not transmissionQueue.full():
@@ -164,10 +164,10 @@ def send(message, receiver = None, device = None):
 			return False
 		################################ FIN VERIFICACIÓN DE CONTACTO ################################
 		# Ponemos en maýusculas el dispositivo preferido, si es que se estableció alguno
-		if device is not None:
-			device = device.upper()
-		# Damos mayor prioridad al dispositivo referenciado por 'device' (si es que hay alguno)
-		setattr(message, 'device', device)
+		if media is not None:
+			media = media.upper()
+		# Damos mayor prioridad al dispositivo referenciado por 'media' (si es que hay alguno)
+		setattr(message, 'media', media)
 		# Indicamos con una marca de tiempo, la hora exacta en la que se almacenó el mensaje en la cola de transmisión
 		setattr(message, 'timeStamp', time.time())
 		# Establecemos el tiempo que permanecerá el mensaje en la cola antes de ser desechado en caso de no ser enviado
