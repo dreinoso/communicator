@@ -200,13 +200,39 @@ def length():
 	else:
 		return receptionQueue.qsize()
 
+def sendVoiceCall(telephoneNumber):
+	if smsInstance.isActive:
+		return smsInstance.sendVoiceCall(telephoneNumber)
+	else:
+		logger.write('WARNING', '[COMMUNICATOR] No hay un módulo para el manejo de llamadas de voz!')
+		return False
+
+def answerVoiceCall():
+	if smsInstance.isActive:
+		return smsInstance.answerVoiceCall()
+	else:
+		logger.write('WARNING', '[COMMUNICATOR] No hay un módulo para el manejo de llamadas de voz!')
+		return False
+
+def hangUpVoiceCall():
+	if smsInstance.isActive:
+		return smsInstance.hangUpVoiceCall()
+	else:
+		logger.write('WARNING', '[COMMUNICATOR] No hay un módulo para el manejo de llamadas de voz!')
+		return False
+
 def connectGprs():
-	# Si no hay una conexión GPRS activa, intentamos conectarnos a la red
+	# Si no existe una conexión GPRS activa, intentamos conectarnos a la red
 	if not gprsInstance.isActive:
 		return gprsInstance.connect()
 	else:
-		logger.write('WARNING', '[GRPS] Ya existe una conexión activa con la red!')
+		logger.write('WARNING', '[COMMUNICATOR] Ya existe una conexión GPRS activa!')
 		return True
 
 def disconnectGprs():
-	return gprsInstance.disconnect()
+	# Si ya existe una conexión GPRS activa, intentamos desconectarnos de la red
+	if gprsInstance.isActive:
+		return gprsInstance.disconnect()
+	else:
+		logger.write('WARNING', '[COMMUNICATOR] No existe una conexión GPRS activa para desconectar!')
+		return False

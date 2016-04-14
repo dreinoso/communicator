@@ -55,9 +55,13 @@ class Modem(object):
 		modemOutput = self.modemInstance.readlines() # Espero la respuesta
 		# Verificamos si se produjo algún tipo de error relacionado con el comando AT
 		for outputElement in modemOutput:
+			# El 'AT+CNMA' sólo es soportado en Dongles USB que requieren confirmación de sms
 			if outputElement.startswith(('+CME ERROR', '+CMS ERROR')) and atCommand != 'AT+CNMA':
-				outputElement = outputElement.replace('\r\n', '')
-				logger.write('ERROR', '[SMS] %s.' % outputElement)
+				errorMessage = outputElement.replace('\r\n', '')
+				logger.write('ERROR', '[SMS] %s.' % errorMessage)
+				raise
+			# El comando AT para llamadas de voz (caracterizado por su terminacion en ';') no es soportado
+			elif outputElement.startswith('NO CARRIER') and atCommand.startswith('ATD') and atCommand.endswith(';'):
 				raise
 		return modemOutput
 
@@ -116,7 +120,6 @@ class Sms(Modem):
 			de telefono dado por 'DESTINATION_NUMBER' un mensaje de actualizacion, que por el momento
 			estara compuesto de un 'TimeStamp'. """
 		smsAmount = 0
-		callerID = None
 		smsBodyList = list()
 		smsHeaderList = list()
 		unreadList = self.sendAT('AT+CMGL="REC UNREAD"')
@@ -185,9 +188,8 @@ class Sms(Modem):
 					smsAmount -= 1
 			elif self.modemInstance.inWaiting() is not 0:
 				bytesToRead = self.modemInstance.inWaiting()
-				print self.modemInstance.read(bytesToRead)
 				receptionList = self.modemInstance.read(bytesToRead).split('\r\n')
-				# Quitamos el primer y último elemento, porque no contienen información
+				# Quitamos el primer y último elemento, porque no contienen información (espacios en blanco)
 				receptionList.pop(len(receptionList) - 1)
 				receptionList.pop(0)
 				# Ejemplo receptionList: ['+CMT: "+543512641040","","16/01/31,05:00:08-12"', 'Nuevo SMS.']
@@ -195,8 +197,8 @@ class Sms(Modem):
 				# Ejemplo receptionList: ['NO CARRIER']
 				# Ejemplo receptionList: ['+CMS ERROR: 500']
 				print receptionList
+				# Significa un mensaje entrante
 				if receptionList[0].startswith('+CMT'):
-					# Significa un mensaje entrante
 					try:
 						smsHeaderList.append(receptionList[0])
 						smsBodyList.append(receptionList[1])
@@ -205,17 +207,24 @@ class Sms(Modem):
 						pass # La excepción aparece cuando el módem no soporta (no necesita) el ACK
 					finally:
 						smsAmount += 1
-				elif receptionList[0].startswith('RING'):
-					# Significa una llamade entrante
-					callerID = self.getTelephoneNumber(receptionList[2])
-					logger.write('INFO', '[CALL] El número \'%s\' está llamando...' % callerID)
-				elif receptionList[0].startswith('NO CARRIER'):
-					# Significa una llamada perdida
-					logger.write('INFO', '[CALL] Llamada perdida de \'%s\'.' % callerID)
-					callerID = None
+				# Significa que no se pudo enviar el mensaje
 				elif receptionList[0].startswith('+CMS'):
-					# Significa que no se pudo enviar el mensaje
 					self.successfulSending = False
+				############################### LLAMADAS DE VOZ ###############################
+				# Significa una llamade entrante
+				elif receptionList[0].startswith('RING'):
+					callerID = self.getTelephoneNumber(receptionList[2])
+					logger.write('INFO', '[GSM] El número \'%s\' está llamando...' % callerID)
+				# Significa que el destino se encuentra en otra llamada
+				elif receptionList[0].startswith('BUSY'):
+					logger.write('WARNING', '[GSM] El télefono destino se encuentra ocupado.')
+				# Significa que la llamada saliente pasó al buzón de voz
+				elif receptionList[0].startswith('NO ANSWER'):
+					logger.write('WARNING', '[GSM] No hubo respuesta durante la llamada de voz.')
+				# Significa que la llamada entrante se perdió (llamada perdida)
+				elif receptionList[0].startswith('NO CARRIER'):
+					logger.write('WARNING', '[GSM] No se pudo establecer la llamada de voz.')
+				############################# FIN LLAMADAS DE VOZ #############################
 			else:
 				time.sleep(1)
 		logger.write('WARNING', '[SMS] Función \'%s\' terminada.' % inspect.stack()[0][3])
@@ -293,14 +302,20 @@ class Sms(Modem):
 			logger.write('ERROR', '[SMS] Instancia de mensaje no enviada a \'%s\'.' % str(telephoneNumber))
 			return False
 
-	def sendCall(self, telephoneNumber):
-		self.sendAT('ATD' + str(telephoneNumber) + ';') # Numero al cual se quiere llamar
+	def sendVoiceCall(self, telephoneNumber):
+		try:
+			self.sendAT('ATD' + str(telephoneNumber) + ';') # Numero al cual se quiere llamar
+			logger.write('INFO', '[GSM] Llamando al número %s...' % str(telephoneNumber))
+			return True
+		except:
+			logger.write('ERROR', '[GSM] Se produjo un error al intentar realizar la llamada!')
+			return False
 
-	def hangUpCall(self):
-		self.sendAT('ATH') # Cuelga la llamada en curso
-
-	def answerCall(self):
+	def answerVoiceCall(self):
 		self.sendAT('ATA') # Atiende la llamada entrante
+
+	def hangUpVoiceCall(self):
+		self.sendAT('ATH') # Cuelga la llamada en curso
 
 	def removeSms(self, smsIndex):
 		""" Envia el comando AT correspondiente para elimiar todos los mensajes del dispositivo.
@@ -433,11 +448,11 @@ class Gprs(Modem):
 			poffProcess = subprocess.Popen('poff', stdout = subprocess.PIPE, stderr = subprocess.PIPE)
 			poffOutput, poffError = poffProcess.communicate()
 			if poffOutput.find('No pppd is running') > 0:
-				logger.write('WARNING', '[GRPS] No hay ninguna conexión activa para desconectar!')
+				logger.write('WARNING', '[GRPS] El demonio pppd no está ejecutándose y no hay conexión!')
 				return False
 			else:
-				logger.write('WARNING', '[GRPS] La conexión activa ha sido desconectada correctamente!')
+				logger.write('INFO', '[GRPS] La conexión de datos ha sido desconectada correctamente!')
 				return True
 		except:
-			logger.write('ERROR', '[GRPS] Se produjo un error al intentar desconectar la conexión!')
+			logger.write('ERROR', '[GRPS] Se produjo un error al intentar desconectarse de la red!')
 			return False

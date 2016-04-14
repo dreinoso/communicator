@@ -150,36 +150,36 @@ class Transmitter(threading.Thread):
 		if all(self.smsPriority != 0 and self.smsPriority >= x for x in(self.emailPriority, self.networkPriority, self.bluetoothPriority)):
 			destinationNumber = contactList.allowedNumbers[messageInstance.receiver]
 			if not self.smsInstance.send(messageInstance, destinationNumber):
-				logger.write('DEBUG', '[COMMUNICATOR-SMS] Falló. Reintentando con otro periférico.')
+				logger.write('DEBUG', '[COMMUNICATOR-SMS] Falló. Reintentando con otro medio.')
 				self.smsPriority = 0              # Se descarta para la próxima selección
-				return self.send(messageInstance) # Se reintenta con otros periféricos
+				return self.send(messageInstance) # Se reintenta con otro medio
 			else:
 				return True
 		# Intentamos transmitir por EMAIL
 		elif all(self.emailPriority != 0 and self.emailPriority >= x for x in(self.networkPriority, self.bluetoothPriority)):
 			destinationEmail = contactList.allowedEmails[messageInstance.receiver]
 			if not self.emailInstance.send(messageInstance, destinationEmail):
-				logger.write('DEBUG', '[COMMUNICATOR-EMAIL] Falló. Reintentando con otro periférico.')
+				logger.write('DEBUG', '[COMMUNICATOR-EMAIL] Falló. Reintentando con otro medio.')
 				self.emailPriority = 0            # Se descarta para la próxima selección
-				return self.send(messageInstance) # Se reintenta con otros periféricos
+				return self.send(messageInstance) # Se reintenta con otro medio
 			else:
 				return True
 		# Intentamos transmitir por NETWORK
 		elif self.networkPriority != 0 and self.networkPriority >= self.bluetoothPriority:
 			destinationHost, destinationTcpPort, destinationUdpPort = contactList.allowedHosts[messageInstance.receiver]
 			if not self.networkInstance.send(messageInstance, destinationHost, destinationTcpPort, destinationUdpPort):
-				logger.write('DEBUG', '[COMMUNICATOR-NETWORK] Falló. Reintentando con otro periférico.')
+				logger.write('DEBUG', '[COMMUNICATOR-NETWORK] Falló. Reintentando con otro medio.')
 				self.networkPriority = 0          # Se descarta para la próxima selección
-				return self.send(messageInstance) # Se reintenta con otros periféricos
+				return self.send(messageInstance) # Se reintenta con otro medio
 			else:
 				return True
 		# Intentamos transmitir por BLUETOOTH
 		elif self.bluetoothPriority != 0:
 			destinationServiceName, destinationMAC, destinationUUID = contactList.allowedMacAddress[messageInstance.receiver]
 			if not self.bluetoothInstance.send(messageInstance, destinationServiceName, destinationMAC, destinationUUID):
-				logger.write('DEBUG', '[COMMUNICATOR-BLUETOOTH] Falló. Reintentando con otro periférico.')
+				logger.write('DEBUG', '[COMMUNICATOR-BLUETOOTH] Falló. Reintentando con otro medio.')
 				self.bluetoothPriority = 0        # Entonces se descarta para la proxima selección
-				return self.send(messageInstance) # Se reintenta con otros periféricos
+				return self.send(messageInstance) # Se reintenta con otro medio
 			else:
 				return True
 		# No fue posible transmitir por ningún medio
