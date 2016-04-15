@@ -2,7 +2,6 @@
 
 import os
 import sys
-import time
 import termios
 
 import contactList
@@ -22,9 +21,9 @@ def main():
 	print '\t\t6 - Colgar la llamada'
 	print '\t\t7 - Conectar GPRS'
 	print '\t\t8 - Desconectar GPRS'
-	print '\t\tc - DEBUG: Cerrar Comunicador'
+	print '\t\tq - Salir'
 	print '\t\to - DEBUG: Abrir Comunicador'
-	print '\t\tq - Salir\n'
+	print '\t\tc - DEBUG: Cerrar Comunicador\n'
 
 	communicator.open() # Se abre el comunicador para detectar medios
 	print 'El módulo de comunicación está listo para usarse!'
@@ -112,12 +111,12 @@ def main():
 			# Opcion 8 - Desconectar GPRS
 			elif optionSelected is '8':
 				communicator.disconnectGprs()
-			elif optionSelected is 'c':
 				communicator.close()
-			elif optionSelected is 'o':
-				communicator.open()
 			elif optionSelected is 'q':
 				endMain = True
+			elif optionSelected is 'o':
+				communicator.open()
+			elif optionSelected is 'c':
 			# Opcion inválida
 			else:
 				print 'Opción inválida!'
