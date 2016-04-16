@@ -111,12 +111,12 @@ def main():
 			# Opcion 8 - Desconectar GPRS
 			elif optionSelected is '8':
 				communicator.disconnectGprs()
-				communicator.close()
 			elif optionSelected is 'q':
 				endMain = True
 			elif optionSelected is 'o':
 				communicator.open()
 			elif optionSelected is 'c':
+				communicator.close()
 			# Opcion inválida
 			else:
 				print 'Opción inválida!'
@@ -148,7 +148,7 @@ def askClients():
 def askMedia():
 	selectMedia = raw_input('¿Desea elegir un medio de comunicación preferido? [S/n] ')
 	if selectMedia is 'S' or selectMedia is 's' or len(selectMedia) is 0:
-		print 'Lista de medios: NETWORK, BLUETOOTH, EMAIL, SMS.'
+		print 'Lista de medios: NETWORK, BLUETOOTH, EMAIL, GSM.'
 		return True
 	elif selectMedia is 'N' or selectMedia is 'n':
 		return False

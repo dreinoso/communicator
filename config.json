@@ -29,17 +29,17 @@
 	"SMTP_PORT"   : 587,
 	"IMAP_PORT"   : 993
 	},
-"SMS":
+"GSM":
 	{
 	"TIME_OUT"  : 1.5,
 	"BAUD_RATE" : 19200
 	},
 "PRIORITY_LEVELS":
 	{
-	"NETWORK"   : 4,
-	"SMS"       : 1,
+	"GSM"       : 1,
 	"EMAIL"     : 2,
-	"BLUETOOTH" : 3
+	"NETWORK"   : 3,
+	"BLUETOOTH" : 4
 	},
 "LOGGER":
 	{

@@ -20,7 +20,7 @@ JSON_CONFIG = json.load(open(JSON_FILE))
 
 class Transmitter(threading.Thread):
 
-	smsPriority = 0
+	gsmPriority = 0
 	emailPriority = 0
 	networkPriority = 0
 	bluetoothPriority = 0
@@ -28,7 +28,7 @@ class Transmitter(threading.Thread):
 	isActive = False
 	transmissionQueue = None
 
-	def __init__(self, _smsInstance, _emailInstance, _networkInstance, _bluetoothInstance, _transmissionQueue):
+	def __init__(self, _gsmInstance, _emailInstance, _networkInstance, _bluetoothInstance, _transmissionQueue):
 		"""Creación de la clase de transmisión de paquetes TCP.
 		@param _threadName: nombre del hilo
 		@type: string
@@ -38,7 +38,7 @@ class Transmitter(threading.Thread):
 		@type: string
 		@type: Message"""
 		threading.Thread.__init__(self, name = 'TransmitterThread')
-		self.smsInstance = _smsInstance 
+		self.gsmInstance = _gsmInstance 
 		self.emailInstance = _emailInstance
 		self.networkInstance = _networkInstance
 		self.bluetoothInstance = _bluetoothInstance
@@ -107,17 +107,17 @@ class Transmitter(threading.Thread):
 			del messageInstance
 
 	def setPriorities(self, receiver, media):
-		self.smsPriority = 0
+		self.gsmPriority = 0
 		self.emailPriority = 0
 		self.networkPriority = 0
 		self.bluetoothPriority = 0
-		# Para SMS
-		if contactList.allowedNumbers.has_key(receiver) and self.smsInstance.isActive:
+		# Para GSM
+		if contactList.allowedNumbers.has_key(receiver) and self.gsmInstance.isActive:
 			# En caso de preferencia se da máxima prioridad
-			if media == 'SMS':
-				self.smsPriority = 10
+			if media == 'GSM':
+				self.gsmPriority = 10
 			else:
-				self.smsPriority = JSON_CONFIG["PRIORITY_LEVELS"]["SMS"]
+				self.gsmPriority = JSON_CONFIG["PRIORITY_LEVELS"]["GSM"]
 		# Para EMAIL
 		if contactList.allowedEmails.has_key(receiver) and self.emailInstance.isActive:
 			# En caso de preferencia se da máxima prioridad
@@ -146,12 +146,12 @@ class Transmitter(threading.Thread):
 		selección preferente del usuario para el mensaje de se posible.
 		@param messageInstance: Mensaje a ser enviado
 		@type messageInstance: str"""
-		# Intentamos transmitir por SMS
-		if all(self.smsPriority != 0 and self.smsPriority >= x for x in(self.emailPriority, self.networkPriority, self.bluetoothPriority)):
+		# Intentamos transmitir por GSM
+		if all(self.gsmPriority != 0 and self.gsmPriority >= x for x in(self.emailPriority, self.networkPriority, self.bluetoothPriority)):
 			destinationNumber = contactList.allowedNumbers[messageInstance.receiver]
-			if not self.smsInstance.send(messageInstance, destinationNumber):
-				logger.write('DEBUG', '[COMMUNICATOR-SMS] Falló. Reintentando con otro medio.')
-				self.smsPriority = 0              # Se descarta para la próxima selección
+			if not self.gsmInstance.send(messageInstance, destinationNumber):
+				logger.write('DEBUG', '[COMMUNICATOR-GSM] Falló. Reintentando con otro medio.')
+				self.gsmPriority = 0              # Se descarta para la próxima selección
 				return self.send(messageInstance) # Se reintenta con otro medio
 			else:
 				return True

@@ -17,16 +17,16 @@ import subprocess
 
 import logger
 
-smsThreadName = 'smsReceptor'
+gsmThreadName = 'gsmReceptor'
 emailThreadName = 'emailReceptor'
 networkThreadName = 'networkReceptor'
 bluetoothThreadName = 'bluetoothReceptor'
 
-threadNameList = [networkThreadName, smsThreadName, emailThreadName, bluetoothThreadName]
+threadNameList = [networkThreadName, gsmThreadName, emailThreadName, bluetoothThreadName]
 
 class Controller(threading.Thread):
 
-	availableSms = False       # Indica si el modo SMS está disponible
+	availableGsm = False       # Indica si el modo GSM está disponible
 	availableGprs = False      # Indica si el modo GPRS está disponible
 	availableEmail = False     # Indica si el modo EMAIL está disponible
 	availableNetwork = False   # Indica si el modo NETWORK está disponible
@@ -34,18 +34,18 @@ class Controller(threading.Thread):
 
 	isActive = False
 
-	def __init__(self, _REFRESH_TIME, _smsInstance, _gprsInstance, _emailInstance, _networkInstance, _bluetoothInstance):
+	def __init__(self, _REFRESH_TIME, _gsmInstance, _gprsInstance, _emailInstance, _networkInstance, _bluetoothInstance):
 		threading.Thread.__init__(self, name = 'ControllerThread')
 		self.REFRESH_TIME = _REFRESH_TIME
 		# Obtenemos las instancias de los medios
-		self.smsInstance = _smsInstance
+		self.gsmInstance = _gsmInstance
 		self.gprsInstance = _gprsInstance
 		self.emailInstance = _emailInstance
 		self.networkInstance = _networkInstance
 		self.bluetoothInstance = _bluetoothInstance
 
 	def __del__(self):
-		self.smsInstance.isActive = False
+		self.gsmInstance.isActive = False
 		self.gprsInstance.isActive = False
 		self.emailInstance.isActive = False
 		self.networkInstance.isActive = False
@@ -59,7 +59,7 @@ class Controller(threading.Thread):
 	def run(self):
 		self.isActive = True
 		while self.isActive:
-			self.availableSms = self.verifySmsConnection()
+			self.availableGsm = self.verifyGsmConnection()
 			self.availableGprs = self.verifyGprsConnection()
 			self.availableEmail = self.verifyEmailConnection()
 			self.availableNetwork = self.verifyNetworkConnection()
@@ -67,8 +67,8 @@ class Controller(threading.Thread):
 			time.sleep(self.REFRESH_TIME)
 		logger.write('WARNING', '[CONTROLLER] Funcion \'%s\' terminada.' % inspect.stack()[0][3])
 
-	def verifySmsConnection(self):
-		"""Se determina la disponibilidad de la comunicación por medio comunicación SMS.
+	def verifyGsmConnection(self):
+		"""Se determina la disponibilidad de la comunicación por medio comunicación GSM.
 		@return: Se determina si la comunicación por este medio se puede realizar.
 		@rtype: bool"""
 		# Generamos la expresión regular
@@ -79,28 +79,28 @@ class Controller(threading.Thread):
 		# Se detectaron dispositivos USB conectados
 		for ttyUSBx in reversed(ttyUSBDevices):
 			# Si el puerto serie nunca fue establecido, entonces la instancia no esta siendo usada
-			if self.smsInstance.serialPort is None:
-				# Si no se produce ningún error durante la configuración, ponemos al módem a recibir SMS
-				if self.smsInstance.connect('/dev/' + ttyUSBx):
-					smsThread = threading.Thread(target = self.smsInstance.receive, name = smsThreadName)
-					logger.write('INFO', '[SMS] Listo para usarse (' + ttyUSBx + ').')
-					smsThread.start()
+			if self.gsmInstance.serialPort is None:
+				# Si no se produce ningún error durante la configuración, ponemos al módem a recibir SMS y llamadas
+				if self.gsmInstance.connect('/dev/' + ttyUSBx):
+					gsmThread = threading.Thread(target = self.gsmInstance.receive, name = gsmThreadName)
+					logger.write('INFO', '[GSM] Listo para usarse (' + ttyUSBx + ').')
+					gsmThread.start()
 					return True
 				# Si se produce un error durante la configuración, devolvemos 'False'
 				else:
 					return False
 			# Si el módem ya está en modo activo (funcionando), devolvemos 'True'
-			elif self.smsInstance.isActive:
+			elif self.gsmInstance.isActive:
 				return True
 			# Llegamos acá si se produce un error en el 'connect' del módem (y todavía está conectado)
 			else:
 				return False
 		# Si anteriormente hubo un intento de 'connect()' con o sin éxito, debemos limpiar el puerto
-		if self.smsInstance.serialPort is not None:
-			self.smsInstance.successfulConnection = None
-			self.smsInstance.serialPort = None
-			self.smsInstance.isActive = False
-			self.smsInstance.closePort()
+		if self.gsmInstance.serialPort is not None:
+			self.gsmInstance.successfulConnection = None
+			self.gsmInstance.serialPort = None
+			self.gsmInstance.isActive = False
+			self.gsmInstance.closePort()
 		return False
 
 	def verifyGprsConnection(self):

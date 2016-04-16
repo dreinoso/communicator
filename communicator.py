@@ -38,7 +38,7 @@ JSON_CONFIG = json.load(open(JSON_FILE))
 
 os.chdir(currentDirectory)
 
-smsInstance = modemClass.Sms
+gsmInstance = modemClass.Gsm
 gprsInstance = modemClass.Gprs
 emailInstance = emailClass.Email
 networkInstance = networkClass.Network
@@ -52,7 +52,7 @@ def open():
 	"""
 	global receptionQueue, transmissionQueue 
 	global controllerInstance, transmitterInstance
-	global smsInstance, gprsInstance, emailInstance, networkInstance, bluetoothInstance
+	global gsmInstance, gprsInstance, emailInstance, networkInstance, bluetoothInstance
 
 	# Creamos el logger de eventos
 	FILE_LOG = JSON_CONFIG["LOGGER"]["FILE_LOG"]
@@ -68,17 +68,17 @@ def open():
 
 	# Creamos las instancias de los periféricos
 	gprsInstance = modemClass.Gprs()
-	smsInstance = modemClass.Sms(receptionQueue)
+	gsmInstance = modemClass.Gsm(receptionQueue)
 	emailInstance = emailClass.Email(receptionQueue)
 	networkInstance = networkClass.Network(receptionQueue)
 	bluetoothInstance = bluetoothClass.Bluetooth(receptionQueue)
 
 	# Creamos la instancia que levantará las conexiones
 	REFRESH_TIME = JSON_CONFIG["COMMUNICATOR"]["REFRESH_TIME"]
-	controllerInstance = controllerClass.Controller(REFRESH_TIME, smsInstance, gprsInstance, emailInstance, networkInstance, bluetoothInstance)
+	controllerInstance = controllerClass.Controller(REFRESH_TIME, gsmInstance, gprsInstance, emailInstance, networkInstance, bluetoothInstance)
 
 	# Creamos la instancia para la transmisión de paquetes
-	transmitterInstance = transmitterClass.Transmitter(smsInstance, emailInstance, networkInstance, bluetoothInstance, transmissionQueue)
+	transmitterInstance = transmitterClass.Transmitter(gsmInstance, emailInstance, networkInstance, bluetoothInstance, transmissionQueue)
 
 	# Ponemos en marcha el controlador de medios de comunicación y la transmisión de mensajes
 	controllerInstance.start()
@@ -90,7 +90,7 @@ def close():
 	"""Se cierran los componentes del sistema, unicamente los abiertos previamente"""
 	global receptionQueue, transmissionQueue
 	global controllerInstance, transmitterInstance
-	global smsInstance, gprsInstance, emailInstance, networkInstance, bluetoothInstance
+	global gsmInstance, gprsInstance, emailInstance, networkInstance, bluetoothInstance
 
 	# Frenamos la transmisión de mensajes
 	transmitterInstance.isActive = False
@@ -101,7 +101,7 @@ def close():
 	controllerInstance.join()
 
 	# Destruimos todas las instancias de comunicación
-	del smsInstance
+	del gsmInstance
 	del gprsInstance
 	del emailInstance
 	del networkInstance
@@ -201,22 +201,22 @@ def length():
 		return receptionQueue.qsize()
 
 def sendVoiceCall(telephoneNumber):
-	if smsInstance.isActive:
-		return smsInstance.sendVoiceCall(telephoneNumber)
+	if gsmInstance.isActive:
+		return gsmInstance.sendVoiceCall(telephoneNumber)
 	else:
 		logger.write('WARNING', '[COMMUNICATOR] No hay un módulo para el manejo de llamadas de voz!')
 		return False
 
 def answerVoiceCall():
-	if smsInstance.isActive:
-		return smsInstance.answerVoiceCall()
+	if gsmInstance.isActive:
+		return gsmInstance.answerVoiceCall()
 	else:
 		logger.write('WARNING', '[COMMUNICATOR] No hay un módulo para el manejo de llamadas de voz!')
 		return False
 
 def hangUpVoiceCall():
-	if smsInstance.isActive:
-		return smsInstance.hangUpVoiceCall()
+	if gsmInstance.isActive:
+		return gsmInstance.hangUpVoiceCall()
 	else:
 		logger.write('WARNING', '[COMMUNICATOR] No hay un módulo para el manejo de llamadas de voz!')
 		return False

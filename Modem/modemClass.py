@@ -41,8 +41,11 @@ class Modem(object):
 			de tiempo en segundos con el cual se hacen lecturas sobre el
 			dispositivo. """
 		self.modemInstance = serial.Serial()
-		self.modemInstance.timeout = JSON_CONFIG["SMS"]["TIME_OUT"]
-		self.modemInstance.baudrate = JSON_CONFIG["SMS"]["BAUD_RATE"]
+		self.modemInstance.bytesize = serial.EIGHTBITS
+		self.modemInstance.parity = serial.PARITY_NONE
+		self.modemInstance.stopbits = serial.STOPBITS_ONE
+		self.modemInstance.timeout = JSON_CONFIG["GSM"]["TIME_OUT"]
+		self.modemInstance.baudrate = JSON_CONFIG["GSM"]["BAUD_RATE"]
 
 	def sendAT(self, atCommand):
 		""" Se encarga de enviarle un comando AT el modem. Espera la respuesta
@@ -55,10 +58,10 @@ class Modem(object):
 		modemOutput = self.modemInstance.readlines() # Espero la respuesta
 		# Verificamos si se produjo algún tipo de error relacionado con el comando AT
 		for outputElement in modemOutput:
-			# El 'AT+CNMA' sólo es soportado en Dongles USB que requieren confirmación de sms
+			# El 'AT+CNMA' sólo es soportado en Dongles USB que requieren confirmación de SMS
 			if outputElement.startswith(('+CME ERROR', '+CMS ERROR')) and atCommand != 'AT+CNMA':
 				errorMessage = outputElement.replace('\r\n', '')
-				logger.write('ERROR', '[SMS] %s.' % errorMessage)
+				logger.write('ERROR', '[GSM] %s.' % errorMessage)
 				raise
 			# El comando AT para llamadas de voz (caracterizado por su terminacion en ';') no es soportado
 			elif outputElement.startswith('NO CARRIER') and atCommand.startswith('ATD') and atCommand.endswith(';'):
@@ -68,14 +71,14 @@ class Modem(object):
 	def closePort(self):
 		self.modemInstance.close()
 
-class Sms(Modem):
+class Gsm(Modem):
 	""" Subclase de 'Modem' correspondiente al modo de operacion con el que se va
 		a trabajar. """
 	successfulSending = None
 	isActive = False
 
 	def __init__(self, _receptionQueue):
-		""" Constructor de la clase 'Sms'. Configura el modem para operar en modo mensajes
+		""" Constructor de la clase 'Gsm'. Configura el modem para operar en modo mensajes
 			de texto, indica el sitio donde se van a almacenar los mensajes recibidos,
 			habilita notificacion para los SMS entrantes y establece el numero del centro
 			de mensajes CLARO para poder enviar mensajes de texto (este campo puede variar
@@ -87,7 +90,7 @@ class Sms(Modem):
 		""" Destructor de la clase 'Modem'. Cierra la conexion establecida
 			con el modem. """
 		self.modemInstance.close()
-		logger.write('INFO', '[SMS] Objeto destruido.')
+		logger.write('INFO', '[GSM] Objeto destruido.')
 
 	def connect(self, _serialPort):
 		self.serialPort = _serialPort
@@ -100,7 +103,7 @@ class Sms(Modem):
 			self.sendAT('ATZ')				 # Enviamos un reset
 			self.sendAT('ATE1')				 # Habilitamos el echo
 			self.sendAT('AT+CMEE=2')		 # Habilitamos reporte de error
-			self.sendAT('AT+CMGF=1')		 # Establecemos el modo para sms
+			self.sendAT('AT+CMGF=1')		 # Establecemos el modo para SMS
 			self.sendAT('AT+CLIP=1')		 # Habilitamos identificador de llamadas
 			self.sendAT('AT+CNMI=1,2,0,0,0') # Habilitamos notificacion de mensaje entrante
 			self.successfulConnection = True
@@ -165,16 +168,10 @@ class Sms(Modem):
 						else: 
 							self.receptionQueue.put((10, smsMessage))
 						#self.sendOutput(telephoneNumber, smsMessage) # -----> SOLO PARA LA DEMO <-----
-						logger.write('INFO', '[SMS] Mensaje de ' + str(telephoneNumber) + ' recibido correctamente!')
+						logger.write('INFO', '[GSM] Mensaje de ' + str(telephoneNumber) + ' recibido correctamente!')
+					# ... sino, rechazamos el mensaje entrante.
 					else:
-						# ... caso contrario, verificamos si el mensaje proviene de la pagina web de CLARO o PERSONAL...
-						if telephoneNumber == 876966 or telephoneNumber == 8235079297:
-							logger.write('WARNING', '[SMS] No es posible procesar mensajes enviados desde la página web!')
-						# ... sino, comunicamos al usuario que no se encuentra registrado.
-						else:
-							logger.write('WARNING', '[SMS] Imposible procesar una solicitud. El número no se encuentra registrado!')
-							smsMessage = 'Imposible procesar la solicitud. Usted no se encuentra registrado!'
-							#self.send(telephoneNumber, smsMessage)
+						logger.write('WARNING', '[GSM] Mensaje de ' + str(telephoneNumber) + 'rechazado!')
 					# Si el mensaje fue leído desde la memoria, entonces lo borramos
 					if smsHeader.startswith('+CMGL'):
 						# Obtenemos el índice del mensaje en memoria
@@ -196,7 +193,6 @@ class Sms(Modem):
 				# Ejemplo receptionList: ['RING', '', '+CLIP: "+543512641040",145,"",0,"",0']
 				# Ejemplo receptionList: ['NO CARRIER']
 				# Ejemplo receptionList: ['+CMS ERROR: 500']
-				print receptionList
 				# Significa un mensaje entrante
 				if receptionList[0].startswith('+CMT'):
 					try:
@@ -227,7 +223,7 @@ class Sms(Modem):
 				############################# FIN LLAMADAS DE VOZ #############################
 			else:
 				time.sleep(1)
-		logger.write('WARNING', '[SMS] Función \'%s\' terminada.' % inspect.stack()[0][3])
+		logger.write('WARNING', '[GSM] Función \'%s\' terminada.' % inspect.stack()[0][3])
 
 	def send(self, message, telephoneNumber):
 		""" Envia el comando AT correspondiente para enviar un mensaje de texto.
@@ -240,7 +236,7 @@ class Sms(Modem):
 			return self.sendMessage(message.plainText, telephoneNumber)
 		# Comprobación de envío de archivo
 		elif isinstance(message, messageClass.Message) and hasattr(message, 'fileName'):
-			logger.write('ERROR', '[SMS] Imposible enviar \'%s\' por este medio!' % message.fileName)
+			logger.write('ERROR', '[GSM] Imposible enviar \'%s\' por este medio!' % message.fileName)
 			return False
 		# Entonces se trata de enviar una instancia de mensaje
 		else:
@@ -260,17 +256,17 @@ class Sms(Modem):
 			# Ejemplo de info02[3]: OK\r\n
 			for i in info02:
 				if i.startswith('OK'):
-					logger.write('INFO', '[SMS] Mensaje de texto enviado a \'%s\'.' % str(telephoneNumber))
+					logger.write('INFO', '[GSM] Mensaje de texto enviado a \'%s\'.' % str(telephoneNumber))
 					return True
 			# Esperamos respuesta de la red ante la petición del envío
 			while self.successfulSending is None:
 				pass
 			# Examinamos la confirmación de la red
 			if self.successfulSending is False:
-				logger.write('WARNING', '[SMS] No se pudo enviar el mensaje a \'%s\'.' % str(telephoneNumber))
+				logger.write('WARNING', '[GSM] No se pudo enviar el mensaje a \'%s\'.' % str(telephoneNumber))
 				return False
 		except:
-			logger.write('ERROR', '[SMS] Error al enviar el mensaje de texto a \'%s\'.' % str(telephoneNumber))
+			logger.write('ERROR', '[GSM] Error al enviar el mensaje de texto a \'%s\'.' % str(telephoneNumber))
 			return False
 
 	def sendMessageInstance(self, message, telephoneNumber):
@@ -279,7 +275,7 @@ class Sms(Modem):
 			# Serializamos el objeto para poder transmitirlo
 			serializedMessage = 'INSTANCE' + pickle.dumps(message)
 			# Enviamos los comandos AT correspondientes para efectuar el envío el mensaje de texto
-			info01 = self.sendAT('AT+CMGS="' + str(telephoneNumber) + '"') # Numero al cual enviar el Sms
+			info01 = self.sendAT('AT+CMGS="' + str(telephoneNumber) + '"') # Numero al cual enviar el SMS
 			info02 = self.sendAT(serializedMessage + ascii.ctrl('z'))      # Mensaje de texto terminado en Ctrl+Z
 			# Borramos el mensaje enviado almacenado en la memoria
 			self.removeAllSms()
@@ -289,17 +285,17 @@ class Sms(Modem):
 			# Ejemplo de info02[3]: OK\r\n
 			for i in info02:
 				if i.startswith('OK'):
-					logger.write('INFO', '[SMS] Instancia de mensaje enviada a \'%s\'.' % str(telephoneNumber))
+					logger.write('INFO', '[GSM] Instancia de mensaje enviada a \'%s\'.' % str(telephoneNumber))
 					return True
 			# Esperamos respuesta de la red ante la petición del envío
 			while self.successfulSending is None:
 				pass
 			# Examinamos la confirmación de la red
 			if self.successfulSending is False:
-				logger.write('WARNING', '[SMS] No se pudo enviar la instancia a \'%s\'.' % str(telephoneNumber))
+				logger.write('WARNING', '[GSM] No se pudo enviar la instancia a \'%s\'.' % str(telephoneNumber))
 				return False
 		except:
-			logger.write('ERROR', '[SMS] Instancia de mensaje no enviada a \'%s\'.' % str(telephoneNumber))
+			logger.write('ERROR', '[GSM] Instancia de mensaje no enviada a \'%s\'.' % str(telephoneNumber))
 			return False
 
 	def sendVoiceCall(self, telephoneNumber):
@@ -344,27 +340,35 @@ class Sms(Modem):
 		""" Procesa la cabecera del SMS.
 			@return: numero de telefono del remitente
 			@rtype: int """
-		# Ejemplo de smsHeader recibido de un movil: +CLIP: "+543512641040",145,"",0,"",0']
-		# Ejemplo de smsHeader recibido de un movil: +CMT: "+543512641040",,"15/12/29,11:41:23-12"\r\n
-		# Ejemplo de smsHeader recibido de un movil: +CMGL: 0,"REC UNREAD","+5493512560536",,"14/10/26,17:12:04-12"\r\n
-		# Ejemplo de smsHeader recibido de la web  : +CMGL: 2,"REC UNREAD","876966",,"14/10/26,19:36:42-12"\r\n
-		headerList = smsHeader.split(',')		  # Separamos smsHeader por comas
+		# Ejemplo de smsHeader recibido de un movil   : +CLIP: "+543512641040",145,"",0,"",0
+		# Ejemplo de smsHeader recibido de un movil   : +CMT: "+543512641040",,"15/12/29,11:41:23-12"
+		# Ejemplo de smsHeader recibido de un movil   : +CMGL: 0,"REC UNREAD","+5493512560536",,"14/10/26,17:12:04-12"
+		# Ejemplo de smsHeader recibido de la web     : +CMGL: 2,"REC UNREAD","876966",,"14/10/26,19:36:42-12"
+		# Ejemplo de smsHeader recibido de un operador: +CMGL: 4,"REC UNREAD","100",,"16/04/14,11:15:51-12"
+		# Ejemplo de smsHeader recibido de un operador: +CMGL: 6,"REC UNREAD","PromRecarga",,"16/04/14,09:20:44-12"
 		telephoneNumber = None
+		headerList = smsHeader.split(',') # Separamos smsHeader por comas
 		if headerList[0].startswith(('+CLIP', '+CMT')):
 			# Ejemplo de headerList[0]: +CMT: "+543512641040"
 			# Ejemplo de headerList[0]: +CLIP: "+543512641040"
 			telephoneNumber = headerList[0].split()[1].replace('"', '') # Quitamos las comillas
 		elif headerList[0].startswith('+CMGL'):
-			# Ejemplo de headerList[2]: "+5493512560536" | "876966"
+			# Ejemplo de headerList[2]: "+5493512560536" | "876966" | "100" | "PromRecarga"
 			telephoneNumber = headerList[2].replace('"', '') # Quitamos las comillas
-		# Ejemplo de telephoneNumber: +543512641040 | +5493512560536 | 876966
+		############################### QUITAMOS EL CODIGO DE PAIS ###############################
+		# Ejemplo de telephoneNumber: +543512641040 | +5493512560536 | 876966 | 100 | PromRecarga
 		if telephoneNumber.startswith('+549'):
-			telephoneNumber = telephoneNumber.replace('+549', '') # Quitamos el codigo de pais
+			telephoneNumber = telephoneNumber.replace('+549', '')
 			# Ejemplo de telephoneNumber: 3512560536
+			return int(telephoneNumber)
 		elif telephoneNumber.startswith('+54'):
-			telephoneNumber = telephoneNumber.replace('+54', '') # Quitamos el codigo de pais
+			telephoneNumber = telephoneNumber.replace('+54', '')
 			# Ejemplo de telephoneNumber: 3512641040
-		return int(telephoneNumber)
+			return int(telephoneNumber)
+		################################### FIN CODIGO DE PAIS ###################################
+		else:
+			# Entonces es 876966 | 100 | PromRecarga
+			return telephoneNumber
 
 	def sendOutput(self, telephoneNumber, smsMessage):
 		try:
