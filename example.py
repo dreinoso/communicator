@@ -25,8 +25,7 @@ def main():
 	print '\t\to - DEBUG: Abrir Comunicador'
 	print '\t\tc - DEBUG: Cerrar Comunicador\n'
 
-	communicator.open() # Se abre el comunicador para detectar medios
-	print 'El módulo de comunicación está listo para usarse!'
+	communicator.open()
 
 	while not endMain:
 		try:
@@ -123,8 +122,8 @@ def main():
 		except KeyboardInterrupt:
 			endMain = True
 
-	print 'Cerrando la aplicación...'
-	communicator.close() # Se cierran las conexiones
+	communicator.close()
+	
 	print '\n---------------- UNC - Fcefyn ----------------'
 	print '---------- Ingeniería en Computación ---------'
 
