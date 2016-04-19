@@ -147,7 +147,7 @@ def askClients():
 def askMedia():
 	selectMedia = raw_input('¿Desea elegir un medio de comunicación preferido? [S/n] ')
 	if selectMedia is 'S' or selectMedia is 's' or len(selectMedia) is 0:
-		print 'Lista de medios: NETWORK, BLUETOOTH, EMAIL, GSM.'
+		print 'Lista de medios: GSM, GPRS, WIFI, BLUETOOTH, EMAIL, '
 		return True
 	elif selectMedia is 'N' or selectMedia is 'n':
 		return False

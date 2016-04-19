@@ -8,10 +8,12 @@
 	@date: Lunes 16 de Mayo de 2015 """
 
 import os
+import io
 import sys
 import time
 import json
 import Queue
+import subprocess
 
 currentDirectory = os.getcwd() 
 if not currentDirectory.endswith('Communicator'):
@@ -38,9 +40,10 @@ os.chdir(currentDirectory)
 alreadyOpen = False
 
 gsmInstance = modemClass.Gsm
-gprsInstance = modemClass.Gprs
 emailInstance = emailClass.Email
-networkInstance = networkClass.Network
+gprsInstance = networkClass.Network
+wifiInstance = networkClass.Network
+ethernetInstance = networkClass.Network
 bluetoothInstance = bluetoothClass.Bluetooth
 
 controllerInstance = controllerClass.Controller    # Instancia que controla los medios
@@ -61,35 +64,48 @@ def open():
 	global alreadyOpen
 	global receptionQueue, transmissionQueue
 	global controllerInstance, transmitterInstance
-	global gsmInstance, gprsInstance, emailInstance, networkInstance, bluetoothInstance
+	global gsmInstance, gprsInstance, emailInstance, wifiInstance, ethernetInstance, bluetoothInstance
 
 	if not alreadyOpen:
-		print 'Abriendo el Comunicador...'
+		logger.write('INFO', 'Abriendo el Comunicador...')
 		# Creamos las colas de recepción y transmisión, respectivamente
 		RECEPTION_QSIZE = JSON_CONFIG["COMMUNICATOR"]["RECEPTION_QSIZE"]
 		TRANSMISSION_QSIZE = JSON_CONFIG["COMMUNICATOR"]["TRANSMISSION_QSIZE"]
 		receptionQueue = Queue.PriorityQueue(RECEPTION_QSIZE)
 		transmissionQueue = Queue.PriorityQueue(TRANSMISSION_QSIZE)
 		# Creamos las instancias de los periféricos
-		gprsInstance = modemClass.Gprs()
 		gsmInstance = modemClass.Gsm(receptionQueue)
 		emailInstance = emailClass.Email(receptionQueue)
-		networkInstance = networkClass.Network(receptionQueue)
+		gprsInstance = networkClass.Network(receptionQueue, 'GPRS')
+		wifiInstance = networkClass.Network(receptionQueue, 'WIFI')
+		ethernetInstance = networkClass.Network(receptionQueue, 'ETHERNET')
 		bluetoothInstance = bluetoothClass.Bluetooth(receptionQueue)
 		# Creamos la instancia que levantará las conexiones
 		REFRESH_TIME = JSON_CONFIG["COMMUNICATOR"]["REFRESH_TIME"]
-		controllerInstance = controllerClass.Controller(REFRESH_TIME, gsmInstance, gprsInstance, emailInstance, networkInstance, bluetoothInstance)
+		controllerInstance = controllerClass.Controller(REFRESH_TIME)
+		controllerInstance.gsmInstance = gsmInstance
+		controllerInstance.gprsInstance = gprsInstance
+		controllerInstance.wifiInstance = wifiInstance
+		controllerInstance.ethernetInstance = ethernetInstance
+		controllerInstance.emailInstance = emailInstance
+		controllerInstance.bluetoothInstance = bluetoothInstance
 		# Creamos la instancia para la transmisión de paquetes
-		transmitterInstance = transmitterClass.Transmitter(gsmInstance, emailInstance, networkInstance, bluetoothInstance, transmissionQueue)
+		transmitterInstance = transmitterClass.Transmitter(transmissionQueue)
+		transmitterInstance.gsmInstance = gsmInstance
+		transmitterInstance.gprsInstance = gprsInstance
+		transmitterInstance.wifiInstance = wifiInstance
+		transmitterInstance.ethernetInstance = ethernetInstance
+		transmitterInstance.emailInstance = emailInstance
+		transmitterInstance.bluetoothInstance = bluetoothInstance
 		# Ponemos en marcha el controlador de medios de comunicación y la transmisión de mensajes
 		controllerInstance.start()
 		transmitterInstance.start()
-		print 'Comunicador abierto exitosamente!'
+		logger.write('INFO', 'Comunicador abierto exitosamente!')
 		# Indicamos que inicio la sesión
 		alreadyOpen = True
 		return True
 	else:
-		print 'El Comunicador ya se encuentra abierto!'
+		logger.write('WARNING', 'El Comunicador ya se encuentra abierto!')
 		return False
 
 def close():
@@ -97,10 +113,12 @@ def close():
 	global alreadyOpen
 	global receptionQueue, transmissionQueue
 	global controllerInstance, transmitterInstance
-	global gsmInstance, gprsInstance, emailInstance, networkInstance, bluetoothInstance
+	global gsmInstance, gprsInstance, emailInstance, wifiInstance, ethernetInstance, bluetoothInstance
 
 	if alreadyOpen:
-		print 'Cerrando el Comunicador...'
+		logger.write('INFO', 'Cerrando el Comunicador...')
+		if gprsInstance.isActive:
+			disconnectGprs()
 		# Frenamos la transmisión de mensajes
 		transmitterInstance.isActive = False
 		transmitterInstance.join()
@@ -110,8 +128,9 @@ def close():
 		# Destruimos todas las instancias de comunicación
 		del gsmInstance
 		del gprsInstance
+		del wifiInstance
+		del ethernetInstance
 		del emailInstance
-		del networkInstance
 		del bluetoothInstance
 		# Destruimos las colas de recepción y transmisión
 		del receptionQueue
@@ -119,13 +138,13 @@ def close():
 		# Destruimos las instancias de manejo del comunicador
 		del controllerInstance
 		del transmitterInstance
-		print 'Comunicador cerrado exitosamente!'
+		logger.write('INFO', 'Comunicador cerrado exitosamente!')
 		# Indicamos que terminó la sesion
 		alreadyOpen = False
 		return True
 	else:
-		print 'El Comunicador ya se encuentra cerrado!'
-		False
+		logger.write('WARNING', 'El Comunicador ya se encuentra cerrado!')
+		return False
 
 def send(message, receiver = None, media = None):
 	"""Se almacena en la cola de transmisión el paquete a ser enviado, se guardara
@@ -190,7 +209,7 @@ def send(message, receiver = None, media = None):
 			logger.write('WARNING', '[COMMUNICATOR] La cola de transmisión esta llena, imposible enviar!')
 			return False
 	else:
-		print 'El Comunicador no se encuentra abierto!'
+		logger.write('WARNING', 'El Comunicador no se encuentra abierto!')
 		return False
 
 def receive():
@@ -205,7 +224,7 @@ def receive():
 			logger.write('INFO', '[COMMUNICATOR] La cola de mensajes esta vacía!')
 			return None
 	else:
-		print 'El Comunicador no se encuentra abierto!'
+		logger.write('WARNING', 'El Comunicador no se encuentra abierto!')
 		return False
 
 def length():
@@ -218,7 +237,7 @@ def length():
 		else:
 			return receptionQueue.qsize()
 	else:
-		print 'El Comunicador no se encuentra abierto!'
+		logger.write('WARNING', 'El Comunicador no se encuentra abierto!')
 		return False
 
 def sendVoiceCall(telephoneNumber):
@@ -245,7 +264,50 @@ def hangUpVoiceCall():
 def connectGprs():
 	# Si no existe una conexión GPRS activa, intentamos conectarnos a la red
 	if not gprsInstance.isActive:
-		return gprsInstance.connect()
+		try:
+			logger.write('INFO', '[COMMUNICATOR] Intentando conectar con la red GPRS...')
+			ponProcess = subprocess.Popen('pon', stdout = subprocess.PIPE, stderr = subprocess.PIPE)
+			ponOutput, ponError = ponProcess.communicate()
+			# Si no se produjo ningún error, entonces se intenta iniciar la conexión con el APN
+			if ponError == '':
+				syslogFile = io.open('/var/log/syslog', 'a+')
+				syslogFile.seek(0, 2) # Apuntamos al final del archivo
+				while True:
+					syslogOutput = syslogFile.readline()
+					if syslogOutput.find('local  IP address ') > 0:
+						# Se asignó una direccion IP...
+						local_IP_Address = syslogOutput.split()[8].encode('utf-8')
+						logger.write('DEBUG', '[COMMUNICATOR] Dirección IP: %s' % local_IP_Address)
+						continue
+					elif syslogOutput.find('remote IP address ') > 0:
+						# Se asignó una puerta de enlace...
+						remote_IP_Address = syslogOutput.split()[8].encode('utf-8')
+						logger.write('DEBUG', '[COMMUNICATOR] Puerta de enlace: %s' % remote_IP_Address)
+						continue
+					elif syslogOutput.find('primary   DNS address ') > 0:
+						# Se asignó un servidor DNS primario...
+						primary_DNS_Address = syslogOutput.split()[8].encode('utf-8')
+						logger.write('DEBUG', '[COMMUNICATOR] DNS Primario: %s' % primary_DNS_Address)
+						continue
+					elif syslogOutput.find('secondary DNS address ') > 0:
+						# Se asignó un servidor DNS secundario (último parámetro)...
+						secondary_DNS_Address = syslogOutput.split()[8].encode('utf-8')
+						logger.write('DEBUG', '[COMMUNICATOR] DNS Secundario: %s' % secondary_DNS_Address)
+						continue
+					elif syslogOutput.find('Script /etc/ppp/ip-up finished') > 0:
+						#logger.write('DEBUG', '[COMMUNICATOR] Parámetros de red configurados exitosamente!')
+						return True
+					elif syslogOutput.find('Connection terminated') > 0:
+						logger.write('DEBUG', '[COMMUNICATOR] No se pudo establecer la conexión con la red GPRS!')
+						return False
+			# El puerto serial en '/etc/ppp/options-mobile' está mal configurado
+			else:
+				logger.write('WARNING', '[COMMUNICATOR] Ningún módem conectado para realizar la conexión!')
+				return False
+		except Exception as error:
+			print error
+			logger.write('ERROR', '[COMMUNICATOR] Se produjo un error al intentar realizar la conexión!')
+			return False
 	else:
 		logger.write('WARNING', '[COMMUNICATOR] Ya existe una conexión GPRS activa!')
 		return True
@@ -253,7 +315,18 @@ def connectGprs():
 def disconnectGprs():
 	# Si ya existe una conexión GPRS activa, intentamos desconectarnos de la red
 	if gprsInstance.isActive:
-		return gprsInstance.disconnect()
+		try:
+			poffProcess = subprocess.Popen('poff', stdout = subprocess.PIPE, stderr = subprocess.PIPE)
+			poffOutput, poffError = poffProcess.communicate()
+			if poffOutput.find('No pppd is running') > 0:
+				logger.write('WARNING', '[COMMUNICATOR] El demonio pppd no está ejecutándose y no hay conexión!')
+				return False
+			else:
+				logger.write('INFO', '[COMMUNICATOR] La red GPRS ha sido desconectada correctamente!')
+				return True
+		except:
+			logger.write('ERROR', '[COMMUNICATOR] Se produjo un error al intentar desconectarse de la red GPRS!')
+			return False
 	else:
 		logger.write('WARNING', '[COMMUNICATOR] No existe una conexión GPRS activa para desconectar!')
 		return False

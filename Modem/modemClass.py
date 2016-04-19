@@ -9,7 +9,6 @@
 	@organization: UNC - Fcefyn
 	@date: Miercoles 17 de Junio de 2015 """
 
-import os
 import json
 import time
 import shlex
@@ -44,8 +43,8 @@ class Modem(object):
 		self.modemInstance.bytesize = serial.EIGHTBITS
 		self.modemInstance.parity = serial.PARITY_NONE
 		self.modemInstance.stopbits = serial.STOPBITS_ONE
-		self.modemInstance.timeout = JSON_CONFIG["GSM"]["TIME_OUT"]
-		self.modemInstance.baudrate = JSON_CONFIG["GSM"]["BAUD_RATE"]
+		self.modemInstance.timeout = JSON_CONFIG["MODEM"]["TIME_OUT"]
+		self.modemInstance.baudrate = JSON_CONFIG["MODEM"]["BAUD_RATE"]
 
 	def sendAT(self, atCommand):
 		""" Se encarga de enviarle un comando AT el modem. Espera la respuesta
@@ -122,10 +121,13 @@ class Gsm(Modem):
 			Tambien cada un cierto tiempo dado por el intervalo de temporizacion, envia a un numero
 			de telefono dado por 'DESTINATION_NUMBER' un mensaje de actualizacion, que por el momento
 			estara compuesto de un 'TimeStamp'. """
-		smsAmount = 0
-		smsBodyList = list()
-		smsHeaderList = list()
-		unreadList = self.sendAT('AT+CMGL="REC UNREAD"')
+		try:
+			smsAmount = 0
+			smsBodyList = list()
+			smsHeaderList = list()
+			unreadList = self.sendAT('AT+CMGL="REC UNREAD"')
+		except:
+			pass
 		# Ejemplo de unreadList[0]: AT+CMGL="REC UNREAD"\r\r\n
 		# Ejemplo de unreadList[1]: +CMGL: 0,"REC UNREAD","+5493512560536",,"14/10/26,17:12:04-12"\r\n
 		# Ejemplo de unreadList[2]: Primer mensaje.\r\n
@@ -382,81 +384,3 @@ class Gsm(Modem):
 		finally:
 			#self.send(telephoneNumber, smsMessage)
 			pass
-
-class Gprs(Modem):
-
-	pppInterface = None
-
-	local_IP_Address = None
-	remote_IP_Address = None
-	primary_DNS_Address = None
-	secondary_DNS_Address = None
-
-	isActive = False
-
-	def __init__(self): 
-		Modem.__init__(self)
-
-	def __del__(self):
-		""" Destructor de la clase 'Modem'. Cierra la conexion establecida
-			con el modem. """
-		self.modemInstance.close()
-		logger.write('INFO', '[GRPS] Objeto destruido.')
-
-	def connect(self):
-		try:
-			ponProcess = subprocess.Popen('pon', stdout = subprocess.PIPE, stderr = subprocess.PIPE)
-			ponOutput, ponError = ponProcess.communicate()
-			# Si no se produjo ningún error, entonces se intenta iniciar la conexión con el APN
-			if ponError == '':
-				syslogFile = open('/var/log/syslog', 'a+')
-				syslogFile.seek(0, 2) # Apuntamos al final del archivo
-				while True:
-					syslogOutput = syslogFile.readline()
-					if syslogOutput.find('local  IP address ') > 0:
-						# Se asignó una direccion IP...
-						self.local_IP_Address = syslogOutput.split()[8]
-						logger.write('DEBUG', '[GRPS] Dirección IP: %s' % self.local_IP_Address)
-						continue
-					elif syslogOutput.find('remote IP address ') > 0:
-						# Se asignó una puerta de enlace...
-						self.remote_IP_Address = syslogOutput.split()[8]
-						logger.write('DEBUG', '[GRPS] Puerta de enlace: %s' % self.remote_IP_Address)
-						continue
-					elif syslogOutput.find('primary   DNS address ') > 0:
-						# Se asignó un servidor DNS primario...
-						self.primary_DNS_Address = syslogOutput.split()[8]
-						logger.write('DEBUG', '[GRPS] DNS Primario: %s' % self.primary_DNS_Address)
-						continue
-					elif syslogOutput.find('secondary DNS address ') > 0:
-						# Se asignó un servidor DNS secundario (último parámetro)...
-						self.secondary_DNS_Address = syslogOutput.split()[8]
-						logger.write('DEBUG', '[GRPS] DNS Secundario: %s' % self.secondary_DNS_Address)
-						continue
-					elif syslogOutput.find('Script /etc/ppp/ip-up finished') > 0:
-						logger.write('DEBUG', '[GRPS] Parámetros de red configurados exitosamente!')
-						self.isActive = True
-						return True
-					elif syslogOutput.find('Connection terminated') > 0:
-						logger.write('DEBUG', '[GRPS] No se pudo establecer la conexión con la red GPRS!')
-						return False
-			# El puerto serial en '/etc/ppp/options-mobile' está mal configurado o no existe (desconectado)
-			else:
-				logger.write('WARNING', '[GRPS] No hay ningún módem conectado para realizar la conexión!')
-		except:
-			logger.write('ERROR', '[GRPS] Se produjo un error al intentar realizar la conexión!')
-			return False
-
-	def disconnect(self):
-		try:
-			poffProcess = subprocess.Popen('poff', stdout = subprocess.PIPE, stderr = subprocess.PIPE)
-			poffOutput, poffError = poffProcess.communicate()
-			if poffOutput.find('No pppd is running') > 0:
-				logger.write('WARNING', '[GRPS] El demonio pppd no está ejecutándose y no hay conexión!')
-				return False
-			else:
-				logger.write('INFO', '[GRPS] La conexión de datos ha sido desconectada correctamente!')
-				return True
-		except:
-			logger.write('ERROR', '[GRPS] Se produjo un error al intentar desconectarse de la red!')
-			return False

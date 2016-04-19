@@ -21,14 +21,23 @@ JSON_CONFIG = json.load(open(JSON_FILE))
 class Transmitter(threading.Thread):
 
 	gsmPriority = 0
+	gprsPriority = 0
+	wifiPriority = 0
+	ethernetPriority = 0
 	emailPriority = 0
-	networkPriority = 0
 	bluetoothPriority = 0
+
+	gsmInstance = None
+	gprsInstance = None
+	wifiInstance = None
+	ethernetInstance = None
+	emailInstance = None
+	bluetoothInstance = None
 
 	isActive = False
 	transmissionQueue = None
 
-	def __init__(self, _gsmInstance, _emailInstance, _networkInstance, _bluetoothInstance, _transmissionQueue):
+	def __init__(self, _transmissionQueue):
 		"""Creación de la clase de transmisión de paquetes TCP.
 		@param _threadName: nombre del hilo
 		@type: string
@@ -38,10 +47,6 @@ class Transmitter(threading.Thread):
 		@type: string
 		@type: Message"""
 		threading.Thread.__init__(self, name = 'TransmitterThread')
-		self.gsmInstance = _gsmInstance 
-		self.emailInstance = _emailInstance
-		self.networkInstance = _networkInstance
-		self.bluetoothInstance = _bluetoothInstance
 		self.transmissionQueue = _transmissionQueue
 
 	def __del__(self):
@@ -108,8 +113,10 @@ class Transmitter(threading.Thread):
 
 	def setPriorities(self, receiver, media):
 		self.gsmPriority = 0
+		self.gprsPriority = 0
+		self.wifiPriority = 0
+		self.ethernetPriority = 0
 		self.emailPriority = 0
-		self.networkPriority = 0
 		self.bluetoothPriority = 0
 		# Para GSM
 		if contactList.allowedNumbers.has_key(receiver) and self.gsmInstance.isActive:
@@ -118,20 +125,27 @@ class Transmitter(threading.Thread):
 				self.gsmPriority = 10
 			else:
 				self.gsmPriority = JSON_CONFIG["PRIORITY_LEVELS"]["GSM"]
-		# Para EMAIL
-		if contactList.allowedEmails.has_key(receiver) and self.emailInstance.isActive:
+		# Para GPRS
+		if contactList.allowedHosts.has_key(receiver) and self.gprsInstance.isActive:
 			# En caso de preferencia se da máxima prioridad
-			if media == 'EMAIL':
-				self.emailPriority = 10
+			if media == 'GPRS':
+				self.gprsPriority = 10
 			else:
-				self.emailPriority = JSON_CONFIG["PRIORITY_LEVELS"]["EMAIL"]
-		# Para NETWORK
-		if contactList.allowedHosts.has_key(receiver) and self.networkInstance.isActive:
+				self.gprsPriority = JSON_CONFIG["PRIORITY_LEVELS"]["GPRS"]
+		# Para WIFI
+		if contactList.allowedHosts.has_key(receiver) and self.wifiInstance.isActive:
 			# En caso de preferencia se da máxima prioridad
-			if media == 'NETWORK':
-				self.networkPriority = 10
+			if media == 'WIFI':
+				self.wifiPriority = 10
 			else:
-				self.networkPriority = JSON_CONFIG["PRIORITY_LEVELS"]["NETWORK"]
+				self.wifiPriority = JSON_CONFIG["PRIORITY_LEVELS"]["WIFI"]
+		# Para ETHERNET
+		if contactList.allowedHosts.has_key(receiver) and self.ethernetInstance.isActive:
+			# En caso de preferencia se da máxima prioridad
+			if media == 'ETHERNET':
+				self.ethernetPriority = 10
+			else:
+				self.ethernetPriority = JSON_CONFIG["PRIORITY_LEVELS"]["ETHERNET"]
 		# Para BLUETOOTH
 		if contactList.allowedMacAddress.has_key(receiver) and self.bluetoothInstance.isActive:
 			# En caso de preferencia se da máxima prioridad
@@ -139,6 +153,13 @@ class Transmitter(threading.Thread):
 				self.bluetoothPriority = 10
 			else:
 				self.bluetoothPriority = JSON_CONFIG["PRIORITY_LEVELS"]["BLUETOOTH"]
+		# Para EMAIL
+		if contactList.allowedEmails.has_key(receiver) and self.emailInstance.isActive:
+			# En caso de preferencia se da máxima prioridad
+			if media == 'EMAIL':
+				self.emailPriority = 10
+			else:
+				self.emailPriority = JSON_CONFIG["PRIORITY_LEVELS"]["EMAIL"]
 
 	def send(self, messageInstance):
 		"""Se envia de modo inteligente un paquete de datos a un contacto previamente 
@@ -147,7 +168,7 @@ class Transmitter(threading.Thread):
 		@param messageInstance: Mensaje a ser enviado
 		@type messageInstance: str"""
 		# Intentamos transmitir por GSM
-		if all(self.gsmPriority != 0 and self.gsmPriority >= x for x in(self.emailPriority, self.networkPriority, self.bluetoothPriority)):
+		if all(self.gsmPriority != 0 and self.gsmPriority >= x for x in(self.gprsPriority, self.emailPriority, self.wifiPriority, self.ethernetPriority, self.bluetoothPriority)):
 			destinationNumber = contactList.allowedNumbers[messageInstance.receiver]
 			if not self.gsmInstance.send(messageInstance, destinationNumber):
 				logger.write('DEBUG', '[COMMUNICATOR-GSM] Falló. Reintentando con otro medio.')
@@ -155,8 +176,17 @@ class Transmitter(threading.Thread):
 				return self.send(messageInstance) # Se reintenta con otro medio
 			else:
 				return True
+		# Intentamos transmitir por GPRS
+		if all(self.gprsPriority != 0 and self.gprsPriority >= x for x in(self.emailPriority, self.wifiPriority, self.ethernetPriority, self.bluetoothPriority)):
+			destinationHost, destinationTcpPort, destinationUdpPort = contactList.allowedHosts[messageInstance.receiver]
+			if not self.gprsInstance.send(messageInstance, destinationHost, destinationTcpPort, destinationUdpPort):
+				logger.write('DEBUG', '[COMMUNICATOR-GPRS] Falló. Reintentando con otro medio.')
+				self.gprsPriority = 0             # Se descarta para la próxima selección
+				return self.send(messageInstance) # Se reintenta con otro medio
+			else:
+				return True
 		# Intentamos transmitir por EMAIL
-		elif all(self.emailPriority != 0 and self.emailPriority >= x for x in(self.networkPriority, self.bluetoothPriority)):
+		elif all(self.emailPriority != 0 and self.emailPriority >= x for x in(self.wifiPriority, self.ethernetPriority, self.bluetoothPriority)):
 			destinationEmail = contactList.allowedEmails[messageInstance.receiver]
 			if not self.emailInstance.send(messageInstance, destinationEmail):
 				logger.write('DEBUG', '[COMMUNICATOR-EMAIL] Falló. Reintentando con otro medio.')
@@ -164,12 +194,21 @@ class Transmitter(threading.Thread):
 				return self.send(messageInstance) # Se reintenta con otro medio
 			else:
 				return True
-		# Intentamos transmitir por NETWORK
-		elif self.networkPriority != 0 and self.networkPriority >= self.bluetoothPriority:
+		# Intentamos transmitir por WIFI
+		elif all(self.wifiPriority != 0 and self.wifiPriority >= x for x in(self.ethernetPriority, self.bluetoothPriority)):
 			destinationHost, destinationTcpPort, destinationUdpPort = contactList.allowedHosts[messageInstance.receiver]
-			if not self.networkInstance.send(messageInstance, destinationHost, destinationTcpPort, destinationUdpPort):
-				logger.write('DEBUG', '[COMMUNICATOR-NETWORK] Falló. Reintentando con otro medio.')
-				self.networkPriority = 0          # Se descarta para la próxima selección
+			if not self.wifiInstance.send(messageInstance, destinationHost, destinationTcpPort, destinationUdpPort):
+				logger.write('DEBUG', '[COMMUNICATOR-WIFI] Falló. Reintentando con otro medio.')
+				self.wifiPriority = 0             # Se descarta para la próxima selección
+				return self.send(messageInstance) # Se reintenta con otro medio
+			else:
+				return True
+		# Intentamos transmitir por ETHERNET
+		elif self.ethernetPriority != 0 and self.ethernetPriority >= self.bluetoothPriority:
+			destinationHost, destinationTcpPort, destinationUdpPort = contactList.allowedHosts[messageInstance.receiver]
+			if not self.ethernetInstance.send(messageInstance, destinationHost, destinationTcpPort, destinationUdpPort):
+				logger.write('DEBUG', '[COMMUNICATOR-ETHERNET] Falló. Reintentando con otro medio.')
+				self.ethernetPriority = 0         # Se descarta para la próxima selección
 				return self.send(messageInstance) # Se reintenta con otro medio
 			else:
 				return True

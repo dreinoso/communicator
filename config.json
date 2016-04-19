@@ -11,8 +11,10 @@
 	},
 "NETWORK":
 	{
-	"TCP_PORT" : 5000,
-	"UDP_PORT" : 5010
+	"TCP_PORT"    : 5000,
+	"UDP_PORT"    : 5010,
+	"BUFFER_SIZE" : 4096,
+	"CONNECTIONS" : 5
  	},
 "BLUETOOTH":
 	{
@@ -29,17 +31,19 @@
 	"SMTP_PORT"   : 587,
 	"IMAP_PORT"   : 993
 	},
-"GSM":
+"MODEM":
 	{
 	"TIME_OUT"  : 1.5,
 	"BAUD_RATE" : 19200
 	},
 "PRIORITY_LEVELS":
 	{
-	"GSM"       : 1,
-	"EMAIL"     : 2,
-	"NETWORK"   : 3,
-	"BLUETOOTH" : 4
+	"GSM"       : 0,
+	"GPRS"      : 1,
+	"WIFI"      : 2,
+	"ETHERNET"  : 1,
+	"BLUETOOTH" : 0,
+	"EMAIL"     : 0
 	},
 "LOGGER":
 	{

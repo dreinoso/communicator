@@ -11,7 +11,7 @@
 
 # Hosts permitidos
 allowedHosts = dict()
-allowedHosts = {'client02' : ('192.168.1.6', 6000, 6010)}
+allowedHosts = {'client02' : ('192.168.1.6', 5000, 5010)}
 
 # Direcciones MAC permitidas
 allowedMacAddress = dict()

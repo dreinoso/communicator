@@ -11,17 +11,18 @@ import contactList
 import bluetoothReceptor
 import bluetoothTransmitter
 
-TIMEOUT = 1.5
-CONNECTIONS = 3
-
 JSON_FILE = 'config.json'
 JSON_CONFIG = json.load(open(JSON_FILE))
+
+TIMEOUT = 1.5
+CONNECTIONS = 3
 
 class Bluetooth(object):
 
 	localServiceName = JSON_CONFIG["BLUETOOTH"]["SERVICE"]
 	localUUID = JSON_CONFIG["BLUETOOTH"]["UUID"]
 
+	localInterface = None
 	localMACAddress = None
 	localPortRFCOMM = None
 
@@ -35,7 +36,7 @@ class Bluetooth(object):
 	def __del__(self):
 		try:
 			# Eliminamos del archivo la MAC usada en esta misma instancia
-			dataToWrite = open('/tmp/activeInterfaces').read().replace(self.localMACAddress + '\n', '')
+			dataToWrite = open('/tmp/activeInterfaces').read().replace(self.localInterface + '\n', '')
 			activeInterfacesFile = open('/tmp/activeInterfaces', 'w')
 			activeInterfacesFile.write(dataToWrite)
 			activeInterfacesFile.close()

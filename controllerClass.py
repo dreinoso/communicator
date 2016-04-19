@@ -18,38 +18,43 @@ import subprocess
 import logger
 
 gsmThreadName = 'gsmReceptor'
+gprsThreadName = 'gprsReceptor'
+wifiThreadName = 'wifiReceptor'
 emailThreadName = 'emailReceptor'
-networkThreadName = 'networkReceptor'
+ethernetThreadName = 'ethernetReceptor'
 bluetoothThreadName = 'bluetoothReceptor'
 
-threadNameList = [networkThreadName, gsmThreadName, emailThreadName, bluetoothThreadName]
+threadNameList = [gsmThreadName, gprsThreadName, wifiThreadName, ethernetThreadName, bluetoothThreadName, emailThreadName]
 
 class Controller(threading.Thread):
 
 	availableGsm = False       # Indica si el modo GSM está disponible
 	availableGprs = False      # Indica si el modo GPRS está disponible
-	availableEmail = False     # Indica si el modo EMAIL está disponible
-	availableNetwork = False   # Indica si el modo NETWORK está disponible
+	availableWifi = False      # Indica si el modo WIFI está disponible
+	availableEthernet = False  # Indica si el modo ETHERNET está disponible
 	availableBluetooth = False # Indica si el modo BLUTOOTH está disponible
+	availableEmail = False     # Indica si el modo EMAIL está disponible
+
+	gsmInstance = None
+	gprsInstance = None
+	wifiInstance = None
+	ethernetInstance = None
+	bluetoothInstance = None
+	emailInstance = None
 
 	isActive = False
 
-	def __init__(self, _REFRESH_TIME, _gsmInstance, _gprsInstance, _emailInstance, _networkInstance, _bluetoothInstance):
+	def __init__(self, _REFRESH_TIME):
 		threading.Thread.__init__(self, name = 'ControllerThread')
 		self.REFRESH_TIME = _REFRESH_TIME
-		# Obtenemos las instancias de los medios
-		self.gsmInstance = _gsmInstance
-		self.gprsInstance = _gprsInstance
-		self.emailInstance = _emailInstance
-		self.networkInstance = _networkInstance
-		self.bluetoothInstance = _bluetoothInstance
 
 	def __del__(self):
 		self.gsmInstance.isActive = False
 		self.gprsInstance.isActive = False
-		self.emailInstance.isActive = False
-		self.networkInstance.isActive = False
+		self.wifiInstance.isActive = False
+		self.ethernetInstance.isActive = False
 		self.bluetoothInstance.isActive = False
+		self.emailInstance.isActive = False
 		# Esperamos que terminen los hilos receptores
 		for receptorThread in threading.enumerate():
 			if receptorThread.getName() in threadNameList and receptorThread.isAlive():
@@ -61,11 +66,12 @@ class Controller(threading.Thread):
 		while self.isActive:
 			self.availableGsm = self.verifyGsmConnection()
 			self.availableGprs = self.verifyGprsConnection()
-			self.availableEmail = self.verifyEmailConnection()
-			self.availableNetwork = self.verifyNetworkConnection()
+			self.availableWifi = self.verifyWifiConnection()
+			self.availableEthernet = self.verifyEthernetConnection()
 			self.availableBluetooth = self.verifyBluetoothConnection()
+			self.availableEmail = self.verifyEmailConnection()
 			time.sleep(self.REFRESH_TIME)
-		logger.write('WARNING', '[CONTROLLER] Funcion \'%s\' terminada.' % inspect.stack()[0][3])
+		logger.write('WARNING', '[CONTROLLER] Función \'%s\' terminada.' % inspect.stack()[0][3])
 
 	def verifyGsmConnection(self):
 		"""Se determina la disponibilidad de la comunicación por medio comunicación GSM.
@@ -108,79 +114,223 @@ class Controller(threading.Thread):
 		pppPattern = re.compile('ppp[0-9]+')
 		for networkInterface in os.popen('ip link show').readlines():
 			# Con 'pppPattern.search(networkInterface)' buscamos alguna coincidencia
-			patternMatched = pppPattern.search(networkInterface)
-			if patternMatched is not None and networkInterface.find("state UNKNOWN") > 0:
-				# Con 'patternMatched.group()' obtenemos la interfaz que concide con la RE
-				if self.gprsInstance.pppInterface is None:
-					time.sleep(1)
-					self.gprsInstance.pppInterface = patternMatched.group()
-					logger.write('INFO', '[GRPS] Listo para usarse (' + patternMatched.group() + ').')
-					return True
-				# Si el módem ya está en modo activo (funcionando), devolvemos 'True'
-				else:
-					return True
-			# No se encontró coincidencia en la iteración actual, entonces seguimos buscando
-			else:
-				continue
-		# Si entramos es porque había una conexión activa y se perdió
-		if self.gprsInstance.pppInterface is not None:
-			# Limpiamos todos los campos del objeto
-			self.gprsInstance.isActive = False
-			self.gprsInstance.pppInterface = None
-			self.gprsInstance.local_IP_Address = None
-			self.gprsInstance.remote_IP_Address = None
-			self.gprsInstance.primary_DNS_Address = None
-			self.gprsInstance.secondary_DNS_Address = None
-		return False
-
-	def verifyNetworkConnection(self):
-		"""Se determina la disponibilidad de la comunicación por medio de comunicación Lan.
-		@return: Se determina si la comunicación por este medio se puede realizar.
-		@rtype: bool"""
-		# Generamos la expresión regular
-		interfacesPattern = re.compile('wlan[0-9]+' '|' 'eth[0-9]+')
-		activeInterfacesList = open('/tmp/activeInterfaces', 'a+').read()
-		for networkInterface in os.popen('ip link show').readlines():
-			# Con 'interfacesPattern.search(networkInterface)' buscamos alguna coincidencia
-			patternMatched = interfacesPattern.search(networkInterface)
-			if patternMatched is not None and networkInterface.find("state UP") > 0:
-				# Con 'patternMatched.group()' obtenemos la interfaz que concide con la RE
-				# La interfaz actual no esté siendo usada y la instancia no está activa (habrá que habilitarla)
-				if patternMatched.group() not in activeInterfacesList and self.networkInstance.localInterface is None:
-					# Escribimos en nuestro archivo la interfaz a usar, para indicar que está ocupada
-					activeInterfacesFile = open('/tmp/activeInterfaces', 'a+')
-					activeInterfacesFile.write(patternMatched.group() + '\n')
-					activeInterfacesFile.close()
-					# Si no se produce ningún error durante la configuración, ponemos a la interfaz a escuchar
-					if self.networkInstance.connect(patternMatched.group()):
-						networkThread = threading.Thread(target = self.networkInstance.receive, name = networkThreadName)
-						networkThread.start()
-						networkInfo = patternMatched.group() + ' - ' + self.networkInstance.localAddress
-						logger.write('INFO', '[NETWORK] Listo para usarse (' + networkInfo + ').')
+			matchedPattern = pppPattern.search(networkInterface)
+			# La interfaz actual coincide con un patrón 'ppp'
+			if matchedPattern is not None and networkInterface.find("state UNKNOWN") > 0:
+				# Esto se cumple cuando nunca se realizó un intento de configuración
+				if self.gprsInstance.localInterface is None:
+					# Obtenemos la interfaz que concide con el patrón
+					self.gprsInstance.localInterface = matchedPattern.group()
+					# Obtenemos la dirección IP local asignada estáticamente o por DHCP
+					commandToExecute = 'ip addr show ' + self.gprsInstance.localInterface + ' | grep inet'
+					localIPAddress = os.popen(commandToExecute).readline().split()[1].split('/')[0]
+					# Si no se produce ningún error durante la configuración, ponemos a la IP a escuchar
+					if self.gprsInstance.connect(localIPAddress):
+						gprsThread = threading.Thread(target = self.gprsInstance.receive, name = gprsThreadName)
+						gprsInfo = self.gprsInstance.localInterface + ' - ' + self.gprsInstance.localIPAddress
+						logger.write('INFO', '[GRPS] Listo para usarse (' + gprsInfo + ').')
+						gprsThread.start()
 						return True
 					# Si se produce un error durante la configuración, devolvemos 'False'
 					else:
 						return False
-				# La interfaz actual coincide con la interfaz de la instancia
-				elif patternMatched.group() == self.networkInstance.localInterface:
+				# El patrón coincidente es igual a la interfaz de la instancia
+				elif matchedPattern.group() == self.gprsInstance.localInterface:
 					# Si no se produjo ningún error durante la configuración, devolvemos 'True'
-					if self.networkInstance.successfulConnection:
+					if self.gprsInstance.successfulConnection:
 						return True
 					# Entonces significa que hubo un error, devolvemos 'False'
 					else:
 						return False
-				# La interfaz actual está siendo usada pero no coincide con la interfaz de la instancia
+				# El patrón coincidente está siendo usado pero no es igual a la interfaz de la instancia
+				else:
+					continue
+			# No se encontró coincidencia en la iteración actual, entonces seguimos buscando
+			else:
+				continue
+		# Si entramos es porque había una conexión activa y se perdió
+		if self.gprsInstance.localInterface is not None:
+			# Limpiamos todos los campos del objeto NETWORK
+			self.gprsInstance.successfulConnection = None
+			self.gprsInstance.localInterface = None
+			self.gprsInstance.localIPAddress = None
+			self.gprsInstance.isActive = False
+		return False
+
+	def verifyWifiConnection(self):
+		"""Se determina la disponibilidad de la comunicación por medio de comunicación Lan.
+		@return: Se determina si la comunicación por este medio se puede realizar.
+		@rtype: bool"""
+		# Generamos la expresión regular
+		wlanPattern = re.compile('wlan[0-9]+' '|' 'eth[0-9]+')
+		activeInterfacesList = open('/tmp/activeInterfaces', 'a+').read()
+		for networkInterface in os.popen('ip link show').readlines():
+			# Con 'wlanPattern.search(networkInterface)' buscamos alguna coincidencia
+			matchedPattern = wlanPattern.search(networkInterface)
+			# La interfaz actual coincide con un patrón 'wlan'
+			if matchedPattern is not None and networkInterface.find("state UP") > 0:
+				# El patrón coincidente no está siendo usado y la instancia no está activa (habrá que habilitarla)
+				if matchedPattern.group() not in activeInterfacesList and self.wifiInstance.localInterface is None:
+					# Obtenemos la interfaz que concide con el patrón
+					self.wifiInstance.localInterface = matchedPattern.group()
+					# Escribimos en nuestro archivo la interfaz, para indicar que está ocupada
+					activeInterfacesFile = open('/tmp/activeInterfaces', 'a+')
+					activeInterfacesFile.write(self.wifiInstance.localInterface + '\n')
+					activeInterfacesFile.close()
+					# Obtenemos la dirección IP local asignada estáticamente o por DHCP
+					commandToExecute = 'ip addr show ' + self.wifiInstance.localInterface + ' | grep inet'
+					localIPAddress = os.popen(commandToExecute).readline().split()[1].split('/')[0]
+					# Si no se produce ningún error durante la configuración, ponemos a la IP a escuchar
+					if self.wifiInstance.connect(localIPAddress):
+						wifiThread = threading.Thread(target = self.wifiInstance.receive, name = wifiThreadName)
+						wifiInfo = self.wifiInstance.localInterface + ' - ' + self.wifiInstance.localIPAddress
+						logger.write('INFO', '[WIFI] Listo para usarse (' + wifiInfo + ').')
+						wifiThread.start()
+						return True
+					# Si se produce un error durante la configuración, devolvemos 'False'
+					else:
+						return False
+				# El patrón coincidente es igual a la interfaz de la instancia
+				elif matchedPattern.group() == self.wifiInstance.localInterface:
+					# Si no se produjo ningún error durante la configuración, devolvemos 'True'
+					if self.wifiInstance.successfulConnection:
+						return True
+					# Entonces significa que hubo un error, devolvemos 'False'
+					else:
+						return False
+				# El patrón coincidente está siendo usado pero no es igual a la interfaz de la instancia
 				else:
 					continue
 			# No se encontró coincidencia en la iteración actual, entonces seguimos buscando
 			else:
 				continue
 		# Si anteriormente hubo un intento de 'connect()' con o sin éxito, debemos limpiar la interfaz
-		if self.networkInstance.localInterface is not None:
-			localInterface = self.networkInstance.localInterface
-			self.networkInstance.successfulConnection = None
-			self.networkInstance.localInterface = None
-			self.networkInstance.isActive = False
+		if self.wifiInstance.localInterface is not None:
+			localInterface = self.wifiInstance.localInterface
+			# Limpiamos todos los campos del objeto NETWORK
+			self.wifiInstance.successfulConnection = None
+			self.wifiInstance.localInterface = None
+			self.wifiInstance.localIPAddress = None
+			self.wifiInstance.isActive = False
+			# Eliminamos del archivo la interfaz de red usada
+			dataToWrite = open('/tmp/activeInterfaces').read().replace(localInterface + '\n', '')
+			activeInterfacesFile = open('/tmp/activeInterfaces', 'w')
+			activeInterfacesFile.write(dataToWrite)
+			activeInterfacesFile.close()
+		return False
+
+	def verifyEthernetConnection(self):
+		"""Se determina la disponibilidad de la comunicación por medio de comunicación Lan.
+		@return: Se determina si la comunicación por este medio se puede realizar.
+		@rtype: bool"""
+		# Generamos la expresión regular
+		ethPattern = re.compile('eth[0-9]+')
+		activeInterfacesList = open('/tmp/activeInterfaces', 'a+').read()
+		for networkInterface in os.popen('ip link show').readlines():
+			# Con 'ethPattern.search(networkInterface)' buscamos alguna coincidencia
+			matchedPattern = ethPattern.search(networkInterface)
+			# La interfaz actual coincide con un patrón 'eth'
+			if matchedPattern is not None and networkInterface.find("state UP") > 0:
+				# El patrón coincidente no está siendo usado y la instancia no está activa (habrá que habilitarla)
+				if matchedPattern.group() not in activeInterfacesList and self.ethernetInstance.localInterface is None:
+					# Obtenemos la interfaz que concide con el patrón
+					self.ethernetInstance.localInterface = matchedPattern.group()
+					# Escribimos en nuestro archivo la interfaz, para indicar que está ocupada
+					activeInterfacesFile = open('/tmp/activeInterfaces', 'a+')
+					activeInterfacesFile.write(self.ethernetInstance.localInterface + '\n')
+					activeInterfacesFile.close()
+					# Obtenemos la dirección IP local asignada estáticamente o por DHCP
+					commandToExecute = 'ip addr show ' + self.ethernetInstance.localInterface + ' | grep inet'
+					localIPAddress = os.popen(commandToExecute).readline().split()[1].split('/')[0]
+					# Si no se produce ningún error durante la configuración, ponemos a la IP a escuchar
+					if self.ethernetInstance.connect(localIPAddress):
+						ethernetThread = threading.Thread(target = self.ethernetInstance.receive, name = ethernetThreadName)
+						ethernetInfo = self.ethernetInstance.localInterface + ' - ' + self.ethernetInstance.localIPAddress
+						logger.write('INFO', '[ETHERNET] Listo para usarse (' + ethernetInfo + ').')
+						ethernetThread.start()
+						return True
+					# Si se produce un error durante la configuración, devolvemos 'False'
+					else:
+						return False
+				# El patrón coincidente es igual a la interfaz de la instancia
+				elif matchedPattern.group() == self.ethernetInstance.localInterface:
+					# Si no se produjo ningún error durante la configuración, devolvemos 'True'
+					if self.ethernetInstance.successfulConnection:
+						return True
+					# Entonces significa que hubo un error, devolvemos 'False'
+					else:
+						return False
+				# El patrón coincidente está siendo usado pero no es igual a la interfaz de la instancia
+				else:
+					continue
+			# No se encontró coincidencia en la iteración actual, entonces seguimos buscando
+			else:
+				continue
+		# Si anteriormente hubo un intento de 'connect()' con o sin éxito, debemos limpiar la interfaz
+		if self.ethernetInstance.localInterface is not None:
+			localInterface = self.ethernetInstance.localInterface
+			# Limpiamos todos los campos del objeto NETWORK
+			self.ethernetInstance.successfulConnection = None
+			self.ethernetInstance.localInterface = None
+			self.ethernetInstance.localIPAddress = None
+			self.ethernetInstance.isActive = False
+			# Eliminamos del archivo la interfaz de red usada
+			dataToWrite = open('/tmp/activeInterfaces').read().replace(localInterface + '\n', '')
+			activeInterfacesFile = open('/tmp/activeInterfaces', 'w')
+			activeInterfacesFile.write(dataToWrite)
+			activeInterfacesFile.close()
+		return False
+
+	def verifyBluetoothConnection(self):
+		"""Se determina la disponibilidad de la comunicación por medio de comunicación Bluetooth.
+		@return: Se determina si la comunicación por este medio se puede realizar.
+		@rtype: bool"""
+		activeInterfacesList = open('/tmp/activeInterfaces', 'a+').read()
+		# Ejemplo de bluetoothDevices: ['Devices:\n', '\thci0\t00:24:7E:64:7B:4A\n']
+		bluetoothDevices = os.popen('hcitool dev').readlines()
+		# Sacamos el primer elemento por izquierda ('Devices:\n')
+		bluetoothDevices.pop(0)
+		for btDevice in bluetoothDevices:
+			# Ejemplo de btDevice: \thci0\t00:24:7E:64:7B:4A\n
+			btInterface = btDevice.split('\t')[1]
+			btAddress = btDevice.split('\t')[2].replace('\n', '')
+			# La interfaz encontrada no está siendo usada y la instancia no está activa (habrá que habilitarla)
+			if btInterface not in activeInterfacesList and self.bluetoothInstance.localInterface is None:
+				# Obtenemos la interfaz encontrada
+				self.bluetoothInstance.localInterface = btInterface
+				# Escribimos en nuestro archivo la interfaz, para indicar que está ocupada
+				activeInterfacesFile = open('/tmp/activeInterfaces', 'a+')
+				activeInterfacesFile.write(btInterface + '\n')
+				activeInterfacesFile.close()
+				# Si no se produce ningún error durante la configuración, ponemos a la MAC a escuchar
+				if self.bluetoothInstance.connect(btAddress):
+					bluetoothThread = threading.Thread(target = self.bluetoothInstance.receive, name = bluetoothThreadName)
+					bluetoothInfo = self.bluetoothInstance.localInterface + ' - ' + self.bluetoothInstance.localMACAddress
+					logger.write('INFO', '[BLUETOOTH] Listo para usarse (' + bluetoothInfo + ').')
+					bluetoothThread.start()
+					return True
+				# Si se produce un error durante la configuración, devolvemos 'False'
+				else:
+					return False
+			# La interfaz encontrada es igual a la interfaz de la instancia
+			elif btInterface == self.bluetoothInstance.localInterface:
+				# Si no se produjo ningún error durante la configuración, devolvemos 'True'
+				if self.bluetoothInstance.successfulConnection:
+					return True
+				# Entonces significa que hubo un error, devolvemos 'False'
+				else:
+					return False
+			# La interfaz encontrada está siendo usado pero no es igual a la interfaz de la instancia
+			else:
+				continue
+		# Si anteriormente hubo un intento de 'connect()' con o sin éxito, debemos limpiar la interfaz
+		if self.bluetoothInstance.localInterface is not None:
+			localInterface = self.bluetoothInstance.localInterface
+			# Limpiamos todos los campos del objeto BLUETOOTH
+			self.bluetoothInstance.successfulConnection = None
+			self.bluetoothInstance.localMACAddress = None
+			self.bluetoothInstance.localInterface = None
+			self.bluetoothInstance.isActive = False
 			# Eliminamos del archivo la interfaz de red usada
 			dataToWrite = open('/tmp/activeInterfaces').read().replace(localInterface + '\n', '')
 			activeInterfacesFile = open('/tmp/activeInterfaces', 'w')
@@ -221,54 +371,3 @@ class Controller(threading.Thread):
 				self.emailInstance.emailAccount = None
 				self.emailInstance.isActive = False
 			return False
-
-	def verifyBluetoothConnection(self):
-		"""Se determina la disponibilidad de la comunicación por medio de comunicación Bluetooth.
-		@return: Se determina si la comunicación por este medio se puede realizar.
-		@rtype: bool"""
-		activeInterfacesList = open('/tmp/activeInterfaces', 'a+').read()
-		# Ejemplo de bluetoothDevices: ['Devices:\n', '\thci0\t00:24:7E:64:7B:4A\n']
-		bluetoothDevices = os.popen('hcitool dev').readlines()
-		# Sacamos el primer elemento por izquierda ('Devices:\n')
-		bluetoothDevices.pop(0)
-		for btDevice in bluetoothDevices:
-			# Ejemplo de btDevice: \thci0\t00:24:7E:64:7B:4A\n
-			btDevice = btDevice.split('\t')[2].replace('\n', '')
-			# La MAC actual no esté siendo usada y la instancia no está activa (habrá que habilitarla)
-			if btDevice not in activeInterfacesList and self.bluetoothInstance.localMACAddress is None:
-				# Escribimos en nuestro archivo la MAC a usar, para indicar que está ocupada
-				activeInterfacesFile = open('/tmp/activeInterfaces', 'a+')
-				activeInterfacesFile.write(btDevice + '\n')
-				activeInterfacesFile.close()
-				# Si no se produce ningún error durante la configuración, ponemos a la MAC a escuchar
-				if self.bluetoothInstance.connect(btDevice):
-					bluetoothThread = threading.Thread(target = self.bluetoothInstance.receive, name = bluetoothThreadName)
-					bluetoothThread.start()
-					logger.write('INFO', '[BLUETOOTH] Listo para usarse (' + btDevice + ').')
-					return True
-				# Si se produce un error durante la configuración, devolvemos 'False'
-				else:
-					return False
-			# La MAC actual coincide con la MAC de la instancia
-			elif btDevice == self.bluetoothInstance.localMACAddress:
-				# Si no se produjo ningún error durante la configuración, devolvemos 'True'
-				if self.bluetoothInstance.successfulConnection:
-					return True
-				# Entonces significa que hubo un error, devolvemos 'False'
-				else:
-					return False
-			# La MAC actual está siendo usada pero no coincide con la MAC de la instancia
-			else:
-				continue
-		# Si anteriormente hubo un intento de 'connect()' con o sin éxito, debemos limpiar la MAC
-		if self.bluetoothInstance.localMACAddress is not None:
-			localMACAddress = self.bluetoothInstance.localMACAddress
-			self.bluetoothInstance.successfulConnection = None
-			self.bluetoothInstance.localMACAddress = None
-			self.bluetoothInstance.isActive = False
-			# Eliminamos del archivo la MAC usada
-			dataToWrite = open('/tmp/activeInterfaces').read().replace(localMACAddress + '\n', '')
-			activeInterfacesFile = open('/tmp/activeInterfaces', 'w')
-			activeInterfacesFile.write(dataToWrite)
-			activeInterfacesFile.close()
-		return False
