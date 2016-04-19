@@ -162,7 +162,7 @@ class Controller(threading.Thread):
 		@return: Se determina si la comunicación por este medio se puede realizar.
 		@rtype: bool"""
 		# Generamos la expresión regular
-		wlanPattern = re.compile('wlan[0-9]+' '|' 'eth[0-9]+')
+		wlanPattern = re.compile('wlan[0-9]+')
 		activeInterfacesList = open('/tmp/activeInterfaces', 'a+').read()
 		for networkInterface in os.popen('ip link show').readlines():
 			# Con 'wlanPattern.search(networkInterface)' buscamos alguna coincidencia

@@ -64,7 +64,7 @@ def open():
 	global alreadyOpen
 	global receptionQueue, transmissionQueue
 	global controllerInstance, transmitterInstance
-	global gsmInstance, gprsInstance, emailInstance, wifiInstance, ethernetInstance, bluetoothInstance
+	global gsmInstance, gprsInstance, wifiInstance, ethernetInstance, bluetoothInstance, emailInstance
 
 	if not alreadyOpen:
 		logger.write('INFO', 'Abriendo el Comunicador...')
@@ -75,11 +75,11 @@ def open():
 		transmissionQueue = Queue.PriorityQueue(TRANSMISSION_QSIZE)
 		# Creamos las instancias de los periféricos
 		gsmInstance = modemClass.Gsm(receptionQueue)
-		emailInstance = emailClass.Email(receptionQueue)
 		gprsInstance = networkClass.Network(receptionQueue, 'GPRS')
 		wifiInstance = networkClass.Network(receptionQueue, 'WIFI')
 		ethernetInstance = networkClass.Network(receptionQueue, 'ETHERNET')
 		bluetoothInstance = bluetoothClass.Bluetooth(receptionQueue)
+		emailInstance = emailClass.Email(receptionQueue)
 		# Creamos la instancia que levantará las conexiones
 		REFRESH_TIME = JSON_CONFIG["COMMUNICATOR"]["REFRESH_TIME"]
 		controllerInstance = controllerClass.Controller(REFRESH_TIME)
@@ -87,16 +87,16 @@ def open():
 		controllerInstance.gprsInstance = gprsInstance
 		controllerInstance.wifiInstance = wifiInstance
 		controllerInstance.ethernetInstance = ethernetInstance
-		controllerInstance.emailInstance = emailInstance
 		controllerInstance.bluetoothInstance = bluetoothInstance
+		controllerInstance.emailInstance = emailInstance
 		# Creamos la instancia para la transmisión de paquetes
 		transmitterInstance = transmitterClass.Transmitter(transmissionQueue)
 		transmitterInstance.gsmInstance = gsmInstance
 		transmitterInstance.gprsInstance = gprsInstance
 		transmitterInstance.wifiInstance = wifiInstance
 		transmitterInstance.ethernetInstance = ethernetInstance
-		transmitterInstance.emailInstance = emailInstance
 		transmitterInstance.bluetoothInstance = bluetoothInstance
+		transmitterInstance.emailInstance = emailInstance
 		# Ponemos en marcha el controlador de medios de comunicación y la transmisión de mensajes
 		controllerInstance.start()
 		transmitterInstance.start()
@@ -113,7 +113,7 @@ def close():
 	global alreadyOpen
 	global receptionQueue, transmissionQueue
 	global controllerInstance, transmitterInstance
-	global gsmInstance, gprsInstance, emailInstance, wifiInstance, ethernetInstance, bluetoothInstance
+	global gsmInstance, gprsInstance, wifiInstance, ethernetInstance, bluetoothInstance, emailInstance
 
 	if alreadyOpen:
 		logger.write('INFO', 'Cerrando el Comunicador...')
@@ -130,8 +130,8 @@ def close():
 		del gprsInstance
 		del wifiInstance
 		del ethernetInstance
-		del emailInstance
 		del bluetoothInstance
+		del emailInstance
 		# Destruimos las colas de recepción y transmisión
 		del receptionQueue
 		del transmissionQueue
