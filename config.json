@@ -1,7 +1,7 @@
 {
 "COMMUNICATOR":
 	{
-	"NAME"                : "Datalogger01",
+	"NAME"                : "Client01",
 	"RECEPTION_FILTER"    : 0,
 	"TRANSMISSION_QSIZE"  : 25,
 	"RECEPTION_QSIZE"     : 50,

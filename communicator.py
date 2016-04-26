@@ -164,7 +164,7 @@ def send(message, receiver = None, media = None):
 				if receiver is not None:
 					tmpMessage = message
 					# Creamos la instancia general de un mensaje
-					message = messageClass.Message('', receiver)
+					message = messageClass.Message('', receiver, 10)
 					# Verificamos si el mensaje es una ruta a un archivo (path relativo o path absoluto)...
 					if os.path.isfile(tmpMessage):
 						# Insertamos el campo 'fileName'
@@ -173,8 +173,6 @@ def send(message, receiver = None, media = None):
 					else:
 						# Insertamos el campo 'plainText'
 						setattr(message, 'plainText', tmpMessage)
-					# Le asignamos una prioridad
-					setattr(message, 'priority', 10)
 				else:
 					logger.write('ERROR', '[COMMUNICATOR] No se especificó un destino para el mensaje!')
 					return False
