@@ -95,23 +95,29 @@ class Network(object):
 		@type destinationUdpPort: int
 		@param message: cadena de texto a enviar
 		@type message: str """
-		try:
-			# Comprobación de envío de archivo
-			if isinstance(message, messageClass.Message) and hasattr(message, 'fileName'):
-				# Crea un nuevo socket que usa el protocolo de transporte especificado
-				clientSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-				# Conecta el socket con el dispositivo remoto sobre el puerto especificado
-				clientSocket.connect((destinationHost, destinationTcpPort))
-				logger.write('DEBUG', '[%s-TCP] Conectado con la dirección \'%s\'.' % (self.MEDIA_NAME, destinationHost))
-				return self.sendFile(message.fileName, clientSocket)
-			# Comprobación de envío de texto plano
-			elif isinstance(message, messageClass.Message) and hasattr(message, 'plainText'):
-				return self.sendMessage(message.plainText, destinationHost, destinationUdpPort)
-			# Entonces se trata de enviar una instancia de mensaje
-			else:
-				return self.sendMessageInstance(message, destinationHost, destinationUdpPort)
-		except socket.error as errorMessage:
-			logger.write('WARNING', '[%s] %s.' % (self.MEDIA_NAME, errorMessage))
+		# Comprobamos si el host destino es alcanzable, es decir, si existe
+		pingResponse = os.system('ping -c 3 ' + destinationHost + ' >/dev/null 2>&1') # El '>/dev/null 2>&1' silencia stdout y stderr
+		if pingResponse is 0:
+			try:
+				# Comprobación de envío de archivo
+				if isinstance(message, messageClass.Message) and hasattr(message, 'fileName'):
+					# Crea un nuevo socket que usa el protocolo de transporte especificado
+					clientSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+					# Conecta el socket con el dispositivo remoto sobre el puerto especificado
+					clientSocket.connect((destinationHost, destinationTcpPort))
+					logger.write('DEBUG', '[%s-TCP] Conectado con la dirección \'%s\'.' % (self.MEDIA_NAME, destinationHost))
+					return self.sendFile(message.fileName, clientSocket)
+				# Comprobación de envío de texto plano
+				elif isinstance(message, messageClass.Message) and hasattr(message, 'plainText'):
+					return self.sendMessage(message.plainText, destinationHost, destinationUdpPort)
+				# Entonces se trata de enviar una instancia de mensaje
+				else:
+					return self.sendMessageInstance(message, destinationHost, destinationUdpPort)
+			except socket.error as errorMessage:
+				logger.write('WARNING', '[%s] %s.' % (self.MEDIA_NAME, errorMessage))
+				return False
+		else:
+			logger.write('WARNING', '[%s] El host destino \'%s\' es inalcanzable!' % (self.MEDIA_NAME, destinationHost))
 			return False
 
 	def sendFile(self, fileName, clientSocket):

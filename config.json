@@ -38,12 +38,12 @@
 	},
 "PRIORITY_LEVELS":
 	{
-	"GSM"       : 0,
-	"GPRS"      : 1,
-	"WIFI"      : 2,
-	"ETHERNET"  : 1,
-	"BLUETOOTH" : 0,
-	"EMAIL"     : 0
+	"GSM"       : 4,
+	"GPRS"      : 3,
+	"WIFI"      : 6,
+	"ETHERNET"  : 5,
+	"BLUETOOTH" : 2,
+	"EMAIL"     : 1
 	},
 "LOGGER":
 	{
