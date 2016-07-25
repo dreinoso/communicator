@@ -1,12 +1,5 @@
  # coding=utf-8
 
-"""Modulo principal que se encarga del control de los demás objetos y submódulos
-	para permitir la comunicación. 
-	@author: Gonzalez Leonardo Mauricio
-	@author: Reinoso Ever Denis
-	@organization: UNC - Fcefyn
-	@date: Lunes 16 de Mayo de 2015 """
-
 import os
 import io
 import sys
@@ -59,8 +52,6 @@ CONSOLE_LOGGING_LEVEL = JSON_CONFIG["LOGGER"]["CONSOLE_LOGGING_LEVEL"]
 logger.set(FILE_LOG, FILE_LOGGING_LEVEL, CONSOLE_LOGGING_LEVEL)
 
 def open():
-	"""Se realiza la apertura, inicialización de los componentes que se tengan disponibles
-	"""
 	global alreadyOpen
 	global receptionQueue, transmissionQueue
 	global controllerInstance, transmitterInstance
@@ -109,7 +100,6 @@ def open():
 		return False
 
 def close():
-	"""Se cierran los componentes del sistema, unicamente los abiertos previamente"""
 	global alreadyOpen
 	global receptionQueue, transmissionQueue
 	global controllerInstance, transmitterInstance
@@ -147,15 +137,6 @@ def close():
 		return False
 
 def send(message, receiver = None, media = None):
-	"""Se almacena en la cola de transmisión el paquete a ser enviado, se guardara
-	en caso de que se hayan establecido parametros correctos. En caso de tratarse 
-	de un mensaje simple o archivo simple, se los convierte en Instancias para simplificar
-	el manejo del mensaje por el transmisor. Pero se envia unicamente la cadena de
-	texto o el archivo
-	@param message: paquete a ser enviado, ya sea mensaje (o instancia) o un archivo (o instancia)
-	@param receiver: es el contacto al que se envia el mensaje
-	@param media: modo de envío preferente para ese mensaje en particular (puede no definirse)"""
-
 	if alreadyOpen:
 		if not transmissionQueue.full():
 			# Si el mensaje no es una instancia, la creamos para poder hacer el manejo de transmisión con prioridad
@@ -211,9 +192,6 @@ def send(message, receiver = None, media = None):
 		return False
 
 def receive():
-	"""Se obtiene de una cola el mensaje recibido mas antiguo.
-	@return: Mensaje recibido
-	@rtype: str"""
 	if alreadyOpen:
 		if receptionQueue.qsize() > 0:
 			# El elemento 0 es la prioridad, por eso sacamos el 1 porque es el mensaje
@@ -226,9 +204,6 @@ def receive():
 		return False
 
 def length():
-	"""Devuelve el tamaño de la cola de recepción.
-	@return: Cantidad de elementos en la cola
-	@rtype: int"""
 	if alreadyOpen:
 		if receptionQueue.qsize() == None:
 			return 0

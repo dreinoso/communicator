@@ -1,11 +1,4 @@
  # coding=utf-8
-"""	Este objeto se ocupa de testar las conexiones disponibles en el sistema
-	para que el comunicador haga uso de estas.
-
-	@author: Gonzalez Leonardo Mauricio
-	@author: Reinoso Ever Denis
-	@organization: UNC - FCEFYN
-	@date: Lunes 16 de Junio de 2015 """
 
 import os
 import re
@@ -74,9 +67,6 @@ class Controller(threading.Thread):
 		logger.write('WARNING', '[CONTROLLER] Función \'%s\' terminada.' % inspect.stack()[0][3])
 
 	def verifyGsmConnection(self):
-		"""Se determina la disponibilidad de la comunicación por medio comunicación GSM.
-		@return: Se determina si la comunicación por este medio se puede realizar.
-		@rtype: bool"""
 		# Generamos la expresión regular
 		ttyUSBPattern = re.compile('ttyUSB[0-9]+')
 		lsDevProcess = subprocess.Popen(['ls', '/dev/'], stdout = subprocess.PIPE, stderr = subprocess.PIPE)
@@ -158,9 +148,6 @@ class Controller(threading.Thread):
 		return False
 
 	def verifyWifiConnection(self):
-		"""Se determina la disponibilidad de la comunicación por medio de comunicación Lan.
-		@return: Se determina si la comunicación por este medio se puede realizar.
-		@rtype: bool"""
 		# Generamos la expresión regular
 		wlanPattern = re.compile('wlan[0-9]+')
 		activeInterfacesList = open('/tmp/activeInterfaces', 'a+').read()
@@ -220,9 +207,6 @@ class Controller(threading.Thread):
 		return False
 
 	def verifyEthernetConnection(self):
-		"""Se determina la disponibilidad de la comunicación por medio de comunicación Lan.
-		@return: Se determina si la comunicación por este medio se puede realizar.
-		@rtype: bool"""
 		# Generamos la expresión regular
 		ethPattern = re.compile('eth[0-9]+')
 		activeInterfacesList = open('/tmp/activeInterfaces', 'a+').read()
@@ -282,9 +266,6 @@ class Controller(threading.Thread):
 		return False
 
 	def verifyBluetoothConnection(self):
-		"""Se determina la disponibilidad de la comunicación por medio de comunicación Bluetooth.
-		@return: Se determina si la comunicación por este medio se puede realizar.
-		@rtype: bool"""
 		activeInterfacesList = open('/tmp/activeInterfaces', 'a+').read()
 		# Ejemplo de bluetoothDevices: ['Devices:\n', '\thci0\t00:24:7E:64:7B:4A\n']
 		bluetoothDevices = os.popen('hcitool dev').readlines()
@@ -339,10 +320,6 @@ class Controller(threading.Thread):
 		return False
 
 	def verifyEmailConnection(self):
-		"""Se determina la disponibilidad de la comunicación por medio de comunicación 
-		a través Email.
-		@return: Se determina si la comunicación por este medio se puede realizar.
-		@rtype: bool"""
 		TEST_REMOTE_SERVER = 'www.gmail.com'
 		try:
 			remoteHost = socket.gethostbyname(TEST_REMOTE_SERVER)

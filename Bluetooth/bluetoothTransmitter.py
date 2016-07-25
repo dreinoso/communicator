@@ -13,11 +13,9 @@ BUFFER_SIZE = 4096 # Tamano del buffer en bytes (cantidad de caracteres)
 class BluetoothTransmitter():
 
 	def __init__(self):
-		"""Constructor de la clase de transmisión de paquetes Bluetooth."""
+		pass
 
 	def send(self, message, clientSocket):
-		'''Dependiendo del tipo de mensaje de que se trate, el envio del mensaje
-		se comportara diferente'''
 		# Comprobación de envío de texto plano
 		if isinstance(message, messageClass.Message) and hasattr(message, 'plainText'):
 			return self.sendMessage(message.plainText, clientSocket)
@@ -29,7 +27,6 @@ class BluetoothTransmitter():
 			return self.sendMessageInstance(message, clientSocket)
 
 	def sendMessage(self, plainText, clientSocket):
-		'''Envío de mensaje simple'''
 		try:
 			clientSocket.send(plainText)
 			logger.write('INFO', '[BLUETOOTH] Mensaje enviado correctamente!')
@@ -42,11 +39,6 @@ class BluetoothTransmitter():
 			clientSocket.close()
 
 	def sendFile(self, fileName, clientSocket):
-		'''Envio de archivo simple, es decir unicamente el archivo sin una instancia de control.
-		Esta función solo se llama en caso de que el archivo exista. Por lo que solo resta abrirlo.
-		Se hacen sucecivas lecturas del archivo, y se envian. El receptor se encarga de recibir y 
-		rearmar	el archivo. Se utiliza una sincronización de mensajes para evitar perder paquetes,
-		además que lleguen en orden.'''
 		try:
 			absoluteFilePath = os.path.abspath(fileName)
 			fileDirectory, fileName = os.path.split(absoluteFilePath)
@@ -89,8 +81,6 @@ class BluetoothTransmitter():
 			clientSocket.close()
 
 	def sendMessageInstance(self, message, clientSocket):
-		'''Envió de la instancia mensaje. Primero debe realizarse una serialización de la clase
-		y enviar de a BUFFER_SIZE cantidad de caracteres, en definitiva se trata de una cadena.'''
 		try:
 			# Serializamos el objeto para poder transmitirlo
 			serializedMessage = 'INSTANCE' + pickle.dumps(message)

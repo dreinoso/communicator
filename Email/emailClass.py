@@ -1,12 +1,5 @@
  # coding=utf-8
 
-"""	Modulo cuya finalidad es proporcionar funciones que se encarguen del envio
-	y recepcion de paquetes de emails a través de una conexión a internet.
-	@author: Gonzalez Leonardo Mauricio
-	@author: Reinoso Ever Denis
-	@organization: UNC - Fcefyn
-	@date: Lunes 16 de Abril de 2015 """
-
 import os
 import json
 import shlex
@@ -50,19 +43,11 @@ class Email(object):
 	isActive = False
 
 	def __init__(self, _receptionQueue):
-		""" Configura el protocolo SMTP y el protocolo IMAP. El primero se encargara
-		de enviar correos electronicos, mientras que el segungo a recibirlos.
-		mbos disponen de una misma cuenta asociada a GMAIL para tales fines (y
-		que esta dada en el archivo 'contactList.py'. 
-		@param _receptionQueue: Buffer para la recepción de datos
-		@type: list"""
 		self.receptionQueue = _receptionQueue
 		# Establecemos tiempo maximo antes de reintentar lectura (válido para 'imapServer')
 		socket.setdefaulttimeout(TIMEOUT)
 
 	def __del__(self):
-		"""Elminación de la instancia de esta clase, cerrando conexiones establecidas, para no dejar
-		conexiones ocupados en el Host"""
 		try:
 			self.smtpServer.quit()   # Terminamos la sesión SMTP y cerramos la conexión
 			self.smtpServer.close()  # Cerramos el buzón seleccionado actualmente
@@ -98,12 +83,6 @@ class Email(object):
 			return False
 
 	def send(self, message, emailDestination):
-		""" Envia un mensaje de correo electronico. Debe determinar el tipo de mensaje
-		para determinar si enviar o no un archivo adjunto.
-		@param message: correo electronico a enviar
-		@type message: str
-		@param emailDestination: correo electronico del destinatario
-		@type emailDestination: str """
 		# Comprobación de envío de texto plano
 		if isinstance(message, messageClass.Message) and hasattr(message, 'plainText'):
 			return self.sendMessage(message.plainText, emailDestination)
@@ -187,12 +166,6 @@ class Email(object):
 			return False
 
 	def receive(self):
-		""" Funcion que se encarga de consultar el correo electronico asociado al modulo
-		por algun EMAIL entrante. Envia al servidor IMAP una peticion de solicitud
-		de mensajes no leidos (que por ende seran los nuevos) y que en caso de obtenerlos,
-		los almacenrá en el buffer, si el remitente del mensaje se encuentra registrado (en el 
-		archivo 'contactList.py') o en caso contrario, se enviara una notificacion al usuario 
- 		informandole que no es posible realizar la operacion solicitada."""
  		self.isActive = True
 		while self.isActive:
 			emailIds = ['']
@@ -295,21 +268,10 @@ class Email(object):
 		return sourceEmail
 		
 	def getEmailSubject(self, emailReceived):
-		""" Obtiene el asunto del correo entrante.
-		@param emailReceived: correo electronico entrante
-		@type emailReceived: message
-		@return: asunto del correo entrante
-		@rtype: str """
 		decodedHeader = decode_header(emailReceived.get('subject'))
 		return unicode(make_header(decodedHeader)).encode('utf-8')
 
 	def getEmailBody(self, emailReceived):
-		""" Decodifica el cuerpo del email. Detecta el conjunto de caracteres si la cabecera no esta
-		configurada. Primero se busca texto plano si no esta, se busca texto/html.
-		@param emailReceived: correo electronico entrante
-		@type emailReceived: message
-		@return: cuerpo del mensaje como string unicode
-		@rtype: str """
 		plainText = None
 		for emailHeader in emailReceived.walk():
 			if emailHeader.get_content_type() == 'text/plain':

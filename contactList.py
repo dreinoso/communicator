@@ -1,14 +1,5 @@
  # coding=utf-8
 
-"""	Contiene los parametros necesarios para configurar el servicio de email.
-    Tambien se encuentra almacenada una lista de confianza cuyo contenido son
-    los numeros telefonicos e emails que tendran autorizacion a operar con el
-    programa.
-	@author: Gonzalez Leonardo Mauricio
-	@author: Reinoso Ever Denis
-	@organization: UNC - Fcefyn
-	@date: Lunes 16 de Abril de 2015 """
-
 # Hosts permitidos
 allowedHosts = dict()
 allowedHosts = {'client02' : ('192.168.1.6', 5000, 5010)}

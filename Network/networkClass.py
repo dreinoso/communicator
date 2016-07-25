@@ -1,10 +1,4 @@
 # coding=utf-8
-"""	Modulo cuya finalidad es proporcionar funciones que se encarguen del envio
-	y recepcion de paquetes de datos en la red local.
-	@author: Gonzalez Leonardo Mauricio
-	@author: Reinoso Ever Denis
-	@organization: UNC - Fcefyn
-	@date: Lunes 16 de Mayo de 2015 """
 
 import os
 import json
@@ -40,16 +34,10 @@ class Network(object):
 	isActive = False
 
 	def __init__(self, _receptionQueue, _MEDIA_NAME):
-		"""Se crean los sockets para envío y recepción. Se activa el hilo para la recepción 
-		y se asigna el buffer también para la recepción.
-		@param _receptionQueue: Buffer para la recepción de datos
-		@type: list"""
 		self.receptionQueue = _receptionQueue
 		self.MEDIA_NAME = _MEDIA_NAME
 
 	def __del__(self):
-		"""Elminación de la instancia de esta clase, cerrando conexiones establecidas, para no dejar
-		puertos ocupados en el Host"""
 		try:
 			# Eliminamos del archivo la interfaz usada en esta misma instancia
 			dataToWrite = open('/tmp/activeInterfaces').read().replace(self.localInterface + '\n', '')
@@ -64,8 +52,6 @@ class Network(object):
 			logger.write('INFO', '[%s] Objeto destruido.' % self.MEDIA_NAME)
 
 	def connect(self, _localIPAddress):
-		'''Se realizan las conexiones de los protocolos UDP y TCP para la comunicación
-		por medio de NETWORK.'''
 		self.localIPAddress = _localIPAddress
 		try:
 			# Creamos los sockets para una conexión TCP
@@ -86,15 +72,6 @@ class Network(object):
 			return False
 
 	def send(self, message, destinationHost, destinationTcpPort, destinationUdpPort):
-		""" Envia una cadena de texto.
-		@param detinationIP: dirección IP del destinatario
-		@type emailDestination: str
-		@param destinationTcpPort: N° de puerto TCP del destinatario
-		@type destinationTcpPort: int
-		@param destinationUdpPort: N° de puerto UDP del destinatario
-		@type destinationUdpPort: int
-		@param message: cadena de texto a enviar
-		@type message: str """
 		# Comprobamos si el host destino es alcanzable, es decir, si existe
 		pingResponse = os.system('ping -c 3 ' + destinationHost + ' >/dev/null 2>&1') # El '>/dev/null 2>&1' silencia stdout y stderr
 		if pingResponse is 0:
@@ -121,11 +98,6 @@ class Network(object):
 			return False
 
 	def sendFile(self, fileName, clientSocket):
-		'''Envio de archivo simple, es decir unicamente el archivo sin una instancia de control.
-		Esta función solo se llama en caso de que el archivo exista. Por lo que solo resta abrirlo.
-		Se hacen sucecivas lecturas del archivo, y se envian. El receptor se encarga de recibir y 
-		rearmar	el archivo. Se utiliza una sincronización de mensajes para evitar perder paquetes,
-		además que lleguen en orden.'''
 		try:
 			absoluteFilePath = os.path.abspath(fileName)
 			fileDirectory, fileName = os.path.split(absoluteFilePath)
@@ -166,7 +138,6 @@ class Network(object):
 			clientSocket.close()
 
 	def sendMessage(self, plainText, destinationHost, destinationUdpPort):
-		'''Envío de mensaje simple'''
 		try:
 			transmissionSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)			
 			transmissionSocket.sendto(plainText, (destinationHost, destinationUdpPort))
@@ -180,8 +151,6 @@ class Network(object):
 			transmissionSocket.close()
 
 	def sendMessageInstance(self, message, destinationHost, destinationUdpPort):
-		'''Envió de la instancia mensaje. Primero debe realizarse una serialización de la clase
-		y enviar de a BUFFER_SIZE cantidad de caracteres, en definitiva se trata de una cadena.'''
 		try:
 			# Serializamos el objeto para poder transmitirlo
 			serializedMessage = 'INSTANCE' + pickle.dumps(message)
@@ -198,9 +167,6 @@ class Network(object):
 			transmissionSocket.close()
 
 	def receive(self):
-		"""Comienza la recepción de datos por medio de los protocolos TCP y UDP
-		para esto requiere la inciación de hilos que esperen los datos en paralelo
-		a la ejecución del programa."""
 		self.isActive = True
 		receiveTcpThread = threading.Thread(target = self.receiveTCP, name = 'tcpReceptor')
 		receiveUdpThread = threading.Thread(target = self.receiveUDP, name = 'udpReceptor')
@@ -210,8 +176,6 @@ class Network(object):
 		receiveUdpThread.join()
 
 	def receiveTCP(self):
-		""" Esta función es ejecutada en un hilo, se queda esperando los paquetes
-		y mensajes que lleguen al puerto TCP establecido para guardarlos en el buffer."""
 		while self.isActive:
 			try:
 				# Espera por una conexion entrante y devuelve un nuevo socket que representa la conexion, como asi tambien la direccion del cliente
@@ -242,8 +206,6 @@ class Network(object):
 		logger.write('WARNING','[%s-TCP] Función \'%s\' terminada.' % (self.MEDIA_NAME, inspect.stack()[0][3]))
 
 	def receiveUDP(self):
-		""" Esta función es ejecutada en un hilo, se queda esperando los paquetes
-		y mensajes que lleguen al puerto UDP establecido para guardarlos en el buffer."""	
 		while self.isActive:
 			try:
 				receivedData, addr = self.udpReceptionSocket.recvfrom(self.BUFFER_SIZE)
@@ -280,11 +242,6 @@ class Network(object):
 		logger.write('WARNING', '[%s-UDP] Función \'%s\' terminada.' % (self.MEDIA_NAME, inspect.stack()[0][3]))
 
 	def receiveFile(self, remoteSocket):
-		'''Para la recepción del archivo, primero se verifica que le archivo no 
-		exista, de existir el archivo, se avisa al transmisor. En caso de que no 
-		exista se confirma al emisor para que comience a transmitir, se crea el 
-		archivo y la capeta de descarga en caso de que no exista. Se escribe el 
-		archivo a medida que llegan los paquetes.'''
 		try:
 			currentDirectory = os.getcwd()                 # Obtenemos el directorio actual de trabajo
 			fileName = remoteSocket.recv(self.BUFFER_SIZE) # Obtenemos el nombre del archivo a recibir

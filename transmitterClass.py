@@ -1,10 +1,4 @@
 # coding=utf-8
-"""	Modulo cuya finalidad es proporcionar funciones que se encarguen del envio
-	de paquetes de datos y mensajes en la red local por el protocolo TCP.
-	@author: Gonzalez Leonardo Mauricio
-	@author: Reinoso Ever Denis
-	@organization: UNC - Fcefyn
-	@date: Lunes 16 de Mayo de 2015 """
 
 import time
 import json
@@ -38,14 +32,6 @@ class Transmitter(threading.Thread):
 	transmissionQueue = None
 
 	def __init__(self, _transmissionQueue):
-		"""Creación de la clase de transmisión de paquetes TCP.
-		@param _threadName: nombre del hilo
-		@type: string
-		@param socket para el envio del archivo
-		@type: socket
-		@param message: mensaje que puede corresponder a una instancia o un String 
-		@type: string
-		@type: Message"""
 		threading.Thread.__init__(self, name = 'TransmitterThread')
 		self.transmissionQueue = _transmissionQueue
 
@@ -53,9 +39,6 @@ class Transmitter(threading.Thread):
 		logger.write('INFO', '[TRANSMITTER] Objeto destruido.')
 
 	def run(self):
- 		'''Toma del buffer una instancia mensaje (la de mayor prioridad) con parametros 
- 		adicionales en la instancia para determinar si el mensaje es válido en relación 
- 		al timeToLive. De ser posible'''
  		self.isActive = True
 		while self.isActive:
 			try:
@@ -80,13 +63,6 @@ class Transmitter(threading.Thread):
 		logger.write('WARNING', '[TRANSMITTER] Funcion \'%s\' terminada.' % inspect.stack()[0][3])
 
 	def trySend(self, messageInstance):
-		'''Esta función es lanzada por un nuevo hilo, entonces puede quedarse esperando
-		el resultado del envio, sin generar una parada en el programa controlador.
-		En caso de que se reciva True no implica que el mensaje se ha enviado, solo 
-		que debe descartarse del buffer (por error en el mensaje o por envio correcto).
-		Si en cambio se recibe False el mensaje no se pudo enviar, pero el mensaje
-		es correcto entonces debe volverse a guardar en el buffer. Los controles sobre
-		el envio se hacen en cada uno de los modos, estos deciden y notifican'''
 		# Establecemos el orden jerárquico de los medios de comunicación
 		self.setPriorities(messageInstance.receiver, messageInstance.media)
 		# Hacemos una copia de los campos del objeto
@@ -162,11 +138,6 @@ class Transmitter(threading.Thread):
 				self.emailPriority = JSON_CONFIG["PRIORITY_LEVELS"]["EMAIL"]
 
 	def send(self, messageInstance):
-		"""Se envia de modo inteligente un paquete de datos a un contacto previamente 
-		registrado el mensaje se envia por el medio mas óptimo encontrado o por la
-		selección preferente del usuario para el mensaje de se posible.
-		@param messageInstance: Mensaje a ser enviado
-		@type messageInstance: str"""
 		# Intentamos transmitir por GSM
 		if all(self.gsmPriority != 0 and self.gsmPriority >= x for x in(self.gprsPriority, self.emailPriority, self.wifiPriority, self.ethernetPriority, self.bluetoothPriority)):
 			destinationNumber = contactList.allowedNumbers[messageInstance.receiver]

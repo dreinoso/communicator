@@ -52,11 +52,6 @@ class BluetoothReceptor(threading.Thread):
 			logger.write('DEBUG', '[BLUETOOTH] \'%s\' terminado y cliente desconectado.' % self.getName())
 
 	def receiveFile(self):
-		'''Para la recepción del archivo, primero se verifica que le archivo no 
-		exista, de existir el archivo, se avisa al transmisor. En caso de que no 
-		exista se confirma al emisor para que comience a transmitir, se crea el 
-		archivo y la capeta de descarga en caso de que no exista. Se escribe el 
-		archivo a medida que llegan los paquetes.'''
 		try:
 			self.remoteSocket.send('ACK')
 			currentDirectory = os.getcwd()                 # Obtenemos el directorio actual de trabajo

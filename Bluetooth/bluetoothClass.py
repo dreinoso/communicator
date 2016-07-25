@@ -51,13 +51,13 @@ class Bluetooth(object):
 		try:
 			# Creamos un nuevo socket Bluetooth que usa el protocolo de transporte especificado
 			self.serverSocketRFCOMM = bluetooth.BluetoothSocket(bluetooth.RFCOMM)
-			# Enlazamos al adaptador local algun puerto disponible usando SDP (Service Discovery Protocol)
+			# Enlazamos al adaptador local algun puerto disponible
 			self.serverSocketRFCOMM.bind((self.localMACAddress, bluetooth.PORT_ANY))
 			# Especificamos el numero de conexiones permitidas (todavia sin aceptar) antes de rechazar las nuevas entrantes
 			self.serverSocketRFCOMM.listen(CONNECTIONS)
 			# Especificamos el tiempo de espera de conexiones (funcion 'accept')
 			self.serverSocketRFCOMM.settimeout(TIMEOUT)
-			# Especificamos el anuncio de nuestro servicio
+			# Utilizamos SDP para anunciar nuestro servicio como un puerto serial
 			bluetooth.advertise_service(self.serverSocketRFCOMM, self.localServiceName,
 										service_id = self.localUUID,
 										service_classes = [self.localUUID, bluetooth.SERIAL_PORT_CLASS],

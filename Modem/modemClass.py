@@ -1,14 +1,5 @@
 # coding=utf-8
 
-"""	Permite crear una instancia que se encargara de proporcionar funciones
-	facilitando el manejo del modem. Entre las funcionalidades basicas con
-	las que cuenta, tenemos principalmente el envio y recepcion de mensajes
-	SMS.
-	@author: Gonzalez Leonardo Mauricio
-	@author: Reinoso Ever Denis
-	@organization: UNC - Fcefyn
-	@date: Miercoles 17 de Junio de 2015 """
-
 import json
 import time
 import shlex
@@ -27,18 +18,12 @@ JSON_FILE = 'config.json'
 JSON_CONFIG = json.load(open(JSON_FILE))
 
 class Modem(object):
-	""" Clase 'Modem'. Permite la creacion de una instancia del dispositivo. """
+
 	successfulConnection = None
 	receptionQueue = None
 	serialPort = None
 
 	def __init__(self):
-		""" Constructor de la clase 'Modem'. Utiliza la API 'pySerial' de
-			Python para establecer un medio de comunicacion entre el usuario
-			y el puerto donde se encuentra conectado el modem. Establece un
-			'baudrate' y un 'timeout', donde este ultimo indica el intervalo
-			de tiempo en segundos con el cual se hacen lecturas sobre el
-			dispositivo. """
 		self.modemInstance = serial.Serial()
 		self.modemInstance.xonxoff = False # Deshabilitamos el control de flujo por software
 		self.modemInstance.rtscts = False  # Deshabilitamos el control de flujo por hardware RTS/CTS
@@ -50,12 +35,6 @@ class Modem(object):
 		self.modemInstance.baudrate = JSON_CONFIG["MODEM"]["BAUD_RATE"]
 
 	def sendAT(self, atCommand):
-		""" Se encarga de enviarle un comando AT el modem. Espera la respuesta
-			a ese comando, antes de continuar.
-			@param atCommand: comando AT que se quiere ejecutar
-			@type atCommand: str
-			@return: respuesta del modem, al comando AT ingresado
-			@rtype: list """
 		self.modemInstance.write(atCommand + '\r')	 # Envio el comando AT al modem
 		modemOutput = self.modemInstance.readlines() # Espero la respuesta
 		# El módem devuelve una respuesta ante el comando AT
@@ -80,23 +59,15 @@ class Modem(object):
 		self.modemInstance.close()
 
 class Gsm(Modem):
-	""" Subclase de 'Modem' correspondiente al modo de operacion con el que se va
-		a trabajar. """
+
 	successfulSending = None
 	isActive = False
 
 	def __init__(self, _receptionQueue):
-		""" Constructor de la clase 'Gsm'. Configura el modem para operar en modo mensajes
-			de texto, indica el sitio donde se van a almacenar los mensajes recibidos,
-			habilita notificacion para los SMS entrantes y establece el numero del centro
-			de mensajes CLARO para poder enviar mensajes de texto (este campo puede variar
-			dependiendo de la compania de telefonia de la tarjeta SIM). """
 		Modem.__init__(self)
 		self.receptionQueue = _receptionQueue
 
 	def __del__(self):
-		""" Destructor de la clase 'Modem'. Cierra la conexion establecida
-			con el modem. """
 		self.modemInstance.close()
 		logger.write('INFO', '[GSM] Objeto destruido.')
 
@@ -119,15 +90,6 @@ class Gsm(Modem):
 			return False
 
 	def receive(self):
-		""" Funcion que se encarga consultar al modem por algun mensaje SMS entrante. Envia al
-			mismo el comando AT que devuelve los mensajes de texto no leidos (que por ende seran
-			los nuevos) y que en caso de obtenerlos, los envia de a uno al modulo de procesamiento
-			para su examen. Si el remitente del mensaje se encuentra registrado (en el archivo
-			'contactList') se procede a procesar el cuerpo del SMS, o en caso contrario, se envia
-			una notificacion informandole que no es posible realizar la operacion solicitada.
-			Tambien cada un cierto tiempo dado por el intervalo de temporizacion, envia a un numero
-			de telefono dado por 'DESTINATION_NUMBER' un mensaje de actualizacion, que por el momento
-			estara compuesto de un 'TimeStamp'. """
 		try:
 			smsAmount = 0
 			smsBodyList = list()
@@ -234,11 +196,6 @@ class Gsm(Modem):
 		logger.write('WARNING', '[GSM] Función \'%s\' terminada.' % inspect.stack()[0][3])
 
 	def send(self, message, telephoneNumber):
-		""" Envia el comando AT correspondiente para enviar un mensaje de texto.
-			@param telephoneNumber: numero de telefono del destinatario
-			@type telephoneNumber: int
-			@param messageToSend: mensaje de texto a enviar
-			@type messageToSend: str """
 		# Comprobación de envío de texto plano
 		if isinstance(message, messageClass.Message) and hasattr(message, 'plainText'):
 			return self.sendMessage(message.plainText, telephoneNumber)
@@ -356,12 +313,6 @@ class Gsm(Modem):
 			return False
 
 	def removeSms(self, smsIndex):
-		""" Envia el comando AT correspondiente para elimiar todos los mensajes del dispositivo.
-			El comando AT tiene una serie de parametros, que dependiendo de cada uno de ellos
-			indicara cual de los mensajes se quiere eliminar. En nuestro caso le indicaremos
-			que elimine los mensajes leidos y los mensajes enviados, ya que fueron procesados
-			y no los requerimos mas (ademas necesitamos ahorrar memoria, debido a que la misma
-			es muy limitada). """
 		try:
 			self.sendAT('AT+CMGD=' + str(smsIndex)) # Elimina el mensaje especificado
 			return True
@@ -387,9 +338,6 @@ class Gsm(Modem):
 		return smsIndex
 
 	def getTelephoneNumber(self, smsHeader):
-		""" Procesa la cabecera del SMS.
-			@return: numero de telefono del remitente
-			@rtype: int """
 		# Ejemplo de smsHeader recibido de un movil   : +CLIP: "+543512641040",145,"",0,"",0
 		# Ejemplo de smsHeader recibido de un movil   : +CMT: "+543512641040",,"15/12/29,11:41:23-12"
 		# Ejemplo de smsHeader recibido de un movil   : +CMGL: 0,"REC UNREAD","+5493512560536",,"14/10/26,17:12:04-12"
