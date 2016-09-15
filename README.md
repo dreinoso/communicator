@@ -91,7 +91,7 @@ La versión del Comunicador que estamos presentando tiene capacidades para traba
 
 ##Funciones del módulo
 
-Para importar el módulo en otro proyecto, se debe hacer un "import communicator.py". Si se va a utilizar un módem GSM/GPRS, la aplicación se debe correr como root.
+Para importar el módulo en otro proyecto, se debe hacer un "import communicator". Si se va a utilizar un módem GSM/GPRS, la aplicación se debe correr como root.
 
 Las funciones que proporciona el Comunicador son:
 
