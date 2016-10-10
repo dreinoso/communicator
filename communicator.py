@@ -160,7 +160,7 @@ def send(message, receiver = None, media = None):
 			################################## VERIFICACIÓN DE CONTACTO ##################################
 			# Antes de poner el mensaje en la cola, comprobamos que el cliente esté en algún diccionario
 			clientList = list() + contactList.allowedHosts.keys()
-			clientList += contactList.allowedMacAddress.keys()
+			clientList += contactList.allowedBtAddress.keys()
 			clientList += contactList.allowedEmails.keys()
 			clientList += contactList.allowedNumbers.keys()
 			# Quitamos los clientes repetidos

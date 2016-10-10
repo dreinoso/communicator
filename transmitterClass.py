@@ -123,7 +123,7 @@ class Transmitter(threading.Thread):
 			else:
 				self.ethernetPriority = JSON_CONFIG["PRIORITY_LEVELS"]["ETHERNET"]
 		# Para BLUETOOTH
-		if contactList.allowedMacAddress.has_key(receiver) and self.bluetoothInstance.isActive:
+		if contactList.allowedBtAddress.has_key(receiver) and self.bluetoothInstance.isActive:
 			# En caso de preferencia se da máxima prioridad
 			if media == 'BLUETOOTH':
 				self.bluetoothPriority = 10
@@ -185,7 +185,7 @@ class Transmitter(threading.Thread):
 				return True
 		# Intentamos transmitir por BLUETOOTH
 		elif self.bluetoothPriority != 0:
-			destinationServiceName, destinationMAC, destinationUUID = contactList.allowedMacAddress[messageInstance.receiver]
+			destinationServiceName, destinationMAC, destinationUUID = contactList.allowedBtAddress[messageInstance.receiver]
 			if not self.bluetoothInstance.send(messageInstance, destinationServiceName, destinationMAC, destinationUUID):
 				logger.write('DEBUG', '[COMMUNICATOR-BLUETOOTH] Falló. Reintentando con otro medio.')
 				self.bluetoothPriority = 0        # Entonces se descarta para la proxima selección

@@ -57,7 +57,7 @@ class Bluetooth(object):
 			self.serverSocketRFCOMM.listen(CONNECTIONS)
 			# Especificamos el tiempo de espera de conexiones (funcion 'accept')
 			self.serverSocketRFCOMM.settimeout(TIMEOUT)
-			# Utilizamos SDP para anunciar nuestro servicio como un puerto serial
+			# Utilizamos SDP para anunciar nuestro servicio
 			bluetooth.advertise_service(self.serverSocketRFCOMM, self.localServiceName,
 										service_id = self.localUUID,
 										service_classes = [self.localUUID, bluetooth.SERIAL_PORT_CLASS],
@@ -117,7 +117,7 @@ class Bluetooth(object):
 				# Aplicamos el filtro de recepción en caso de estar activado
 				if JSON_CONFIG["COMMUNICATOR"]["RECEPTION_FILTER"]:
 					enabledFilter = True
-					for valueList in contactList.allowedMacAddress.values():
+					for valueList in contactList.allowedBtAddress.values():
 						if ipAddress in valueList:
 							# Deshabilitamos el filtro ya que el cliente estaba registrado
 							enabledFilter = False
