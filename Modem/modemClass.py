@@ -111,88 +111,91 @@ class Gsm(Modem):
 				smsAmount += 1
 			elif unreadData.startswith('OK'):
 				break
-		# Ejemplo de smsHeaderList[0]: +CMGL: 0,"REC UNREAD","+5493512560536",,"14/10/26,17:12:04-12"\r\n
+		# Ejemplo de smsHeaderList[0]: +CMGL: 0,"REC UNREAD","+549351256bluetooth0536",,"14/10/26,17:12:04-12"\r\n
 		# Ejemplo de smsBodyList[0]  : Primer mensaje.\r\n
 		# Ejemplo de smsHeaderList[1]: +CMGL: 1,"REC UNREAD","+5493512560536",,"14/10/26,17:15:10-12"\r\n
 		# Ejemplo de smsBodyList[1]  : Segundo mensaje.\r\n
 		self.isActive = True
 		while self.isActive:
-			# Leemos los mensajes de texto recibidos...
-			if smsAmount is not 0:
-				logger.write('DEBUG', '[SMS] Ha(n) llegado ' + str(smsAmount) + ' nuevo(s) mensaje(s) de texto!')
-				for smsHeader, smsBody in zip(smsHeaderList, smsBodyList):
-					# Ejemplo smsHeader: +CMGL: 0,"REC UNREAD","+5493512560536",,"14/10/26,17:12:04-12"\r\n
-					# Ejemplo smsBody  : Primer mensaje.\r\n
-					# Ejemplo smsHeader: +CMT: "+543512641040",,"15/12/29,11:19:38-12"\r\n
-					# Ejemplo smsBody  : Nuevo SMS.\r\n
-					telephoneNumber = self.getTelephoneNumber(smsHeader) # Obtenemos el numero de telefono
-					# Comprobamos si el remitente del mensaje (un teléfono) está registrado...
-					if telephoneNumber in contactList.allowedNumbers.values() or not JSON_CONFIG["COMMUNICATOR"]["RECEPTION_FILTER"]:
-						# Quitamos el '\r\n' del final y obtenemos el mensaje de texto
-						smsMessage = smsBody.replace('\r\n', '')
-						if smsMessage.startswith('INSTANCE'):
-							# Quitamos la 'etiqueta' que hace refencia a una instancia de mensaje
-							serializedMessage = smsMessage[len('INSTANCE'):]
-							# 'Deserializamos' la instancia de mensaje para obtener el objeto en sí
-							messageInstance = pickle.loads(serializedMessage)
-							self.receptionQueue.put((messageInstance.priority, messageInstance))
-						else: 
-							self.receptionQueue.put((10, smsMessage))
-						#self.sendOutput(telephoneNumber, smsMessage) # -----> SOLO PARA LA DEMO <-----
-						logger.write('INFO', '[GSM] Mensaje de ' + str(telephoneNumber) + ' recibido correctamente!')
-					# ... sino, rechazamos el mensaje entrante.
-					else:
-						logger.write('WARNING', '[GSM] Mensaje de ' + str(telephoneNumber) + 'rechazado!')
-					# Si el mensaje fue leído desde la memoria, entonces lo borramos
-					if smsHeader.startswith('+CMGL'):
-						# Obtenemos el índice del mensaje en memoria
-						smsIndex = self.getSmsIndex(smsHeader.split(',')[0])
-						# Eliminamos el mensaje desde la memoria porque ya fue leído
-						self.removeSms(smsIndex)
-					# Eliminamos la cabecera y el cuerpo del mensaje de las listas correspondientes
-					smsHeaderList.remove(smsHeader)
-					smsBodyList.remove(smsBody)
-					# Decrementamos la cantidad de mensajes a procesar
-					smsAmount -= 1
-			elif self.modemInstance.inWaiting() is not 0:
-				bytesToRead = self.modemInstance.inWaiting()
-				receptionList = self.modemInstance.read(bytesToRead).split('\r\n')
-				# Ejemplo receptionList: ['+CMT: "+543512641040","","16/01/31,05:00:08-12"', 'Nuevo SMS.']
-				# Ejemplo receptionList: ['RING', '', '+CLIP: "+543512641040",145,"",0,"",0']
-				# Ejemplo receptionList: ['+CMS ERROR: Requested facility not subscribed']
-				# Ejemplo receptionList: ['NO CARRIER']
-				for index, data in enumerate(receptionList):
-					# Significa un mensaje entrante
-					if receptionList[index].startswith('+CMT'):
-						try:
-							smsHeaderList.append(receptionList[index])
-							smsBodyList.append(receptionList[index + 1])
-							self.sendAT('AT+CNMA') # Enviamos el ACK (ńecesario sólo para los Dongle USB)
-						except:
-							pass # La excepción aparece cuando el módem no soporta (no necesita) el ACK
-						finally:
-							smsAmount += 1
-					# Significa que no se pudo enviar el mensaje
-					elif receptionList[index].startswith('+CMS ERROR'):
-						self.successfulSending = False
-					############################### LLAMADAS DE VOZ ###############################
-					# Significa una llamade entrante
-					elif receptionList[index].startswith('RING'):
-						self.callerID = self.getTelephoneNumber(receptionList[index + 2])
-						logger.write('INFO', '[GSM] El número %s está llamando...' % self.callerID)
-					# Significa que el destino se encuentra en otra llamada
-					elif receptionList[index].startswith('BUSY'):
-						logger.write('WARNING', '[GSM] El télefono destino se encuentra ocupado.')
-					# Significa que la llamada saliente pasó al buzón de voz
-					elif receptionList[index].startswith('NO ANSWER'):
-						logger.write('WARNING', '[GSM] No hubo respuesta durante la llamada de voz.')
-					# Significa que la llamada entrante se perdió (llamada perdida) o que el extremo colgo
-					elif receptionList[index].startswith('NO CARRIER'):
-						self.callerID = None
-						logger.write('WARNING', '[GSM] Se perdió la conexión con el otro extremo.')
-					############################# FIN LLAMADAS DE VOZ #############################
-			else:
-				time.sleep(1)
+			try:
+				# Leemos los mensajes de texto recibidos...
+				if smsAmount is not 0:
+					logger.write('DEBUG', '[SMS] Ha(n) llegado ' + str(smsAmount) + ' nuevo(s) mensaje(s) de texto!')
+					for smsHeader, smsBody in zip(smsHeaderList, smsBodyList):
+						# Ejemplo smsHeader: +CMGL: 0,"REC UNREAD","+5493512560536",,"14/10/26,17:12:04-12"\r\n
+						# Ejemplo smsBody  : Primer mensaje.\r\n
+						# Ejemplo smsHeader: +CMT: "+543512641040",,"15/12/29,11:19:38-12"\r\n
+						# Ejemplo smsBody  : Nuevo SMS.\r\n
+						telephoneNumber = self.getTelephoneNumber(smsHeader) # Obtenemos el numero de telefono
+						# Comprobamos si el remitente del mensaje (un teléfono) está registrado...
+						if telephoneNumber in contactList.allowedNumbers.values() or not JSON_CONFIG["COMMUNICATOR"]["RECEPTION_FILTER"]:
+							# Quitamos el '\r\n' del final y obtenemos el mensaje de texto
+							smsMessage = smsBody.replace('\r\n', '')
+							if smsMessage.startswith('INSTANCE'):
+								# Quitamos la 'etiqueta' que hace refencia a una instancia de mensaje
+								serializedMessage = smsMessage[len('INSTANCE'):]
+								# 'Deserializamos' la instancia de mensaje para obtener el objeto en sí
+								messageInstance = pickle.loads(serializedMessage)
+								self.receptionQueue.put((messageInstance.priority, messageInstance))
+							else: 
+								self.receptionQueue.put((10, smsMessage))
+							#self.sendOutput(telephoneNumber, smsMessage) # -----> SOLO PARA LA DEMO <-----
+							logger.write('INFO', '[GSM] Mensaje de ' + str(telephoneNumber) + ' recibido correctamente!')
+						# ... sino, rechazamos el mensaje entrante.
+						else:
+							logger.write('WARNING', '[GSM] Mensaje de ' + str(telephoneNumber) + 'rechazado!')
+						# Si el mensaje fue leído desde la memoria, entonces lo borramos
+						if smsHeader.startswith('+CMGL'):
+							# Obtenemos el índice del mensaje en memoria
+							smsIndex = self.getSmsIndex(smsHeader.split(',')[0])
+							# Eliminamos el mensaje desde la memoria porque ya fue leído
+							self.removeSms(smsIndex)
+						# Eliminamos la cabecera y el cuerpo del mensaje de las listas correspondientes
+						smsHeaderList.remove(smsHeader)
+						smsBodyList.remove(smsBody)
+						# Decrementamos la cantidad de mensajes a procesar
+						smsAmount -= 1
+				elif self.modemInstance.inWaiting() is not 0:
+					bytesToRead = self.modemInstance.inWaiting()
+					receptionList = self.modemInstance.read(bytesToRead).split('\r\n')
+					# Ejemplo receptionList: ['+CMT: "+543512641040","","16/01/31,05:00:08-12"', 'Nuevo SMS.']
+					# Ejemplo receptionList: ['RING', '', '+CLIP: "+543512641040",145,"",0,"",0']
+					# Ejemplo receptionList: ['+CMS ERROR: Requested facility not subscribed']
+					# Ejemplo receptionList: ['NO CARRIER']
+					for index, data in enumerate(receptionList):
+						# Significa un mensaje entrante
+						if receptionList[index].startswith('+CMT'):
+							try:
+								smsHeaderList.append(receptionList[index])
+								smsBodyList.append(receptionList[index + 1])
+								self.sendAT('AT+CNMA') # Enviamos el ACK (ńecesario sólo para los Dongle USB)
+							except:
+								pass # La excepción aparece cuando el módem no soporta (no necesita) el ACK
+							finally:
+								smsAmount += 1
+						# Significa que no se pudo enviar el mensaje
+						elif receptionList[index].startswith('+CMS ERROR'):
+							self.successfulSending = False
+						############################### LLAMADAS DE VOZ ###############################
+						# Significa una llamade entrante
+						elif receptionList[index].startswith('RING'):
+							self.callerID = self.getTelephoneNumber(receptionList[index + 2])
+							logger.write('INFO', '[GSM] El número %s está llamando...' % self.callerID)
+						# Significa que el destino se encuentra en otra llamada
+						elif receptionList[index].startswith('BUSY'):
+							logger.write('WARNING', '[GSM] El télefono destino se encuentra ocupado.')
+						# Significa que la llamada saliente pasó al buzón de voz
+						elif receptionList[index].startswith('NO ANSWER'):
+							logger.write('WARNING', '[GSM] No hubo respuesta durante la llamada de voz.')
+						# Significa que la llamada entrante se perdió (llamada perdida) o que el extremo colgo
+						elif receptionList[index].startswith('NO CARRIER'):
+							self.callerID = None
+							logger.write('WARNING', '[GSM] Se perdió la conexión con el otro extremo.')
+						############################# FIN LLAMADAS DE VOZ #############################
+				else:
+					time.sleep(1.5)
+			except:
+				time.sleep(1.5)
 		logger.write('WARNING', '[GSM] Función \'%s\' terminada.' % inspect.stack()[0][3])
 
 	def send(self, message, telephoneNumber):
