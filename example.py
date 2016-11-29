@@ -29,7 +29,7 @@ def main():
 
 	while not endMain:
 		try:
-			termios.tcflush(sys.stdin, termios.TCIOFLUSH) # Limpiamos el stdin
+			#termios.tcflush(sys.stdin, termios.TCIOFLUSH) # Limpiamos el stdin
 			optionSelected = raw_input()
 			# Opcion 1 - Enviar mensaje
 			if optionSelected is '1':
