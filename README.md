@@ -1,8 +1,8 @@
-#Módulo de Comunicación
+# Módulo de Comunicación
 
 La versión del Comunicador que estamos presentando tiene capacidades para trabajar en LAN y WLAN, con tecnologías Ethernet y WiFi respectivamente; en WAN con tecnologías GSM/GPRS; y en WPAN con tecnología Bluetooth. Para las redes LAN, WLAN y WAN utiliza la pila TCP/IP como transporte de datos, y la pila BlueZ para WPAN. Además, soporta los servicios de correos electrónicos (aprovechando el stack TCP/IP), SMS, llamadas telefónicas e Internet móvil (estas tres últimas sobre la red de telefonía GSM).
 
-##Requisitos del módulo
+## Requisitos del módulo
 
 	- Python 2.7
 
@@ -14,7 +14,7 @@ La versión del Comunicador que estamos presentando tiene capacidades para traba
 
 	- PySerial (sudo pip install pyserial)
 
-##Configuración del módulo
+## Configuración del módulo
 
 	- Completar la lista de contactos con los usuarios con los que se planea la comunicación (contactList.py).
 
@@ -89,17 +89,17 @@ La versión del Comunicador que estamos presentando tiene capacidades para traba
 		}
 }
 
-##Funciones del módulo
+## Funciones del módulo
 
 Para importar el módulo en otro proyecto, se debe hacer un "import communicator". Si se va a utilizar un módem GSM/GPRS, la aplicación se debe correr como root.
 
 Las funciones que proporciona el Comunicador son:
 
-###communicator.open()
+### communicator.open()
 
 	Configura todos los componentes del sistema.
 
-###communicator.send()
+### communicator.send()
 
 	Envio de textoPlano/archivo: **communicator.send(plainText/filePath, receiver, media)**
 		Este último campo se puede obviar, y será el comunicador quién elija la tecnología. Ejemplo: communicator.send(plainText/filePath, receiver)
@@ -107,29 +107,29 @@ Las funciones que proporciona el Comunicador son:
 	Envio de instancia de mensaje: **communicator.send(messageInstance, media = userPreference)**
 		El mensaje debe ser una instancia "Message" (messageClass.py). El último campo también se puede obviar, donde la tecnología se elegirá automáticamente. Ejemplo: communicator.send(messageInstance)
 
-###communicator.recieve()
+### communicator.recieve()
 
 	Obtiene el mensaje de mayor prioridad desde la cola de recepción.
 
-###communicator.close()
+### communicator.close()
 
 	Elimina todos los componentes creados en la apertura.
 
-###communicator.lenght()
+### communicator.lenght()
 
 	Devuelve la cantidad de elementos de la cola de recepción.
 
-###communicator.connectGPRS()
+### communicator.connectGPRS()
 
 	Conecta con la red de Internet móvil.
 
-###communicator.disconnectGPRS()
+### communicator.disconnectGPRS()
 
 	Desconecta la red de Internet móvil.
 
 Existe un módulo de prueba creado para probar todas las funcionalidades del Comunicador (example.py).
 
-##NOTA
+## NOTA
 
 	- En caso de que el programa falle y no finalize correctamente, se debe eliminar el archivo temporal:
 		sudo rm /tmp/activeInterfaces 
